@@ -1,0 +1,23 @@
+# Go 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+
+# 本地配置 / 工具链文件
+go.work
+go.work.sum
+.air.toml
+.env
+
+# 运行期数据（上传图片、SQLite 数据库、日志）
+uploads/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log

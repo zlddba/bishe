@@ -1,0 +1,15 @@
+* text=auto
+
+# 跨平台脚本固定换行，避免 gradlew / shell 脚本在 Windows 上失效
+*.sh    text eol=lf
+gradlew text eol=lf
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二进制文件不做换行转换
+*.jar   binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.exe   binary
+*.db    binary
