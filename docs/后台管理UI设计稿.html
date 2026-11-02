@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宠栖后台 · 管理端 UI 设计稿</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23E0708A'/%3E%3Cpath d='M6 10c-1.2 0-2 .8-2 2s.8 2 2 2 2-.8 2-2-.8-2-2-2Zm12 0c-1.2 0-2 .8-2 2s.8 2 2 2 2-.8 2-2-.8-2-2-2Z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#FAF5F6; --panel:#fff; --line:#E7E9EC; --line2:#F1EEEF;
+  --ink:#1B1E23; --ink2:#5C6470; --ink3:#9AA3AF;
+  --brand:#E0708A; --brand-soft:#FBE0E6; --brand-ink:#AF4A62;
+  --ok:#2F9E63; --warn:#D97706; --danger:#C2456A; --info:#3E7BFA;
+  --amber:#EAB308; --mint:#F2AEBE;
+  --radius:6px; --shadow:0 1px 2px rgba(20,25,32,.04);
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55}
+body{min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+.hidden{display:none!important}
+svg{display:block;flex:none}
+.icon{width:18px;height:18px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== 登录 ===== */
+.login-wrap{width:100%;min-height:100vh;display:flex;align-items:stretch}
+.login-brand{flex:1.1;background:linear-gradient(160deg,#E0708A,#8E3B4E);color:#fff;
+  display:flex;flex-direction:column;justify-content:space-between;padding:48px 56px}
+.login-form{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:32px}
+.login-card{width:340px}
+.brand-mark{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
+.brand-badge{width:30px;height:30px;border-radius:7px;background:#fff;color:var(--brand-ink);
+  display:flex;align-items:center;justify-content:center;font-weight:700}
+.brand-title{font-size:26px;font-weight:600;line-height:1.3}
+.brand-sub{font-size:15px;opacity:.9;margin-top:10px;line-height:1.7;max-width:420px}
+.brand-foot{font-size:12.5px;opacity:.6}
+
+/* ===== 应用框架 ===== */
+.app{display:flex;width:100%;min-height:100vh}
+.side{width:228px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;flex-shrink:0}
+.side-logo{display:flex;align-items:center;gap:10px;padding:20px 18px;font-weight:600;font-size:15px;border-bottom:1px solid var(--line2)}
+.nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-cap{font-size:11px;color:var(--ink3);letter-spacing:.06em;padding:14px 10px 6px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:6px;color:var(--ink2);
+  font-size:14px;cursor:pointer;user-select:none;transition:background .15s,color .15s}
+.nav-item:hover{background:var(--line2)}
+.nav-item.active{background:var(--brand-soft);color:var(--brand-ink);font-weight:500}
+.side-foot{border-top:1px solid var(--line2);padding:12px 14px;font-size:13px;color:var(--ink2)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 24px;height:60px}
+.top-title{font-size:17px;font-weight:600}
+.top-crumb{font-size:12.5px;color:var(--ink3)}
+.top-spacer{flex:1}
+.top-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--radius);padding:6px 12px;color:var(--ink3);font-size:13.5px;width:240px}
+.top-user{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink2)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);
+  display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.content{padding:24px;flex:1}
+
+/* ===== 通用组件 ===== */
+.page-h{display:flex;align-items:flex-end;gap:12px;margin-bottom:18px}
+.page-h h1{font-size:20px;font-weight:600}
+.page-h p{font-size:13px;color:var(--ink3);padding-bottom:2px}
+.ml-auto{margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--radius);padding:8px 14px;font-size:13.5px;font-weight:500;transition:background .15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-ink)}
+.btn-ghost{border:1px solid var(--line);background:var(--panel);color:var(--ink2)}
+.btn-ghost:hover{border-color:var(--ink3)}
+.btn-text{color:var(--brand-ink);font-size:13.5px;padding:4px 6px}
+.btn-danger-text{color:var(--danger);font-size:13.5px;padding:4px 6px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:20px}
+.panel-h{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line2)}
+.panel-h h3{font-size:15px;font-weight:600}
+.panel-h p{font-size:12.5px;color:var(--ink3)}
+.panel-b{padding:20px}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.stat .lbl{font-size:12.5px;color:var(--ink3);display:flex;align-items:center;gap:7px}
+.stat .num{font-size:27px;font-weight:600;margin:8px 0 2px;letter-spacing:-.01em}
+.stat .trend{font-size:12.5px;display:flex;align-items:center;gap:5px}
+.up{color:var(--ok)}.down{color:var(--danger)}.warn{color:var(--warn)}
+.chart-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.chart h4{font-size:14px;font-weight:600;margin-bottom:4px}
+.chart .sub{font-size:12.5px;color:var(--ink3);margin-bottom:14px}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line2)}
+.field{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:var(--radius);padding:7px 12px;font-size:13.5px;color:var(--ink2)}
+.field input{border:none;outline:none;font-size:13.5px;width:150px;color:var(--ink)}
+.tabs{display:flex;gap:2px;background:var(--line2);border-radius:7px;padding:3px}
+.tab{padding:6px 14px;border-radius:5px;font-size:13px;color:var(--ink2);cursor:pointer}
+.tab.active{background:var(--panel);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;font-weight:500;color:var(--ink3);font-size:12.5px;padding:11px 20px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:13px 20px;border-bottom:1px solid var(--line2);vertical-align:middle;white-space:nowrap}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .muted{color:var(--ink3)}
+.tbl .mono{font-family:var(--mono);font-size:12.5px}
+.cell-main{font-weight:500}
+.cell-sub{font-size:12px;color:var(--ink3)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:3px 9px;border-radius:20px}
+.tag-dot{width:6px;height:6px;border-radius:50%}
+.tag-soft{background:var(--line2);color:var(--ink2)}
+.tag-ok{background:#EAF6EF;color:var(--ok)}
+.tag-warn{background:#FBF2E4;color:#B45309}
+.tag-danger{background:#FAE7EC;color:var(--danger)}
+.tag-brand{background:var(--brand-soft);color:var(--brand-ink)}
+.pagi{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:14px 20px;font-size:13px;color:var(--ink2)}
+.pg{min-width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid var(--line);cursor:pointer}
+.pg.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.stars{display:inline-flex;gap:2px}
+.progress{height:6px;border-radius:4px;background:var(--line2);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--brand);border-radius:4px}
+.f-label{font-size:13px;color:var(--ink2);margin:16px 0 7px}
+.f-input{width:100%;border:1px solid var(--line);border-radius:var(--radius);padding:10px 13px;font-size:14px;outline:none;transition:border .15s;background:#fff}
+.f-input:focus{border-color:var(--brand)}
+.f-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2);margin:14px 0}
+.f-check input{width:15px;height:15px;accent-color:var(--brand)}
+
+/* ===== 弹窗 / 抽屉 / 表单 / 空态 ===== */
+.mask{position:fixed;inset:0;background:rgba(27,30,35,.45);z-index:50;display:none}
+.mask.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:#fff;z-index:55;transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.10)}
+.drawer.on{transform:none}
+.d-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line2)}
+.d-head h2{font-size:16px;font-weight:600}
+.d-body{padding:6px 22px 20px;overflow-y:auto;flex:1}
+.d-foot{padding:14px 22px;border-top:1px solid var(--line2);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.kv{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:12px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
+.kv .k{color:var(--ink3);flex:none}
+.kv .v{color:var(--ink);text-align:right}
+.kv .v.muted{color:var(--ink3)}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;background:#fff;border-radius:12px;width:min(480px,calc(100vw - 32px));box-shadow:0 16px 50px rgba(0,0,0,.18);display:none}
+.modal.on{display:block}
+.m-head{padding:18px 22px;border-bottom:1px solid var(--line2);font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+.m-body{padding:6px 22px 8px}
+.m-foot{padding:16px 22px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--line2)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.empty{text-align:center;padding:38px 20px;color:var(--ink3);font-size:13.5px}
+
+/* ===== 新组件：四维评分条 / 动态卡片 / 容量日历 / 开关 ===== */
+.score-bars{display:grid;gap:11px}
+.sbar .top{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);margin-bottom:5px}
+.sbar .track{height:8px;border-radius:4px;background:var(--line2);overflow:hidden}
+.sbar .fill{height:100%;background:var(--brand);border-radius:4px}
+.dyn-card{display:flex;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line2);align-items:flex-start}
+.dyn-card:last-child{border-bottom:none}
+.dyn-thumb{width:64px;height:64px;border-radius:9px;background:var(--brand-soft);color:var(--brand-ink);flex:none;display:flex;align-items:center;justify-content:center}
+.dyn-body{flex:1;min-width:0}
+.dyn-title{font-weight:600;font-size:14px}
+.dyn-meta{font-size:12.5px;color:var(--ink3);margin-top:3px}
+.dyn-txt{font-size:13.5px;color:var(--ink2);margin-top:8px;line-height:1.6}
+.dyn-actions{flex:none;display:flex;gap:8px;align-items:center}
+.switch{width:36px;height:20px;border-radius:11px;background:var(--line);position:relative;cursor:pointer;transition:background .2s;flex:none}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.switch.on{background:var(--brand)}
+.switch.on::after{left:18px}
+.cal{padding:16px 20px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13.5px;color:var(--ink2)}
+.cal-head b{color:var(--ink);font-size:15px}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-days .dow{font-size:11.5px;color:var(--ink3);text-align:center;padding:4px 0}
+.cal-cell{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;min-height:52px;position:relative}
+.cal-cell .n{font-weight:600;color:var(--ink2);font-size:12px}
+.cal-cell .seat{margin-top:5px;font-size:11px;line-height:1.5;display:flex;flex-wrap:wrap;gap:3px}
+.seat .s{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:10px}
+.s-free{background:#EAF6EF;color:var(--ok)}
+.s-full{background:#FAE7EC;color:var(--danger)}
+.s-busy{background:#FBF2E4;color:#B45309}
+.s-hol{position:absolute;top:4px;right:6px;font-size:10px;color:var(--danger);font-weight:600}
+.alert-row{display:flex;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid var(--line2);font-size:13.5px}
+.alert-row:last-child{border-bottom:none}
+.alert-row .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.alert-row .w{font-weight:500;color:var(--ink)}
+.setting-note{font-size:12.5px;color:var(--ink3);margin-top:6px}
+
+@media (min-width:768px){
+  .stat-grid{grid-template-columns:repeat(4,1fr)}
+  .chart-grid{grid-template-columns:2fr 1fr}
+}
+@media (max-width:767px){
+  .side{position:static;width:100%;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .app{flex-direction:column}
+  .nav{display:flex;gap:4px;overflow-x:auto;padding:8px 10px}
+  .nav-cap{display:none}
+  .nav-item{flex:none;white-space:nowrap}
+  .side-foot{display:none}
+  .login-brand{display:none}
+  .top-search{display:none}
+  .content{padding:16px}
+  .f-input,.field input{font-size:16px}
+  .cal-days{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 登录页 ===== -->
+<div class="login-wrap" id="view-login">
+  <div class="login-brand">
+    <div class="brand-mark"><span class="brand-badge"><svg class="icon" viewBox="0 0 24 24"><path d="M12 4c-1.5 0-2.4 1-2.4 2.3 0 .9.5 1.8 1.4 2.7-.9.5-1.7.7-2.6.7-1.6 0-2.7 1-2.7 2.4 0 1.5 1.2 2.5 2.8 2.5.7 0 1.4-.2 2.1-.6l.8.9h.8l1-1c.7.4 1.4.6 2.1.6 1.6 0 2.8-1 2.8-2.5 0-1.4-1.1-2.4-2.7-2.4-.9 0-1.7-.2-2.6-.7.9-.9 1.4-1.8 1.4-2.7C14.4 5 13.5 4 12 4Z" fill="currentColor" opacity=".15"/><path d="M12 9c-1.6 0-2.8 1.2-2.8 2.7 0 1.6 1.2 2.7 2.8 2.7s2.8-1.1 2.8-2.7C14.8 10.2 13.6 9 12 9Z" fill="currentColor" opacity=".9"/></svg></span>宠栖后台</div>
+    <div>
+      <div class="brand-title">宠物寄养服务平台<br>运营管理中枢</div>
+      <div class="brand-sub">把机构、订单、宠物、寄养动态与口碑统一收进一个管理后台。清晰、克制、一目了然。</div>
+    </div>
+    <div class="brand-foot">宠栖 · PetNest 后台管理系统</div>
+  </div>
+  <div class="login-form">
+    <div class="login-card">
+      <div style="font-size:22px;font-weight:600">登录后台</div>
+      <div style="font-size:13.5px;color:var(--ink3);margin-top:6px">使用管理员账号继续</div>
+      <div class="f-label">账号</div>
+      <input class="f-input" placeholder="admin 或邮箱" value="admin">
+      <div class="f-label">密码</div>
+      <input class="f-input" type="password" placeholder="请输入密码">
+      <label class="f-check"><input type="checkbox" checked> 记住登录状态</label>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" onclick="go('dashboard')">登 录</button>
+      <div style="text-align:center;font-size:12.5px;color:var(--ink3);margin-top:18px">如需帮助，请联系系统管理员</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 应用框架 ===== -->
+<div class="app hidden" id="app">
+  <aside class="side">
+    <div class="side-logo"><span class="brand-badge"><svg class="icon" viewBox="0 0 24 24"><path d="M12 4c-1.5 0-2.4 1-2.4 2.3 0 .9.5 1.8 1.4 2.7-.9.5-1.7.7-2.6.7-1.6 0-2.7 1-2.7 2.4 0 1.5 1.2 2.5 2.8 2.5.7 0 1.4-.2 2.1-.6l.8.9h.8l1-1c.7.4 1.4.6 2.1.6 1.6 0 2.8-1 2.8-2.5 0-1.4-1.1-2.4-2.7-2.4-.9 0-1.7-.2-2.6-.7.9-.9 1.4-1.8 1.4-2.7C14.4 5 13.5 4 12 4Z" fill="currentColor"/><circle cx="12" cy="11.7" r="2" fill="#fff"/></svg></span>宠栖后台</div>
+    <nav class="nav" id="nav">
+      <div class="nav-cap">总览</div>
+      <div class="nav-item active" data-view="dashboard"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="4" rx="1.5"/><rect x="14" y="11" width="7" height="10" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>经营看板</div>
+      <div class="nav-cap">业务</div>
+      <div class="nav-item" data-view="sitters"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>机构管理</div>
+      <div class="nav-item" data-view="orders"><svg class="icon" viewBox="0 0 24 24"><path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>订单管理</div>
+      <div class="nav-item" data-view="pets"><svg class="icon" viewBox="0 0 24 24"><path d="M12 6c-1.6 0-2.6 1-2.6 2.3 0 1 1 2 2.6 2 1.6 0 2.6-1 2.6-2C14.6 7 13.6 6 12 6Z"/><path d="M7.5 10c-1.3 0-2.2.7-2.2 1.7 0 1.1.9 1.8 2.2 1.8 1.3 0 2.2-.7 2.2-1.8 0-1-.9-1.7-2.2-1.7Zm9 0c-1.3 0-2.2.7-2.2 1.7 0 1.1.9 1.8 2.2 1.8s2.2-.7 2.2-1.8c0-1-.9-1.7-2.2-1.7Z"/><path d="M5 15c-1.3 0-2 .8-2 1.9 0 1.4 1 2.6 2.6 2.6h12.8c1.6 0 2.6-1.2 2.6-2.6 0-1.1-.7-1.9-2-1.9H5Z"/></svg>宠物管理</div>
+      <div class="nav-item" data-view="dynamics"><svg class="icon" viewBox="0 0 24 24"><path d="M3 4h18v12H3zM3 20h18"/><circle cx="12" cy="10" r="2.2"/><path d="M7 15c1-2.5 10-2.5 10 0"/></svg>寄养动态</div>
+      <div class="nav-item" data-view="reviews"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>评价管理</div>
+      <div class="nav-cap">运营</div>
+      <div class="nav-item" data-view="calendar"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 15h3M14 15h2"/></svg>容量日历</div>
+      <div class="nav-item" data-view="matching"><svg class="icon" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3.2"/><circle cx="17" cy="17" r="3.2"/><path d="M9.5 9.5 14.5 14.5M7 10.5V17h3.5M17 13.5V7h-3.5"/></svg>智能匹配</div>
+      <div class="nav-cap">系统</div>
+      <div class="nav-item" data-view="users"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.5-3 2.5-4.6 5.5-4.6s5 1.6 5.5 4.6"/><path d="M16 8.2a2.6 2.6 0 0 1 0 0"/><circle cx="17.5" cy="12" r="2.4"/><path d="M16 19c.4-2 1.6-3 3.2-3"/></svg>用户管理</div>
+    </nav>
+    <div class="side-foot">管理员 · admin<br><span style="font-size:12px;color:var(--ink3)">宠栖后台 V1.0</span></div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div><div class="top-title" id="topTitle">经营看板</div><div class="top-crumb">宠栖后台 / <span id="topCrumb">经营看板</span></div></div>
+      <div class="top-spacer"></div>
+      <div class="top-search"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg>搜索订单 / 机构 / 用户</div>
+      <div class="top-user"><span class="avatar">管</span>管理员<span style="color:var(--ink3)">·</span><span onclick="go('login')" style="color:var(--ink3);font-size:13px;cursor:pointer">退出</span></div>
+    </div>
+    <div class="content">
+
+      <!-- ===== 经营看板 ===== -->
+      <section class="view" data-view="dashboard">
+        <div class="page-h"><div><h1>经营看板</h1><p>今日经营与数据一览</p></div><div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：报表导出未接入')">导出报表</button></div></div>
+        <div class="stat-grid">
+          <div class="stat"><div class="lbl">今日收入</div><div class="num">¥6,420</div><div class="trend up"><span>↑</span>较昨日 +8.2%</div></div>
+          <div class="stat"><div class="lbl">综合入住率</div><div class="num">78%</div><div class="trend up"><span>↑</span>较上周 +5%</div></div>
+          <div class="stat"><div class="lbl">进行中订单</div><div class="num">43</div><div class="trend up"><span>↑</span>较昨日 +12</div></div>
+          <div class="stat"><div class="lbl">待处理事项</div><div class="num">9</div><div class="trend warn"><span>!</span>审核 7 · 差评 2</div></div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart">
+            <h4>近 14 日收入趋势</h4><div class="sub">订单实收金额</div>
+            <svg viewBox="0 0 600 220" style="width:100%;height:auto">
+              <line x1="0" y1="190" x2="600" y2="190" stroke="#E7E9EC"/>
+              <line x1="0" y1="130" x2="600" y2="130" stroke="#EFF1F3"/>
+              <line x1="0" y1="70" x2="600" y2="70" stroke="#EFF1F3"/>
+              <polyline points="30,150 70,130 110,160 150,110 190,90 230,120 270,80 310,100 350,60 390,85 430,55 470,70 510,45 550,40" fill="none" stroke="#E0708A" stroke-width="2.5"/>
+              <rect x="30" y="150" width="42" height="40" rx="3" fill="#E0708A" opacity=".22"/>
+              <rect x="130" y="130" width="42" height="60" rx="3" fill="#E0708A" opacity=".22"/>
+              <rect x="230" y="160" width="42" height="30" rx="3" fill="#E0708A" opacity=".22"/>
+              <rect x="330" y="100" width="42" height="90" rx="3" fill="#E0708A" opacity=".22"/>
+              <rect x="430" y="55" width="42" height="135" rx="3" fill="#E0708A" opacity=".22"/>
+              <rect x="530" y="40" width="42" height="150" rx="3" fill="#E0708A" opacity=".3"/>
+            </svg>
+          </div>
+          <div class="chart">
+            <h4>机构类型占比</h4><div class="sub">在架机构构成</div>
+            <svg viewBox="0 0 220 160" style="width:100%;height:auto">
+              <path d="M110 80 L110 20 A60 60 0 0 1 156 40 Z" fill="#E0708A"/>
+              <path d="M110 80 L156 40 A60 60 0 0 1 150 120 Z" fill="#F2AEBE"/>
+              <path d="M110 80 L150 120 A60 60 0 0 1 70 140 Z" fill="#FAE7EC"/>
+              <path d="M110 80 L70 140 A60 60 0 0 1 110 20 Z" fill="#FDF1F4"/>
+              <circle cx="110" cy="80" r="22" fill="#fff"/>
+            </svg>
+            <div style="margin-top:10px;font-size:12.5px;color:var(--ink2);display:grid;gap:4px">
+              <div style="display:flex;justify-content:space-between"><span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#E0708A;margin-right:6px"></span>家庭寄养</span><b>58</b></div>
+              <div style="display:flex;justify-content:space-between"><span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#F2AEBE;margin-right:6px"></span>门店寄养</span><b>41</b></div>
+              <div style="display:flex;justify-content:space-between"><span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#FAE7EC;margin-right:6px"></span>上门喂养</span><b>27</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-grid" style="margin-top:14px">
+          <div class="chart">
+            <h4>旺季预警</h4><div class="sub">节假日前后床位趋紧的机构</div>
+            <div class="alert-row"><span class="dot" style="background:var(--danger)"></span><span class="w">宠物营地</span><span class="muted">11/01 - 11/03 已满员，建议上调价格或引导分流</span></div>
+            <div class="alert-row"><span class="dot" style="background:var(--warn)"></span><span class="w">萌宠之家</span><span class="muted">国庆后余量 1，接单需确认容量</span></div>
+            <div class="alert-row"><span class="dot" style="background:var(--info)"></span><span class="w">遛遛上门</span><span class="muted">上门喂养高峰在 11/02，建议增派人手</span></div>
+          </div>
+          <div class="chart">
+            <h4>差评预警</h4><div class="sub">近 7 日低分评价</div>
+            <div class="alert-row"><span class="dot" style="background:var(--danger)"></span><span class="w">宠物营地 · 赵敏</span><span class="muted">3 分 · 狗狗回来后有点蔫</span></div>
+            <div class="alert-row"><span class="dot" style="background:var(--warn)"></span><span class="w">安心猫舍 · 李然</span><span class="muted">4 分 · 接宠等待稍久</span></div>
+            <div class="alert-row" style="color:var(--ink3);font-size:12.5px">仅展示评分 ≤ 4 的评价，全部可在「评价管理」查看</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 机构管理 ===== -->
+      <section class="view hidden" data-view="sitters">
+        <div class="page-h"><div><h1>机构管理</h1><p>审核、上下架与资料维护</p></div><div class="ml-auto"><button class="btn btn-primary" onclick="openForm('sitter')"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新增机构</button></div></div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="搜索机构名称 / 地址"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">家庭寄养</div><div class="tab">门店寄养</div><div class="tab">上门喂养</div></div>
+            <div class="ml-auto"><span class="tag tag-brand">待审核 7</span><button class="btn btn-text" style="margin-left:4px" onclick="go('calendar')">容量日历 →</button></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <tr><th>机构</th><th>类型</th><th>日单价</th><th>评分</th><th>容量</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-sitters"></tbody>
+            </table>
+          </div>
+          <div class="pagi"><span style="color:var(--ink3)">共 126 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">13</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 订单管理 ===== -->
+      <section class="view hidden" data-view="orders">
+        <div class="page-h"><div><h1>订单管理</h1><p>全量订单与状态流转</p></div><div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：批量导出未接入')">批量导出</button></div></div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="订单号 / 主人 / 机构"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">待支付</div><div class="tab">待确认</div><div class="tab">寄养中</div><div class="tab">已结束</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <tr><th>订单号</th><th>主人</th><th>机构</th><th>日期区间</th><th>天数</th><th>金额</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-orders"></tbody>
+            </table>
+          </div>
+          <div class="pagi"><span style="color:var(--ink3)">共 4,328 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">174</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 宠物管理 ===== -->
+      <section class="view hidden" data-view="pets">
+        <div class="page-h"><div><h1>宠物管理</h1><p>平台宠物档案与免疫核验</p></div><div class="ml-auto"><span class="tag tag-soft">共 1,842 只</span></div></div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="宠物名 / 主人"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">猫</div><div class="tab">狗</div><div class="tab">其他</div></div>
+            <div class="ml-auto"><span class="tag tag-warn">疫苗待核验 12</span></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <tr><th>宠物</th><th>类型</th><th>体型</th><th>年龄</th><th>疫苗</th><th>免疫证明</th><th>主人</th><th>订单数</th><th>操作</th></tr>
+              <tbody id="tb-pets"></tbody>
+            </table>
+          </div>
+          <div class="pagi"><span style="color:var(--ink3)">共 1,842 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">93</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 寄养动态 ===== -->
+      <section class="view hidden" data-view="dynamics">
+        <div class="page-h"><div><h1>寄养动态</h1><p>机构寄养期间的图文动态，审核后对主人可见</p></div><div class="ml-auto"><button class="btn btn-primary" onclick="__demo('演示稿：发布动态表单未接入')"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>发布动态</button></div></div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="搜索机构 / 宠物 / 内容"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">待审核</div><div class="tab">已上架</div><div class="tab">已下架</div></div>
+          </div>
+          <div id="dyn-list"></div>
+          <div class="pagi"><span style="color:var(--ink3)">共 386 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">39</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 评价管理 ===== -->
+      <section class="view hidden" data-view="reviews">
+        <div class="page-h"><div><h1>评价管理</h1><p>多维口碑、内容审核与舆情</p></div><div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：舆情预警未接入')">舆情预警</button></div></div>
+        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat"><div class="lbl">平台综合评分</div><div class="num">4.7</div><div class="trend up"><span>↑</span>较上月 +0.1</div></div>
+          <div class="stat"><div class="lbl">好评率</div><div class="num">92%</div><div class="trend up"><span>↑</span>四星以上占比</div></div>
+          <div class="stat"><div class="lbl">近 7 日差评</div><div class="num">6</div><div class="trend down"><span>!</span>需跟进 2</div></div>
+          <div class="stat"><div class="lbl">待回复评价</div><div class="num">14</div><div class="trend warn"><span>!</span>建议 24h 内回复</div></div>
+        </div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="搜索机构 / 主人 / 内容"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">好评</div><div class="tab">中评</div><div class="tab">差评</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <tr><th>机构</th><th>主人</th><th>综合</th><th>环境</th><th>服务</th><th>安全</th><th>性价比</th><th>内容</th><th>时间</th><th>操作</th></tr>
+              <tbody id="tb-reviews"></tbody>
+            </table>
+          </div>
+          <div class="pagi"><span style="color:var(--ink3)">共 3,116 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">78</span></div>
+        </div>
+      </section>
+
+      <!-- ===== 容量日历 ===== -->
+      <section class="view hidden" data-view="calendar">
+        <div class="page-h"><div><h1>容量日历</h1><p>机构逐日床位排期与节假日紧张度</p></div>
+          <div class="ml-auto"><span class="field" style="padding:7px 12px"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span style="color:var(--ink)">萌宠之家</span><span style="color:var(--ink3)">▾</span></span></div></div>
+        <div class="panel">
+          <div class="cal">
+            <div class="cal-head"><span><button class="btn-text" onclick="__demo('演示稿：上一周')">‹ 上一周</button><b style="margin:0 14px">10/26 - 11/01</b><button class="btn-text" onclick="__demo('演示稿：下一周')">下一周 ›</button></span><span style="color:var(--ink3)">2026 · 第 44 周</span></div>
+            <div class="cal-days">
+              <div class="dow">周一<br><span style="font-size:11px">10/26</span></div>
+              <div class="dow">周二<br><span style="font-size:11px">10/27</span></div>
+              <div class="dow">周三<br><span style="font-size:11px">10/28</span></div>
+              <div class="dow">周四<br><span style="font-size:11px">10/29</span></div>
+              <div class="dow">周五<br><span style="font-size:11px">10/30</span></div>
+              <div class="dow">周六<br><span style="font-size:11px">10/31</span></div>
+              <div class="dow">周日<br><span style="font-size:11px">11/01</span></div>
+              <div class="cal-cell"><div class="n">26</div><div class="seat"><span class="s s-free">家庭 1/3</span><span class="s s-free">门店 3/5</span></div></div>
+              <div class="cal-cell"><div class="n">27</div><div class="seat"><span class="s s-free">家庭 2/3</span><span class="s s-busy">门店 4/5</span></div></div>
+              <div class="cal-cell"><div class="n">28</div><div class="seat"><span class="s s-free">家庭 2/3</span><span class="s s-busy">门店 4/5</span></div></div>
+              <div class="cal-cell"><div class="n">29</div><div class="seat"><span class="s s-free">家庭 2/3</span><span class="s s-full">门店 5/5</span></div></div>
+              <div class="cal-cell"><div class="n">30</div><div class="seat"><span class="s s-full">家庭 3/3</span><span class="s s-full">门店 5/5</span></div></div>
+              <div class="cal-cell"><span class="s-hol">假期</span><div class="n">31</div><div class="seat"><span class="s s-full">家庭 3/3</span><span class="s s-full">门店 5/5</span></div></div>
+              <div class="cal-cell"><span class="s-hol">假期</span><div class="n">01</div><div class="seat"><span class="s s-full">家庭 3/3</span><span class="s s-full">门店 5/5</span></div></div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2)">
+              <span><span class="s s-free">空闲</span> 余量充足</span>
+              <span><span class="s s-busy">紧张</span> 余量 ≤ 1</span>
+              <span><span class="s s-full">满员</span> 不可再下单</span>
+              <span style="color:var(--danger)">节假日标记</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><h3>周末与节假日容量预测</h3><p>基于历史订单的入住率预测</p><div class="ml-auto"><span class="tag tag-warn">10/31 - 11/01 预计满员</span></div></div>
+          <div class="panel-b" style="font-size:13.5px;color:var(--ink2);line-height:1.8">
+            系统根据近 90 天订单与节假日日历，预测 <b style="color:var(--ink)">11/01 前后</b>家庭寄养与门店寄养床位将趋紧，建议提前开放「节假日上浮定价」或引导用户预约上门喂养。
+            <div style="margin-top:12px"><button class="btn btn-primary" onclick="__demo('演示稿：节假日定价未接入')">配置节假日定价</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 智能匹配 ===== -->
+      <section class="view hidden" data-view="matching">
+        <div class="page-h"><div><h1>智能匹配</h1><p>基于 pgvector 的宠物 × 机构语义推荐</p></div><div class="ml-auto"><span class="tag tag-ok">向量引擎运行中</span></div></div>
+        <div class="chart-grid" style="grid-template-columns:1fr">
+          <div class="chart">
+            <h4>匹配参数</h4><div class="sub">控制推荐召回与相似度门槛</div>
+            <div class="panel-b">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13.5px;color:var(--ink2);padding:6px 0"><span>启用智能推荐</span><span class="switch on" onclick="__demo('演示稿：开关未接入')"></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13.5px;color:var(--ink2);padding:12px 0;border-top:1px solid var(--line2)"><span>相似度阈值</span><b style="color:var(--ink)">0.78</b></div>
+              <div class="progress" style="height:8px"><i style="width:78%;background:var(--brand)"></i></div>
+              <div style="display:flex;gap:16px;font-size:12.5px;color:var(--ink3)"><span>过低 → 召回杂</span><span style="margin-left:auto">过高 → 召回少</span></div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px">
+                <div><div class="f-label" style="margin:0 0 5px">召回数量</div><input class="f-input" value="10"></div>
+                <div><div class="f-label" style="margin:0 0 5px">向量维度</div><input class="f-input" value="512"></div>
+                <div><div class="f-label" style="margin:0 0 5px">索引方式</div><select class="f-input"><option>HNSW</option><option>IVFFlat</option></select></div>
+              </div>
+              <div style="margin-top:14px"><button class="btn btn-primary" onclick="__demo('演示稿：参数保存未接入')">保存参数</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-grid" style="grid-template-columns:1fr">
+          <div class="chart">
+            <h4>匹配预览</h4><div class="sub">输入一段宠物需求，查看语义匹配结果</div>
+            <div class="panel-b">
+              <div class="field" style="width:100%;max-width:520px"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="例：能收胆小的猫，环境安静，有独立猫舍" style="width:100%"></div>
+              <div style="margin-top:14px;display:grid;gap:10px">
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:9px;padding:12px 16px">
+                  <div class="dyn-thumb" style="width:44px;height:44px"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11"/></svg></div>
+                  <div style="flex:1"><div class="cell-main">安心猫舍</div><div style="font-size:12px;color:var(--ink3)">独立猫舍 · 安静环境</div></div>
+                  <span class="tag tag-brand">相似度 0.94</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:9px;padding:12px 16px">
+                  <div class="dyn-thumb" style="width:44px;height:44px"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11"/></svg></div>
+                  <div style="flex:1"><div class="cell-main">暖窝寄养</div><div style="font-size:12px;color:var(--ink3)">小型家庭寄养 · 安静居家</div></div>
+                  <span class="tag tag-brand">相似度 0.87</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:9px;padding:12px 16px">
+                  <div class="dyn-thumb" style="width:44px;height:44px"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11"/></svg></div>
+                  <div style="flex:1"><div class="cell-main">萌宠之家</div><div style="font-size:12px;color:var(--ink3)">自有院落 · 每日视频反馈</div></div>
+                  <span class="tag tag-soft">相似度 0.71</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 用户管理 ===== -->
+      <section class="view hidden" data-view="users">
+        <div class="page-h"><div><h1>用户管理</h1><p>账号、角色与状态</p></div><div class="ml-auto"><button class="btn btn-primary" onclick="openForm('user')"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>邀请用户</button></div></div>
+        <div class="panel">
+          <div class="filters">
+            <div class="field"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="用户名 / 手机号"></div>
+            <div class="tabs"><div class="tab active">全部</div><div class="tab">主人</div><div class="tab">机构</div><div class="tab">管理员</div></div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <tr><th>用户</th><th>角色</th><th>手机</th><th>注册时间</th><th>订单数</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-users"></tbody>
+            </table>
+          </div>
+          <div class="pagi"><span style="color:var(--ink3)">共 2,460 条</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">98</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 抽屉 / 弹窗容器 ===== -->
+<div class="mask" id="mask"></div>
+<aside class="drawer" id="drawer">
+  <div class="d-head"><h2 id="dTitle"></h2><span style="cursor:pointer;color:var(--ink3);display:inline-flex" onclick="closeDrawer()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+  <div class="d-body" id="dBody"></div>
+  <div class="d-foot" id="dFoot"></div>
+</aside>
+<div class="modal" id="modal">
+  <div class="m-head"><span id="mTitle"></span><span style="cursor:pointer;color:var(--ink3);display:inline-flex" onclick="closeModal()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+  <div class="m-body" id="mBody"></div>
+  <div class="m-foot" id="mFoot"></div>
+</div>
+
+<script>
+(function(){/* 路由 */
+  var TITLES={dashboard:'经营看板',sitters:'机构管理',orders:'订单管理',pets:'宠物管理',dynamics:'寄养动态',reviews:'评价管理',calendar:'容量日历',matching:'智能匹配',users:'用户管理'};
+  function show(name){
+    document.getElementById('view-login').classList.toggle('hidden',name!=='login');
+    document.getElementById('app').classList.toggle('hidden',name==='login');
+    document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('hidden',s.getAttribute('data-view')!==name);});
+    document.querySelectorAll('.nav-item').forEach(function(i){i.classList.toggle('active',i.getAttribute('data-view')===name);});
+    if(TITLES[name]){document.getElementById('topTitle').textContent=TITLES[name];document.getElementById('topCrumb').textContent=TITLES[name];}
+    window.scrollTo(0,0);
+  }
+  window.go=show;
+  document.getElementById('nav').addEventListener('click',function(e){var it=e.target.closest('.nav-item');if(it)show(it.getAttribute('data-view'));});
+  var h=location.hash.replace('#','');show(TITLES[h]?h:'dashboard');
+})();
+(function(){/* toast + 星星 + 通用点击 */
+  var t=null;
+  function toast(m){if(t)t.remove();t=document.createElement('div');t.textContent=m;
+    t.style.cssText='position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1B1E23;color:#fff;padding:10px 18px;border-radius:8px;font-size:13.5px;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+    document.body.appendChild(t);setTimeout(function(){t.remove();t=null;},1800);}
+  window.__demo=toast;
+  window.renderStars=function(){document.querySelectorAll('.stars').forEach(function(el){var n=parseInt(el.getAttribute('data-score')||'5',10),h='',f='<svg viewBox="0 0 24 24" width="13" height="13" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>',o='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#EAB308" stroke-width="1.5"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>';for(var i=1;i<=5;i++)h+=i<=n?f:o;el.innerHTML=h;});};
+  document.addEventListener('click',function(e){
+    var pg=e.target.closest('.pg');if(pg){e.preventDefault();toast('演示稿：分页未接入');return;}
+    var b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('onclick'))return;if(b.closest('#nav'))return;
+    e.preventDefault();toast('演示稿：该操作尚未接入后端');
+  },true);
+})();
+(function(){/* 数据与业务交互 */
+  var D={},FL={sitters:{q:'',tab:'全部'},orders:{q:'',tab:'全部'},pets:{q:'',tab:'全部'},dynamics:{q:'',tab:'全部'},reviews:{q:'',tab:'全部'},users:{q:'',tab:'全部'}};
+  function $(id){return document.getElementById(id);}
+  D.sitters=[
+    {name:'萌宠之家',addr:'呼和浩特 · 赛罕区',type:'家庭寄养',price:'¥130/天',score:5,cap:'3 只',status:'在架',owner:'王叔',tel:'186****7710',desc:'自有院落，专人陪护，每日视频反馈',tags:'院落 · 专人陪护'},
+    {name:'安心猫舍',addr:'呼和浩特 · 新城区',type:'门店寄养',price:'¥180/天',score:4,cap:'5 只',status:'在架',owner:'李姐',tel:'186****7721',desc:'专注猫科寄养，独立猫舍单间',tags:'独立猫舍 · 安静环境'},
+    {name:'遛遛上门',addr:'呼和浩特 · 全城',type:'上门喂养',price:'¥60/次',score:5,cap:'—',status:'在架',owner:'小周',tel:'186****7732',desc:'按次上门，投喂、遛宠、拍照打卡',tags:'上门投喂 · 拍照打卡'},
+    {name:'宠物营地',addr:'呼和浩特 · 玉泉区',type:'门店寄养',price:'¥210/天',score:4,cap:'8 只',status:'已下架',owner:'张总',tel:'186****7743',desc:'户外活动区 + 恒温寄养间',tags:'户外活动 · 恒温'},
+    {name:'暖窝寄养',addr:'呼和浩特 · 回民区',type:'家庭寄养',price:'¥150/天',score:4,cap:'2 只',status:'在架',owner:'赵姨',tel:'186****7754',desc:'小型家庭寄养，安静居家环境',tags:'小型家庭 · 安静居家'}
+  ];
+  D.orders=[
+    {no:'PO20261028017',owner:'陈雨',org:'萌宠之家',pet:'豆包（橘猫）',range:'10/28 - 11/01',days:'4 天',amount:520,fee:'130 × 4 天',status:'寄养中',made:'10/28 09:12',agree:'已确认'},
+    {no:'PO20261028009',owner:'李然',org:'安心猫舍',pet:'元宝（金毛）',range:'10/28 - 10/30',days:'2 天',amount:360,fee:'180 × 2 天',status:'待确认',made:'10/28 08:40',agree:'待机构确认'},
+    {no:'PO20261027951',owner:'赵敏',org:'宠物营地',pet:'团子（布偶）',range:'10/27 - 11/03',days:'7 天',amount:1470,fee:'210 × 7 天',status:'寄养中',made:'10/27 21:03',agree:'已确认'},
+    {no:'PO20261027890',owner:'孙阳',org:'暖窝寄养',pet:'来福（柯基）',range:'10/26 - 10/28',days:'2 天',amount:300,fee:'150 × 2 天',status:'待支付',made:'10/26 19:20',agree:'待支付'},
+    {no:'PO20261027722',owner:'周舟',org:'遛遛上门',pet:'雪球（银渐层）',range:'10/25 - 10/27',days:'2 次',amount:120,fee:'60 × 2 次',status:'已评价',made:'10/25 18:50',agree:'已确认'}
+  ];
+  D.pets=[
+    {name:'豆包',breed:'橘猫',type:'猫',size:'中型',age:'2 岁',vaccine:'已接种',cert:'已核验',owner:'陈雨',orders:5,note:'温顺亲人，需定时投喂'},
+    {name:'元宝',breed:'金毛',type:'狗',size:'大型',age:'3 岁',vaccine:'已接种',cert:'已核验',owner:'李然',orders:3,note:'精力旺盛，需每日遛'},
+    {name:'团子',breed:'布偶猫',type:'猫',size:'小型',age:'1 岁',vaccine:'待补种',cert:'待核验',owner:'赵敏',orders:2,note:'怕生，宜安静环境'},
+    {name:'来福',breed:'柯基',type:'狗',size:'小型',age:'4 岁',vaccine:'已接种',cert:'已核验',owner:'孙阳',orders:7,note:'粘人，爱撒娇'},
+    {name:'雪球',breed:'银渐层',type:'猫',size:'中型',age:'2 岁',vaccine:'已接种',cert:'已核验',owner:'周舟',orders:4,note:'胆小，需熟悉后再亲近'}
+  ];
+  D.dynamics=[
+    {org:'萌宠之家',pet:'豆包（橘猫）',txt:'豆包今天胃口很好，午后在院子里晒了会太阳，已按时投喂两次。',time:'10/28 18:20',likes:12,notes:3,status:'已上架'},
+    {org:'安心猫舍',pet:'元宝（金毛）',txt:'元宝和新伙伴玩得很开心，已做驱虫，晚饭正常。',time:'10/28 16:05',likes:8,notes:1,status:'已上架'},
+    {org:'宠物营地',pet:'团子（布偶）',txt:'团子有点认生，暂时安排独立单间，观察中。',time:'10/28 14:10',likes:5,notes:0,status:'待审核'},
+    {org:'萌宠之家',pet:'来福（柯基）',txt:'来福早上遛弯回来精神不错，喝水量正常。',time:'10/27 20:40',likes:9,notes:2,status:'已上架'},
+    {org:'遛遛上门',pet:'雪球（银渐层）',txt:'上门投喂完成，雪球状态稳定，已拍照打卡。',time:'10/27 19:30',likes:6,notes:1,status:'已下架'}
+  ];
+  D.reviews=[
+    {org:'萌宠之家',owner:'陈雨',score:5,env:4.9,svc:4.8,safe:5.0,val:4.9,content:'环境很干净，店员每天都发豆包的视频，很放心。',time:'10/28',status:'展示中'},
+    {org:'安心猫舍',owner:'李然',score:4,env:4.3,svc:3.9,safe:4.5,val:4.2,content:'整体不错，接宠时等待稍久。',time:'10/27',status:'展示中'},
+    {org:'宠物营地',owner:'赵敏',score:3,env:3.2,svc:3.0,safe:3.8,val:3.4,content:'狗狗回来后有点蔫，建议注意活动空间。',time:'10/26',status:'展示中'},
+    {org:'遛遛上门',owner:'周舟',score:5,env:4.8,svc:5.0,safe:4.9,val:4.9,content:'上门小哥很准时，照片也拍得清楚。',time:'10/25',status:'展示中'}
+  ];
+  D.users=[
+    {name:'陈雨',acc:'@chenyu',role:'主人',phone:'138****2201',reg:'2026-03-12',orders:5,status:'正常'},
+    {name:'萌宠之家',acc:'@mengchong',role:'机构',phone:'186****7710',reg:'2026-05-02',orders:48,status:'正常'},
+    {name:'赵敏',acc:'@zhaomin',role:'主人',phone:'159****8843',reg:'2026-06-21',orders:2,status:'已禁用'},
+    {name:'运营组',acc:'@admin',role:'管理员',phone:'177****0092',reg:'2026-01-01',orders:'—',status:'正常'}
+  ];
+  function stars(n){return '<span class="stars" data-score="'+n+'"></span>';}
+  function tag(cls,dot,text){return '<span class="tag '+cls+'">'+(dot?'<span class="tag-dot" style="background:'+dot+'"></span>':'')+text+'</span>';}
+  function stTag(s){return s==='寄养中'?tag('tag-ok','var(--ok)',s):s==='待支付'?tag('tag-warn','#D97706',s):s==='已评价'?tag('tag-brand',null,s):s==='已取消'?tag('tag-soft',null,s):tag('tag-soft',null,s);}
+  function empty(m){return '<tr><td colspan="10"><div class="empty">'+m+'</div></td></tr>';}
+  function render(k){
+    var rows,html='';
+    if(k==='sitters'){
+      rows=D.sitters.filter(function(r){var f=FL[k].tab==='全部'||r.type===FL[k].tab;var q=FL[k].q;return f&&(!q||(r.name+r.addr).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<tr><td><div class="cell-main">'+r.name+'</div><div class="cell-sub">'+r.addr+'</div></td><td>'+tag(r.type==='门店寄养'?'tag-brand':r.type==='上门喂养'?'tag-warn':'tag-soft',null,r.type)+'</td><td>'+r.price+'</td><td>'+stars(r.score)+' '+(r.score||'—')+'</td><td>'+r.cap+'</td><td>'+tag(r.status==='在架'?'tag-ok':'tag-danger',r.status==='在架'?'var(--ok)':null,r.status)+'</td><td><button class="btn-text" onclick="openDetail(\'sitter\','+i+')">详情</button>'+(r.status==='在架'?'<button class="btn-danger-text" onclick="openConfirm(\'确认下架\',\'下架后用户将无法预约「'+r.name+'」，确定继续？\',function(){D.sitters['+i+'].status=\'已下架\';render(\'sitters\');toast(\'已下架「'+r.name+'」\');})">下架</button>':'<button class="btn-text" onclick="openConfirm(\'确认上架\',\'确定重新上架「'+r.name+'」？\',function(){D.sitters['+i+'].status=\'在架\';render(\'sitters\');toast(\'已上架「'+r.name+'」\');})">上架</button>')+'</td></tr>';}).join(''):empty('暂无匹配的机构');
+    } else if(k==='orders'){
+      rows=D.orders.filter(function(r){var f=FL[k].tab==='全部'||r.status===FL[k].tab||(FL[k].tab==='已结束'&&(r.status==='已评价'||r.status==='已取消'));var q=FL[k].q;return f&&(!q||(r.no+r.owner+r.org).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<tr><td class="mono">'+r.no+'</td><td class="cell-main">'+r.owner+'</td><td>'+r.org+'</td><td class="muted">'+r.range+'</td><td>'+(r.days.indexOf('次')>=0?'<span class="muted">'+r.days+'</span>':r.days)+'</td><td class="mono">¥'+r.amount+'</td><td>'+stTag(r.status)+'</td><td><button class="btn-text" onclick="openDetail(\'order\','+i+')">详情</button></td></tr>';}).join(''):empty('暂无匹配的订单');
+    } else if(k==='pets'){
+      rows=D.pets.filter(function(r){var f=FL[k].tab==='全部'||r.type===FL[k].tab;var q=FL[k].q;return f&&(!q||(r.name+r.owner+r.breed).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<tr><td><div class="cell-main" style="cursor:pointer;color:var(--brand-ink)" onclick="openDetail(\'pet\','+i+')">'+r.name+'</div><div class="cell-sub">'+r.breed+'</div></td><td>'+tag(r.type==='狗'?'tag-brand':'tag-soft',null,r.type)+'</td><td>'+r.size+'</td><td>'+r.age+'</td><td>'+tag(r.vaccine==='已接种'?'tag-ok':'tag-warn',null,r.vaccine)+'</td><td>'+tag(r.cert==='已核验'?'tag-ok':r.cert==='待核验'?'tag-warn':'tag-danger',null,r.cert)+'</td><td>'+r.owner+'</td><td>'+r.orders+'</td><td><button class="btn-text" onclick="openDetail(\'pet\','+i+')">详情</button>'+(r.cert==='待核验'?'<button class="btn-text" onclick="openConfirm(\'核验免疫证明\',\'确认「'+r.name+'」的免疫证明已通过核验？\',function(){D.pets['+i+'].cert=\'已核验\';D.pets['+i+'].vaccine=\'已接种\';render(\'pets\');toast(\'已核验「'+r.name+'」免疫证明\');})">核验</button>':'')+'</td></tr>';}).join(''):empty('暂无匹配的宠物');
+    } else if(k==='dynamics'){
+      rows=D.dynamics.filter(function(r){var f=FL[k].tab==='全部'||r.status===FL[k].tab;var q=FL[k].q;return f&&(!q||(r.org+r.pet+r.txt).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<div class="dyn-card"><div class="dyn-thumb"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg></div><div class="dyn-body"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="dyn-title">'+r.org+' · '+r.pet+'</span>'+tag(r.status==='已上架'?'tag-ok':r.status==='待审核'?'tag-warn':'tag-soft',null,r.status)+'</div><div class="dyn-meta">'+r.time+' · 点赞 '+r.likes+' · 留言 '+r.notes+'</div><div class="dyn-txt">'+r.txt+'</div></div><div class="dyn-actions"><button class="btn-text" onclick="openDetail(\'dyn\','+i+')">详情</button>'+(r.status==='待审核'?'<button class="btn-text" onclick="openConfirm(\'通过动态\',\'通过后主人可在小程序看到该动态，确定发布？\',function(){D.dynamics['+i+'].status=\'已上架\';render(\'dynamics\');toast(\'已上架该动态\');})">通过</button><button class="btn-danger-text" onclick="openConfirm(\'驳回动态\',\'确定驳回该动态？\',function(){D.dynamics['+i+'].status=\'已下架\';render(\'dynamics\');toast(\'已驳回该动态\');})">驳回</button>':r.status==='已上架'?'<button class="btn-danger-text" onclick="openConfirm(\'确认下架动态\',\'下架后主人将不再看到该动态，确定继续？\',function(){D.dynamics['+i+'].status=\'已下架\';render(\'dynamics\');toast(\'已下架该动态\');})">下架</button>':'<button class="btn-text" onclick="openConfirm(\'重新上架\',\'确定重新上架该动态？\',function(){D.dynamics['+i+'].status=\'已上架\';render(\'dynamics\');toast(\'已上架该动态\');})">上架</button>')+'</div></div>';}).join(''):'<div class="empty" style="padding:38px 20px">暂无匹配的动态</div>';
+      $('dyn-list').innerHTML=html;renderStars();return;
+    } else if(k==='reviews'){
+      rows=D.reviews.filter(function(r){var f=FL[k].tab==='全部'||(FL[k].tab==='好评'&&r.score>=4)||(FL[k].tab==='中评'&&r.score===3)||(FL[k].tab==='差评'&&r.score<3);var q=FL[k].q;return f&&(!q||(r.content+r.org+r.owner).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<tr><td class="cell-main">'+r.org+'</td><td>'+r.owner+'</td><td>'+stars(r.score)+'</td><td class="muted">'+r.env+'</td><td class="muted">'+r.svc+'</td><td class="muted">'+r.safe+'</td><td class="muted">'+r.val+'</td><td class="muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.content+'</td><td class="muted">'+r.time+'</td><td><button class="btn-text" onclick="openDetail(\'review\','+i+')">详情</button><button class="btn-danger-text" onclick="openConfirm(\'隐藏评价\',\'隐藏后该评价不再公开展示，确定继续？\',function(){D.reviews['+i+'].status=\'已隐藏\';render(\'reviews\');toast(\'已隐藏该评价\');})">隐藏</button></td></tr>';}).join(''):empty('暂无匹配的评价');
+    } else if(k==='users'){
+      rows=D.users.filter(function(r){var f=FL[k].tab==='全部'||r.role===FL[k].tab;var q=FL[k].q;return f&&(!q||(r.name+r.acc+r.phone).toLowerCase().indexOf(q)>=0);});
+      html=rows.length?rows.map(function(r,i){return '<tr><td><div class="cell-main">'+r.name+'</div><div class="cell-sub">'+r.acc+'</div></td><td>'+tag(r.role==='机构'?'tag-brand':r.role==='管理员'?'tag-danger':'tag-soft',null,r.role)+'</td><td class="mono">'+r.phone+'</td><td class="muted">'+r.reg+'</td><td>'+r.orders+'</td><td>'+tag(r.status==='正常'?'tag-ok':'tag-danger',r.status==='正常'?'var(--ok)':null,r.status)+'</td><td><button class="btn-text" onclick="openDetail(\'user\','+i+')">详情</button>'+(r.status==='正常'&&r.role!=='管理员'?'<button class="btn-danger-text" onclick="openConfirm(\'确认禁用\',\'禁用后该账号将无法登录，确定继续？\',function(){D.users['+i+'].status=\'已禁用\';render(\'users\');toast(\'已禁用「'+r.name+'」\');})">禁用</button>':r.status==='已禁用'?'<button class="btn-text" onclick="openConfirm(\'确认启用\',\'确定恢复「'+r.name+'」的登录？\',function(){D.users['+i+'].status=\'正常\';render(\'users\');toast(\'已启用「'+r.name+'」\');})">启用</button>':'')+'</td></tr>';}).join(''):empty('暂无匹配的用户');
+    }
+    $('tb-'+k).innerHTML=html;renderStars();
+  }
+  function renderAll(){['sitters','orders','pets','reviews','users'].forEach(render);render('dynamics');}
+  ['sitters','orders','pets','dynamics','reviews','users'].forEach(function(k){
+    var sec=document.querySelector('.view[data-view="'+k+'"]');if(!sec)return;
+    sec.querySelectorAll('.tabs .tab').forEach(function(tb){tb.addEventListener('click',function(){sec.querySelectorAll('.tabs .tab').forEach(function(x){x.classList.remove('active');});tb.classList.add('active');FL[k].tab=tb.textContent;render(k);});});
+    var inp=sec.querySelector('.field input');if(inp)inp.addEventListener('input',function(){FL[k].q=inp.value.toLowerCase();render(k);});
+  });
+  /* 抽屉 */
+  function openDetail(kind,i){
+    var r,title,kv=[],foot='';
+    if(kind==='sitter'){r=D.sitters[i];title='机构详情';kv=[['机构名称',r.name],['机构类型',r.type],['所在地址',r.addr],['日单价',r.price],['评分',stars(r.score)+' '+r.score+' 分'],['可同时容量',r.cap],['状态',r.status],['负责人',r.owner],['联系电话',r.tel],['环境标签',r.tags],['机构简介',r.desc]];foot='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button><button class="btn btn-primary" onclick="__demo(\'演示稿：编辑机构未接入\')">编辑</button>';}
+    else if(kind==='order'){r=D.orders[i];title='订单详情';kv=[['订单号',r.no],['主人',r.owner],['寄养宠物',r.pet],['机构',r.org],['寄养区间',r.range],['天数 / 次数',r.days],['费用构成',r.fee],['应付金额','¥'+r.amount],['下单时间',r.made],['协议确认',r.agree],['订单状态',r.status]];foot='<button class="btn btn-danger-text" onclick="closeDrawer()">改期</button><button class="btn btn-danger-text" onclick="closeDrawer()">续费</button><button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>';}
+    else if(kind==='pet'){r=D.pets[i];title='宠物档案';kv=[['宠物名',r.name],['品种',r.breed],['类型',r.type],['体型',r.size],['年龄',r.age],['疫苗情况',r.vaccine],['免疫证明',r.cert],['主人',r.owner],['累计订单',r.orders+' 单'],['备注',r.note]];foot='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>';}
+    else if(kind==='review'){r=D.reviews[i];title='评价详情';kv=[['机构',r.org],['评价人',r.owner],['综合评分',stars(r.score)+' '+r.score+' 分'],['评价内容',r.content],['发布时间',r.time],['状态',r.status]];foot='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>';$('dBody').innerHTML='<div style="padding-top:6px">'+kv.map(function(p){return '<div class="kv"><span class="k">'+p[0]+'</span><span class="v">'+p[1]+'</span></div>';}).join('')+'</div><div style="margin-top:18px"><div style="font-size:13px;font-weight:600;margin-bottom:10px">四维评分</div><div class="score-bars">'+[['环境',r.env],['服务',r.svc],['安全',r.safe],['性价比',r.val]].map(function(x){return '<div class="sbar"><div class="top"><span>'+x[0]+'</span><b>'+x[1].toFixed(1)+'</b></div><div class="track"><div class="fill" style="width:'+(x[1]*20)+'%"></div></div></div>';}).join('')+'</div></div>';
+      $('dTitle').textContent=title;$('dFoot').innerHTML=foot;$('mask').classList.add('on');$('drawer').classList.add('on');renderStars();return;}
+    else if(kind==='dyn'){r=D.dynamics[i];title='动态详情';kv=[['发布机构',r.org],['寄养宠物',r.pet],['发布时间',r.time],['点赞 / 留言',r.likes+' / '+r.notes],['审核状态',r.status],['动态内容',r.txt]];foot='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>';}
+    else if(kind==='user'){r=D.users[i];title='用户详情';kv=[['用户名',r.name],['账号',r.acc],['角色',r.role],['手机号',r.phone],['注册时间',r.reg],['累计订单',r.orders+' 单'],['账号状态',r.status]];foot='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>';}
+    $('dTitle').textContent=title;
+    $('dBody').innerHTML='<div style="padding-top:6px">'+kv.map(function(p){return '<div class="kv"><span class="k">'+p[0]+'</span><span class="v">'+p[1]+'</span></div>';}).join('')+'</div>';
+    $('dFoot').innerHTML=foot;$('mask').classList.add('on');$('drawer').classList.add('on');renderStars();
+  }
+  function closeDrawer(){$('mask').classList.remove('on');$('drawer').classList.remove('on');}
+  var curOk=null;
+  function openConfirm(title,msg,onOk){curOk=onOk;$('mTitle').textContent=title;$('mBody').innerHTML='<div style="padding:14px 2px 6px;color:var(--ink2);font-size:14px;line-height:1.7">'+msg+'</div>';$('mFoot').innerHTML='<button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="runOk()">确定</button>';$('mask').classList.add('on');$('modal').classList.add('on');}
+  function runOk(){var f=curOk;closeModal();if(f)f();}
+  function closeModal(){$('mask').classList.remove('on');$('modal').classList.remove('on');$('mFoot').innerHTML='';}
+  function closeAll(){closeDrawer();closeModal();}
+  function openForm(kind){
+    if(kind==='sitter'){
+      $('mTitle').textContent='新增机构';
+      $('mBody').innerHTML='<div class="f-label">机构名称</div><input class="f-input" id="f1" placeholder="如：拾光宠物家"><div class="form-row"><div><div class="f-label">类型</div><select class="f-input" id="f2"><option>家庭寄养</option><option>门店寄养</option><option>上门喂养</option></select></div><div><div class="f-label">日单价</div><input class="f-input" id="f3" placeholder="如 150"></div></div><div class="f-label">所在地址</div><input class="f-input" id="f4" placeholder="呼和浩特 · 区/旗"><div class="form-row"><div><div class="f-label">可同时容量</div><input class="f-input" id="f5" placeholder="如 3"></div><div><div class="f-label">负责人电话</div><input class="f-input" id="f6" placeholder="手机号"></div></div><div class="f-label">环境标签</div><input class="f-input" id="f7" placeholder="逗号分隔，如：安静、独立猫舍">';
+      $('mFoot').innerHTML='<button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="submitSitter()">保存机构</button>';
+    } else {
+      $('mTitle').textContent='邀请用户';
+      $('mBody').innerHTML='<div class="f-label">用户名</div><input class="f-input" id="f1" placeholder="如 新主人"><div class="form-row"><div><div class="f-label">角色</div><select class="f-input" id="f2"><option>主人</option><option>机构</option><option>管理员</option></select></div><div><div class="f-label">手机号</div><input class="f-input" id="f3" placeholder="手机号"></div></div>';
+      $('mFoot').innerHTML='<button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="submitUser()">发送邀请</button>';
+    }
+    $('mask').classList.add('on');$('modal').classList.add('on');
+  }
+  function submitSitter(){var n=$('f1').value.trim();if(!n){toast('请填写机构名称');return;}D.sitters.unshift({name:n,addr:$('f4').value.trim()||'待补充',type:$('f2').value,price:'¥'+( $('f3').value||'0')+($('f2').value==='上门喂养'?'/次':'/天'),score:0,cap:($('f5').value||'—')+' 只',status:'在架',owner:'待维护',tel:$('f6').value.trim()||'—',desc:'新入驻机构，资料待完善',tags:$('f7').value.trim()||'待完善'});closeModal();render('sitters');toast('已新增机构「'+n+'」');}
+  function submitUser(){var n=$('f1').value.trim();if(!n){toast('请填写用户名');return;}D.users.unshift({name:n,acc:'@'+n,role:$('f2').value,phone:$('f3').value.trim()||'—',reg:'2026-10-29',orders:0,status:'正常'});closeModal();render('users');toast('已向「'+n+'」发送邀请');}
+  function toast(m){window.__demo(m);}
+  window.openDetail=openDetail;window.closeDrawer=closeDrawer;
+  window.openConfirm=openConfirm;window.closeModal=closeModal;window.runOk=runOk;
+  window.openForm=openForm;window.submitSitter=submitSitter;window.submitUser=submitUser;
+  $('mask').addEventListener('click',closeAll);
+  document.querySelectorAll('.pg').forEach(function(p){p.setAttribute('onclick','__demo(\'演示稿：分页未接入\')');});
+  renderAll();
+})();
+</script>
+</body>
+</html>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->

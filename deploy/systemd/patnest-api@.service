@@ -1,0 +1,30 @@
+[Unit]
+Description=PatNest API (%i slot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=patnest
+Group=patnest
+WorkingDirectory=/opt/patnest/api/current
+
+# 公共配置（数据库、MinIO、JWT）；slot 文件在后，用来覆盖 APP_PORT / APP_SLOT
+EnvironmentFile=/opt/patnest/api/shared/.env
+EnvironmentFile=-/opt/patnest/api/shared/slot.%i
+
+ExecStart=/opt/patnest/api/current/patnest-api
+
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=30
+LimitNOFILE=65535
+
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

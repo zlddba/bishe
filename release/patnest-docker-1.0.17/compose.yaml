@@ -1,0 +1,111 @@
+# PatNest 后端一体包：Nginx（管理页面 + API 入口）、Redis、Go API（蓝绿双槽位）
+#
+# 本包的 artifacts/ 与 web/dist/ 已在本机构建好，服务器只需打包镜像：
+#   podman-compose --profile app up -d --build
+#
+# 更新后端：替换 artifacts/patnest-api 后
+#   bash scripts/release-api.sh   /   .\scripts\release-api.ps1
+# 更新管理页面：替换 web/dist/ 后
+#   bash scripts/release-web.sh   /   .\scripts\release-web.ps1
+
+x-api: &api
+  image: patnest-api:${APP_VERSION:-1.0.0}
+  env_file: .env
+  volumes:
+    - ./data/updates:/var/lib/patnest/updates
+  depends_on:
+    - redis
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9201/health || exit 1"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
+services:
+  redis:
+    profiles: ["app", "tools"]
+    image: redis:latest
+    pull_policy: always
+    container_name: patnest-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-patnest_redis_change_me}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-patnest_redis_change_me}
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api-blue:
+    <<: *api
+    profiles: ["app"]
+    container_name: patnest-api-blue
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      pull: true
+    environment:
+      APP_PORT: "9201"
+      APP_SLOT: "blue"
+      REDIS_ADDR: "redis:6379"
+      UPDATE_DIR: "/var/lib/patnest/updates"
+
+  api-green:
+    <<: *api
+    profiles: ["app"]
+    container_name: patnest-api-green
+    environment:
+      APP_PORT: "9201"
+      APP_SLOT: "green"
+      REDIS_ADDR: "redis:6379"
+      UPDATE_DIR: "/var/lib/patnest/updates"
+
+  nginx:
+    profiles: ["app"]
+    image: patnest-web:${APP_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      pull: true
+    container_name: patnest-nginx
+    ports:
+      - "${PUBLIC_PORT:-9200}:9200"
+    volumes:
+      - ./nginx/upstream.conf:/etc/nginx/patnest/upstream.conf:ro
+    depends_on:
+      - api-blue
+    restart: unless-stopped
+
+  migrate:
+    profiles: ["tools"]
+    image: patnest-api:${APP_VERSION:-1.0.0}
+    env_file: .env
+    entrypoint: ["/app/patnest-migrate"]
+    command: ["-dir", "/app/migrations"]
+    restart: "no"
+
+  updates-init:
+    profiles: ["tools"]
+    image: alpine:latest
+    pull_policy: always
+    volumes:
+      - ./data/updates:/updates
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /updates/tmp /updates/manual /updates/queue /updates/processing
+        /updates/inbox
+        /updates/failed /updates/status /updates/staging /updates/logs /updates/backups
+        && chmod -R a+rwX /updates
+    restart: "no"

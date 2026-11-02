@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "version": "1.0.18",
+  "commit": "f79173c",
+  "build_time": "2026-11-02T06:02:04Z",
+  "arch": "linux/amd64",
+  "targets": [
+    "api",
+    "web",
+    "db"
+  ],
+  "files": {
+    "artifacts/patnest-api": {
+      "size": 16027808,
+      "sha256": "4f921dff6a16ecbc84f16e6d94254b0ba9d2bcc13a53c673b37098fe800fa902"
+    },
+    "artifacts/patnest-migrate": {
+      "size": 9506976,
+      "sha256": "6299e8a4fad9c89e27e704b0983cd74a936d035e6e1e6a834c4cd4c8f237cc86"
+    },
+    "web/dist/index.html": {
+      "size": 673,
+      "sha256": "a58076aff72c89813b1883c8a5a6173ec72ab254d87f93b8af92bd804defbdf7"
+    },
+    "web/dist/version.json": {
+      "size": 139,
+      "sha256": "0e050480e448ce9a7071e2a3fddb94a7a9deec267eb69d35df644aff9bd17ed4"
+    }
+  }
+}

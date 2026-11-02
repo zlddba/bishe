@@ -1,0 +1,20 @@
+# 本地已编译好 Linux 二进制，服务器只做镜像打包（秒级完成）
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -u 10001 -h /app patnest
+
+WORKDIR /app
+
+COPY artifacts/patnest-api /app/patnest-api
+COPY artifacts/patnest-migrate /app/patnest-migrate
+COPY db/migrations /app/migrations
+
+RUN chmod +x /app/patnest-api /app/patnest-migrate \
+    && chown -R patnest:patnest /app
+
+ENV TZ=Asia/Shanghai
+USER patnest
+EXPOSE 9201
+
+ENTRYPOINT ["/app/patnest-api"]

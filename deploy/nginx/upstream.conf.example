@@ -1,0 +1,3 @@
+# /etc/nginx/patnest/upstream.conf
+# 由 deploy/scripts/deploy-backend.sh 自动改写，只保留一个活动槽位。
+server 127.0.0.1:9200 max_fails=2 fail_timeout=5s;

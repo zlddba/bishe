@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宠栖 PetNest · KMP Desktop 端 UI 设计稿</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23E0708A' d='M12 2c1.6 0 2.9 1.3 2.9 2.9 0 1.3-.9 2.4-2.2 2.8.7.3 1.4.4 2.2.4 2.8 0 5.1 2.2 5.1 5 0 .9-.2 1.7-.6 2.4l1.6 3.4a1 1 0 0 1-.9 1.4H17.2a4 4 0 0 1-3.4 1.9h-3.6a4 4 0 0 1-3.4-1.9H3.9a1 1 0 0 1-.9-1.4l1.6-3.4A5.3 5.3 0 0 1 4 13.1c0-2.8 2.3-5 5.1-5 .8 0 1.5-.1 2.2-.4-.9-.4-1.5-1-1.5-1.9C9.8 3.3 11 2 12 2z'/%3E%3C/svg%3E">
+<style>
+:root{
+  --brand:#E0708A;--brand-soft:#FBE0E6;--brand-ink:#AF4A62;--brand-900:#6F2A3B;
+  --bg:#F6F1F2;--panel:#FFFFFF;--line:#EFE5E8;--line2:#F3EAEC;
+  --ink:#3A2A2F;--ink2:#7C6A6F;--ink3:#B2A0A5;
+  --danger:#C2456A;--ok:#2F9E63;--warn:#D97706;--info:#3E7BFA;--star:#EAB308;
+  --rail:#2C2326;--rail-ink:#C9BCC0;--rail-act:#E0708A;
+  --shadow:0 6px 24px rgba(175,74,98,.10);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:radial-gradient(1200px 700px at 15% 10%,#F7E9EC 0%,transparent 60%),radial-gradient(1000px 600px at 90% 85%,#F2DCE3 0%,transparent 55%),#F1EBED;color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+.hidden{display:none!important}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,select,textarea{font-family:inherit;outline:none}
+.icon{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ===== 登录页 ===== */
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.login-card{width:400px;background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:34px 36px}
+.login-logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:6px}
+.login-logo b{font-size:22px;letter-spacing:1px;color:var(--brand-ink)}
+.login-sub{text-align:center;color:var(--ink2);font-size:12.5px;margin-bottom:26px}
+.f-label{font-size:12.5px;color:var(--ink2);margin:0 0 6px}
+.f-input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;color:var(--ink);background:#fff;transition:.15s}
+.f-input:focus{border-color:var(--brand)}
+.f-input::placeholder{color:var(--ink3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:9px;font-size:13.5px;font-weight:600;transition:.15s}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-ink));color:#fff}
+.btn-primary:hover{opacity:.92}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--brand);color:var(--brand-ink)}
+.btn-danger-text{color:var(--danger)}
+.btn-block{width:100%;margin-top:18px;padding:11px}
+.login-hint{text-align:center;font-size:12px;color:var(--ink3);margin-top:16px}
+.login-third{display:flex;gap:12px;margin-top:16px}
+.login-third .btn{flex:1;font-weight:500;font-size:12.5px;color:var(--ink2);border:1px solid var(--line)}
+
+/* ===== 桌面应用窗口 ===== */
+#app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:18px}
+.win{width:min(1280px,97vw);height:min(840px,94vh);background:var(--panel);border-radius:14px;overflow:hidden;box-shadow:0 22px 70px rgba(60,20,40,.22);display:flex;flex-direction:column}
+.titlebar{height:42px;background:#2C2326;display:flex;align-items:center;padding:0 16px;flex:none}
+.tb-dots{display:flex;gap:7px}
+.tb-dots i{width:11px;height:11px;border-radius:50%}
+.tb-r{background:#E66A5B}.tb-y{background:#E6B84E}.tb-g{background:#62C46C}
+.tb-title{margin-left:16px;color:#D9C9CD;font-size:12.5px;letter-spacing:.5px}
+.tb-right{margin-left:auto;display:flex;gap:8px;color:#8E7E83;font-size:12px}
+.win-body{flex:1;display:flex;overflow:hidden}
+.rail{width:220px;background:var(--rail);flex:none;display:flex;flex-direction:column;padding:16px 10px 12px}
+.rail-logo{display:flex;align-items:center;gap:9px;padding:4px 10px 18px}
+.rail-logo b{color:#fff;font-size:15px;letter-spacing:.5px}
+.rail-logo span{font-size:10.5px;color:#8E7E83}
+.rail-sec{font-size:10.5px;color:#6E5F64;margin:10px 12px 6px;letter-spacing:1px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--rail-ink);font-size:13.5px;cursor:pointer;transition:.15s;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:rgba(224,112,138,.16);color:#fff}
+.nav-item.active .icon{color:var(--rail-act)}
+.nav-item .badge{margin-left:auto;background:var(--brand);color:#fff;font-size:10.5px;border-radius:9px;padding:1px 7px}
+.rail-user{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-top:1px solid rgba(255,255,255,.08)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--brand-900));color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.rail-user b{color:#e9dee1;font-size:12.5px;display:block}
+.rail-user span{color:#8E7E83;font-size:11px}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.main-top{height:56px;background:#fff;border-bottom:1px solid var(--line2);display:flex;align-items:center;padding:0 24px;gap:14px;flex:none}
+.main-top h1{font-size:16px;color:var(--ink)}
+.main-top .crumb{font-size:12px;color:var(--ink3)}
+.search{display:flex;align-items:center;gap:7px;background:#F5F0F1;border-radius:8px;padding:7px 12px;color:var(--ink3);width:240px}
+.search input{border:none;background:none;font-size:13px;color:var(--ink);width:100%}
+.main-actions{margin-left:auto;display:flex;align-items:center;gap:12px}
+.icon-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink2);position:relative}
+.icon-btn:hover{background:#F5F0F1;color:var(--brand-ink)}
+.icon-btn .dot{position:absolute;top:7px;right:8px;width:7px;height:7px;background:var(--danger);border-radius:50%;border:1.5px solid #fff}
+.content{flex:1;overflow-y:auto;padding:22px 26px 40px}
+.view{animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.page-h{display:flex;align-items:flex-end;gap:10px;margin-bottom:18px}
+.page-h h1{font-size:19px}
+.page-h p{color:var(--ink2);font-size:12.5px;margin-bottom:2px}
+.ml-auto{margin-left:auto}
+
+.panel{background:#fff;border:1px solid var(--line2);border-radius:12px;padding:20px}
+.panel-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.panel-h h3{font-size:14.5px}
+.panel-h p{color:var(--ink3);font-size:12px}
+.panel-h .ml-auto{margin-left:auto}
+.panel-b{font-size:13.5px;color:var(--ink2)}
+
+/* stat */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.stat{background:#fff;border:1px solid var(--line2);border-radius:12px;padding:16px 18px}
+.stat .lbl{font-size:12px;color:var(--ink2);margin-bottom:8px}
+.stat .num{font-size:26px;font-weight:700;color:var(--ink)}
+.stat .num small{font-size:13px;color:var(--ink3);font-weight:400;margin-left:3px}
+.stat .trend{font-size:11.5px;color:var(--ink3);margin-top:6px}
+.stat .trend span{color:var(--ok);font-weight:600}
+.stat .trend.down span{color:var(--danger)}
+
+/* 机构卡片 */
+.s-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.scard{border:1px solid var(--line2);border-radius:12px;overflow:hidden;background:#fff;transition:.18s;cursor:pointer}
+.scard:hover{box-shadow:var(--shadow);transform:translateY(-2px)}
+.scard-img{height:118px;position:relative;display:flex;align-items:center;justify-content:center;color:#fff}
+.scard-img .icon{width:34px;height:34px;opacity:.9}
+.scard-img .img-tag{position:absolute;left:12px;top:12px}
+.tag{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600}
+.tag-brand{background:var(--brand-soft);color:var(--brand-ink)}
+.tag-ok{background:#E2F5EA;color:var(--ok)}
+.tag-warn{background:#FBF0DF;color:var(--warn)}
+.tag-soft{background:var(--line2);color:var(--ink2)}
+.tag-danger{background:#F9E4E8;color:var(--danger)}
+.tag-dot{width:6px;height:6px;border-radius:50%;flex:none}
+.scard-body{padding:13px 15px}
+.scard-name{display:flex;align-items:center;gap:7px;font-size:14.5px;font-weight:600}
+.scard-name .icon{width:14px;height:14px;color:var(--brand)}
+.scard-meta{font-size:12px;color:var(--ink2);margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.stars{display:inline-flex;gap:1px;color:var(--star);font-size:12px}
+.scard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:11px;border-top:1px solid var(--line2)}
+.price{color:var(--brand-ink);font-weight:700;font-size:15px}
+.price small{font-size:11.5px;color:var(--ink3);font-weight:400}
+.btn-sm{padding:6px 12px;font-size:12.5px;border-radius:7px}
+
+/* banner */
+.banner{background:linear-gradient(120deg,var(--brand),var(--brand-900));color:#fff;border-radius:14px;padding:22px 26px;margin-bottom:18px;display:flex;align-items:center;gap:18px}
+.banner h2{font-size:18px;margin-bottom:6px}
+.banner p{font-size:12.5px;opacity:.88;line-height:1.6}
+.banner .icon{width:52px;height:52px;opacity:.9;flex:none}
+
+/* 宠物卡片 */
+.p-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pcard{border:1px solid var(--line2);border-radius:12px;background:#fff;padding:15px;cursor:pointer;transition:.18s}
+.pcard:hover{box-shadow:var(--shadow)}
+.pcard-top{display:flex;align-items:center;gap:11px;margin-bottom:11px}
+.pet-ava{width:44px;height:44px;border-radius:50%;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;color:var(--brand-ink)}
+.pet-ava .icon{width:24px;height:24px}
+.pcard-name{font-weight:600;font-size:14px}
+.pcard-breed{font-size:11.5px;color:var(--ink3)}
+.pcard-line{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;padding:3px 0}
+.pcard-line b{color:var(--ink);font-weight:600}
+.pcard-foot{display:flex;gap:8px;margin-top:12px}
+.pcard-foot .btn{flex:1;font-size:12px;padding:7px}
+
+/* 表格 */
+.tbl-wrap{overflow:auto}
+.tbl{width:100%;border-collapse:collapse;min-width:760px}
+.tbl th{font-size:12px;color:var(--ink3);font-weight:600;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{font-size:13px;padding:12px;border-bottom:1px solid var(--line2);color:var(--ink)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#FBF5F6}
+.cell-main{font-weight:600;font-size:13.5px}
+.cell-sub{font-size:11.5px;color:var(--ink3);margin-top:2px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.btn-text{color:var(--brand-ink);font-size:12.5px;font-weight:600;margin-right:10px}
+.btn-danger-text{color:var(--danger);font-size:12.5px;font-weight:600;margin-right:10px}
+
+/* 动态流 */
+.dyn-card{display:flex;gap:14px;border:1px solid var(--line2);border-radius:12px;background:#fff;padding:14px 16px;margin-bottom:12px}
+.dyn-thumb{width:64px;height:64px;border-radius:10px;background:var(--brand-soft);display:flex;align-items:center;justify-content:center;color:var(--brand-ink);flex:none}
+.dyn-thumb .icon{width:26px;height:26px}
+.dyn-body{flex:1;min-width:0}
+.dyn-title{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dyn-meta{font-size:11.5px;color:var(--ink3);margin-top:4px}
+.dyn-txt{font-size:13px;color:var(--ink2);margin-top:7px;line-height:1.6}
+.dyn-actions{margin-top:8px;display:flex;gap:6px}
+
+/* 步骤条 */
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:20px}
+.step{display:flex;align-items:center;gap:8px;color:var(--ink3);font-size:13px}
+.step .n{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.step.active{color:var(--brand-ink);font-weight:600}
+.step.active .n{background:var(--brand);border-color:var(--brand);color:#fff}
+.step.done .n{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-ink)}
+.step-line{width:44px;height:1.5px;background:var(--line);margin:0 10px}
+
+/* 抽屉 */
+.mask{position:fixed;inset:0;background:rgba(30,15,20,.35);opacity:0;pointer-events:none;transition:.2s;z-index:50}
+.mask.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:440px;background:#fff;box-shadow:-8px 0 30px rgba(0,0,0,.12);transform:translateX(100%);transition:.28s cubic-bezier(.2,.7,.3,1);z-index:51;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.d-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line2)}
+.d-head h2{font-size:16px}
+.d-body{flex:1;overflow-y:auto;padding:8px 22px 20px}
+.kv{display:flex;gap:16px;padding:11px 0;border-bottom:1px solid var(--line2);font-size:13px}
+.kv .k{color:var(--ink3);width:92px;flex:none}
+.kv .v{color:var(--ink)}
+.d-foot{padding:14px 22px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px}
+
+/* 进度条(容量/评分) */
+.progress{height:7px;background:var(--line2);border-radius:5px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--brand);border-radius:5px}
+.score-bars{display:grid;gap:12px}
+.sbar .top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;color:var(--ink2)}
+.sbar .top b{color:var(--ink)}
+.track{height:7px;background:var(--line2);border-radius:5px}
+.track .fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-ink));border-radius:5px}
+
+/* 空态 */
+.empty{padding:44px 20px;text-align:center;color:var(--ink3);font-size:13px}
+
+@media(max-width:1080px){
+  .s-grid{grid-template-columns:repeat(2,1fr)}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .p-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:760px){
+  #app{padding:0}
+  .win{border-radius:0;height:100vh;width:100vw}
+  .rail{width:76px}
+  .rail .nav-item span,.rail-logo b,.rail-logo span,.rail-sec,.rail-user b,.rail-user span{display:none}
+  .nav-item{justify-content:center}
+  .content{padding:16px 14px 30px}
+  .s-grid,.stat-grid,.p-grid{grid-template-columns:1fr}
+  .search{display:none}
+}
+</style>
+</head>
+<body>
+<!-- ===== 登录 ===== -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-logo"><span class="avatar" style="width:40px;height:40px;font-size:16px">宠</span><b>宠栖 PetNest</b></div>
+    <div class="login-sub">KMP Desktop 端 · 宠物寄养服务预约</div>
+    <div class="f-label">手机号</div>
+    <input class="f-input" value="138****2201">
+    <div class="f-label" style="margin-top:14px">验证码</div>
+    <div style="display:flex;gap:10px"><input class="f-input" placeholder="6 位验证码"><button class="btn btn-ghost" style="flex:none" onclick="__demo('演示稿：验证码发送')">获取验证码</button></div>
+    <button class="btn btn-primary btn-block" onclick="go('home')">登录</button>
+    <div class="login-hint">未注册的手机号将自动创建账号</div>
+    <div class="login-third">
+      <button class="btn" onclick="__demo('演示稿：微信登录')">微信登录</button>
+      <button class="btn" onclick="go('home')">游客浏览</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 桌面应用 ===== -->
+<div id="app" class="hidden">
+  <div class="win">
+    <div class="titlebar">
+      <span class="tb-dots"><i class="tb-r"></i><i class="tb-y"></i><i class="tb-g"></i></span>
+      <span class="tb-title">宠栖 PetNest · Desktop</span>
+      <span class="tb-right">窗口控制区</span>
+    </div>
+    <div class="win-body">
+      <aside class="rail">
+        <div class="rail-logo"><span class="avatar" style="width:30px;height:30px;font-size:13px">宠</span><b>宠栖</b><span>· Desktop</span></div>
+        <div id="rail-menu">
+        <div class="rail-sec">常用</div>
+        <div class="nav-item active" data-view="home"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8M5 10v10h4v-6h6v6h4V10"/></svg><span>首页</span></div>
+        <div class="nav-item" data-view="sitters"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 8h6"/></svg><span>找机构</span></div>
+        <div class="nav-item" data-view="pets"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><path d="M12 2c1.5 0 2.7 1.2 2.7 2.7 0 1.2-.8 2.2-2 2.6.6.3 1.3.4 2 .4 2.6 0 4.7 2 4.7 4.6 0 .8-.2 1.6-.6 2.2L20 20H4l1.2-5.5A4.9 4.9 0 0 1 4.6 12c0-2.6 2.1-4.6 4.7-4.6.7 0 1.4-.1 2-.4-.6-.4-1-1-1-1.9C10.3 3.2 11 2 12 2z"/></svg><span>我的宠物</span></div>
+        <div class="rail-sec">寄养</div>
+        <div class="nav-item" data-view="booking"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>预约下单</span></div>
+        <div class="nav-item" data-view="orders"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="m18 14 2 2 3-3"/></svg><span>我的订单</span><span class="badge">1</span></div>
+        <div class="nav-item" data-view="dynamics"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg><span>寄养动态</span></div>
+        <div class="rail-sec">账户</div>
+        <div class="nav-item" data-view="profile"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>个人中心</span></div>
+        <div class="nav-item" data-view="favorites"><svg class="icon" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9-8.5C1.5 8 4 5 7 5c2 0 3 1 5 3 2-2 3-3 5-3 3 0 5.5 3 4 6.5-2 4-9 8.5-9 8.5z"/></svg><span>我的收藏</span></div>
+        <div class="nav-item" data-view="coupons"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4zM9.5 10.5v3"/></svg><span>优惠券</span></div>
+        <div class="nav-item" data-view="messages"><svg class="icon" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></svg><span>消息通知</span><span class="badge">3</span></div>
+        </div>
+        <div class="rail-user" id="rail-user-card"><span class="avatar">陈</span><div><b>陈雨</b><span>主人 · 138****2201</span></div></div>
+      </aside>
+      <main class="main">
+        <div class="main-top">
+          <h1 id="topTitle">首页</h1>
+          <span class="crumb" id="topCrumb">宠栖 Desktop &gt; 首页</span>
+          <div class="search"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="搜索机构 / 宠物"></div>
+          <div class="main-actions">
+            <div class="role-switch">
+              <span class="rs-opt active" data-r="owner" onclick="switchRole('owner')">主人</span>
+              <span class="rs-opt" data-r="sitter" onclick="switchRole('sitter')">机构</span>
+            </div>
+            <span class="icon-btn" onclick="__demo('演示稿：消息通知')"><svg class="icon" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></svg><span class="dot"></span></span>
+            <span class="icon-btn" onclick="go('profile')"><span class="avatar" style="width:30px;height:30px;font-size:12px">陈</span></span>
+          </div>
+        </div>
+        <div class="content">
+
+        <!-- ===== 首页 ===== -->
+        <section class="view hidden" data-view="home">
+          <div class="banner">
+            <svg class="icon" viewBox="0 0 24 24" style="width:52px;height:52px"><path d="M12 2c1.6 0 2.9 1.3 2.9 2.9 0 1.3-.9 2.4-2.2 2.8.7.3 1.4.4 2.2.4 2.8 0 5.1 2.2 5.1 5 0 .9-.2 1.7-.6 2.4l1.6 3.4a1 1 0 0 1-.9 1.4H17.2a4 4 0 0 1-3.4 1.9h-3.6a4 4 0 0 1-3.4-1.9H3.9a1 1 0 0 1-.9-1.4l1.6-3.4A5.3 5.3 0 0 1 4 13.1c0-2.8 2.3-5 5.1-5 .8 0 1.5-.1 2.2-.4-.9-.4-1.5-1-1.5-1.9C9.8 3.3 11 2 12 2z"/></svg>
+            <div style="flex:1"><h2>欢迎回来，陈雨</h2><p>「豆包」的寄养正在进行中 · 萌宠之家 · 10/28 - 11/01 · 还有 2 天结束。节假日寄养建议提前 7 天预约。</p></div>
+            <button class="btn btn-ghost" style="background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.4)" onclick="go('booking')">立即预约</button>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><div class="lbl">进行中寄养</div><div class="num">1 <small>单</small></div><div class="trend">豆包 · 萌宠之家</div></div>
+            <div class="stat"><div class="lbl">待支付订单</div><div class="num">1 <small>单</small></div><div class="trend down"><span>!</span> 需在 10:32 前支付</div></div>
+            <div class="stat"><div class="lbl">我的宠物</div><div class="num">2 <small>只</small></div><div class="trend">已全部建档</div></div>
+            <div class="stat"><div class="lbl">待评价</div><div class="num">1 <small>单</small></div><div class="trend">雪球 · 遛遛上门</div></div>
+          </div>
+          <div class="page-h" style="margin-top:22px"><h1 style="font-size:15px">我的宠物</h1><p>预约时快速选择</p><div class="ml-auto"><button class="btn-text" onclick="go('pets')">管理宠物</button></div></div>
+          <div class="p-grid" id="home-pets"></div>
+          <div class="page-h" style="margin-top:26px"><h1 style="font-size:15px">为你推荐</h1><p>基于你的宠物与偏好智能匹配</p><div class="ml-auto"><span class="tag tag-brand">语义推荐 · pgvector</span></div></div>
+          <div class="s-grid" id="home-sitters"></div>
+        </section>
+
+        <!-- ===== 找机构 ===== -->
+        <section class="view hidden" data-view="sitters">
+          <div class="page-h"><div><h1>找机构</h1><p>家庭寄养 / 门店寄养 / 上门喂养</p></div>
+            <div class="ml-auto" style="display:flex;gap:10px;align-items:center">
+              <span class="tag tag-brand" onclick="__demo('演示稿：智能匹配')"><svg class="icon" style="width:12px;height:12px" viewBox="0 0 24 24"><path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/></svg>智能推荐</span>
+            </div>
+          </div>
+          <div class="panel" style="padding:14px 16px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <div class="tabs" id="sitter-tabs">
+                <span class="tab active">全部</span><span class="tab">家庭寄养</span><span class="tab">门店寄养</span><span class="tab">上门喂养</span>
+              </div>
+              <div class="ml-auto" style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="font-size:12px;padding:7px 12px" onclick="__demo('演示稿：排序')">综合排序 ▾</button>
+                <button class="btn btn-ghost" style="font-size:12px;padding:7px 12px" onclick="__demo('演示稿：筛选')">筛选</button>
+              </div>
+            </div>
+          </div>
+          <div class="s-grid" id="sitter-list" style="margin-top:16px"></div>
+        </section>
+
+        <!-- ===== 我的宠物 ===== -->
+        <section class="view hidden" data-view="pets">
+          <div class="page-h"><div><h1>我的宠物</h1><p>宠物档案 · 免疫证明 · 健康备注</p></div>
+            <div class="ml-auto"><button class="btn btn-primary" onclick="__demo('演示稿：新增宠物')"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新增宠物</button></div>
+          </div>
+          <div class="p-grid" id="pet-list"></div>
+          <div class="panel" style="margin-top:18px">
+            <div class="panel-h"><h3>免疫证明核验状态</h3><p>平台审核通过后可在预约时正常使用</p></div>
+            <div class="tbl-wrap"><table class="tbl">
+              <tr><th>宠物</th><th>疫苗情况</th><th>证明</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-cert"></tbody>
+            </table></div>
+          </div>
+        </section>
+
+        <!-- ===== 预约下单 ===== -->
+        <section class="view hidden" data-view="booking">
+          <div class="page-h"><div><h1>预约下单</h1><p>选机构 → 选日期与宠物 → 确认费用</p></div></div>
+          <div class="stepper">
+            <div class="step active" id="sp1"><span class="n">1</span><span>选择机构</span></div><span class="step-line"></span>
+            <div class="step" id="sp2"><span class="n">2</span><span>日期与宠物</span></div><span class="step-line"></span>
+            <div class="step" id="sp3"><span class="n">3</span><span>确认与提交</span></div>
+          </div>
+          <div id="bk-step1">
+            <div class="s-grid" style="grid-template-columns:repeat(2,1fr)" id="bk-sitters"></div>
+          </div>
+          <div id="bk-step2" class="hidden">
+            <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:16px">
+              <div class="panel">
+                <div class="panel-h"><h3>选择寄养日期</h3><p>天数 = 结束 − 开始（含首不含尾）</p></div>
+                <div style="display:flex;gap:14px">
+                  <div style="flex:1"><div class="f-label">开始日期</div><input class="f-input" type="date" value="2026-10-31"></div>
+                  <div style="flex:1"><div class="f-label">结束日期</div><input class="f-input" type="date" value="2026-11-04"></div>
+                </div>
+                <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+                  <span class="tag tag-ok">家庭 3/3 满</span><span class="tag tag-ok">门店 2/5 可订</span>
+                </div>
+                <div class="panel-h" style="margin-top:18px"><h3>选择宠物</h3><p>单选</p></div>
+                <div id="bk-pets" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>
+              </div>
+              <div class="panel">
+                <div class="panel-h"><h3>费用预估</h3><p>实时计算</p></div>
+                <div style="display:grid;gap:9px">
+                  <div class="kv" style="border:none;padding:6px 0"><span class="k">机构</span><span class="v" id="fee-org">萌宠之家</span></div>
+                  <div class="kv" style="border:none;padding:6px 0"><span class="k">寄养天数</span><span class="v" id="fee-days">4 天</span></div>
+                  <div class="kv" style="border:none;padding:6px 0"><span class="k">日单价</span><span class="v">¥130</span></div>
+                  <div class="kv" style="border:none;padding:6px 0"><span class="k">小计</span><span class="v mono">¥520</span></div>
+                </div>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line2);display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-size:13px;color:var(--ink2)">应付</span><b style="color:var(--brand-ink);font-size:20px">¥520</b>
+                </div>
+                <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="bkNext(2)">下一步：确认订单</button>
+              </div>
+            </div>
+          </div>
+          <div id="bk-step3" class="hidden">
+            <div class="panel" style="max-width:560px">
+              <div class="panel-h"><h3>确认订单</h3></div>
+              <div style="display:grid;gap:9px">
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">机构</span><span class="v">萌宠之家</span></div>
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">寄养区间</span><span class="v">10/31 - 11/04</span></div>
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">宠物</span><span class="v">豆包（橘猫）</span></div>
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">费用构成</span><span class="v">130 × 4 天 = ¥520</span></div>
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">优惠</span><span class="v" style="color:var(--ok)">-¥20（新人券）</span></div>
+                <div class="kv" style="border:none;padding:6px 0"><span class="k">应付</span><span class="v mono" style="color:var(--brand-ink);font-weight:700">¥500</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin:14px 0;font-size:12.5px;color:var(--ink2)">
+                <span class="checkbox" style="width:15px;height:15px;border:1.5px solid var(--brand);border-radius:4px;background:var(--brand);display:inline-flex;align-items:center;justify-content:center;color:#fff"><svg viewBox="0 0 24 24" style="width:11px;height:11px" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+                我已阅读并同意《寄养服务协议》与《宠物健康告知书》
+              </div>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-ghost" style="flex:1" onclick="bkPrev()">上一步</button>
+                <button class="btn btn-primary" style="flex:1" onclick="__demo('演示稿：提交订单 → 待支付')">提交订单</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 我的订单 ===== -->
+        <section class="view hidden" data-view="orders">
+          <div class="page-h"><div><h1>我的订单</h1><p>待支付 → 待确认 → 寄养中 → 已结束 → 已评价</p></div></div>
+          <div class="panel">
+            <div style="display:flex;gap:10px;flex-wrap:wrap" id="order-tabs">
+              <span class="tab active">全部</span><span class="tab">待支付</span><span class="tab">寄养中</span><span class="tab">已结束</span>
+            </div>
+            <div class="tbl-wrap" style="margin-top:14px"><table class="tbl">
+              <tr><th>订单号</th><th>机构</th><th>宠物</th><th>区间</th><th>天数</th><th>金额</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-orders"></tbody>
+            </table></div>
+          </div>
+        </section>
+
+        <!-- ===== 寄养动态 ===== -->
+        <section class="view hidden" data-view="dynamics">
+          <div class="page-h"><div><h1>寄养动态</h1><p>寄养期间机构发布的宠物近况</p></div>
+            <div class="ml-auto"><span class="tag tag-warn" onclick="__demo('演示稿：订阅消息')"><svg class="icon" style="width:12px;height:12px" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></svg>已订阅动态提醒</span></div>
+          </div>
+          <div id="dyn-list"></div>
+        </section>
+
+        <!-- ===== 个人中心 ===== -->
+        <section class="view hidden" data-view="profile">
+          <div class="page-h"><div><h1>个人中心</h1><p>账号 · 统计 · 设置</p></div></div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:16px">
+            <div class="panel">
+              <div class="panel-h"><h3>我的资料</h3><p>联系人信息</p></div>
+              <div style="display:grid;gap:10px">
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1"><div class="f-label">昵称</div><input class="f-input" value="陈雨"></div>
+                  <div style="flex:1"><div class="f-label">手机号</div><input class="f-input" value="138****2201"></div>
+                </div>
+                <div><div class="f-label">常用地址</div><input class="f-input" value="呼和浩特 · 赛罕区"></div>
+                <div><div class="f-label">紧急联系人</div><input class="f-input" value="家人 · 159****8843"></div>
+              </div>
+              <div style="margin-top:16px"><button class="btn btn-primary" onclick="__demo('演示稿：保存资料')">保存</button></div>
+            </div>
+            <div class="panel">
+              <div class="panel-h"><h3>我的统计</h3></div>
+              <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:0">
+                <div class="stat" style="padding:12px"><div class="lbl">累计寄养</div><div class="num" style="font-size:20px">9 <small>单</small></div></div>
+                <div class="stat" style="padding:12px"><div class="lbl">收藏机构</div><div class="num" style="font-size:20px">4 <small>家</small></div></div>
+                <div class="stat" style="padding:12px"><div class="lbl">优惠券</div><div class="num" style="font-size:20px">2 <small>张</small></div></div>
+                <div class="stat" style="padding:12px"><div class="lbl">积分</div><div class="num" style="font-size:20px">320 <small>分</small></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-h"><h3>账号设置</h3></div>
+            <div style="display:grid;gap:2px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line2)"><span style="font-size:13px">消息通知（订阅消息）</span><span class="switch on" onclick="__demo('演示稿：开关')"></span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line2)"><span style="font-size:13px">允许机构查看宠物健康备注</span><span class="switch on" onclick="__demo('演示稿：开关')"></span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 2px"><span style="font-size:13px">账号与安全</span><span style="color:var(--ink3);font-size:12px">›</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 机构详情（全页） ===== -->
+        <section class="view hidden" data-view="sitter-detail">
+          <div class="page-h"><button class="btn btn-ghost" style="padding:7px 14px;font-size:12.5px" onclick="go('sitters')"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>返回列表</button>
+            <div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：收藏机构')"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-9-8.5C1.5 8 4 5 7 5c2 0 3 1 5 3 2-2 3-3 5-3 3 0 5.5 3 4 6.5-2 4-9 8.5-9 8.5z"/></svg>收藏</button></div>
+          </div>
+          <div class="panel" style="padding:0;overflow:hidden">
+            <div id="sd-img" style="height:150px;display:flex;align-items:center;justify-content:center;color:#fff"><svg class="icon" style="width:44px;height:44px;opacity:.9" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg></div>
+            <div style="padding:20px 24px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <h2 id="sd-name" style="font-size:20px"></h2>
+                <span class="tag tag-brand" id="sd-type"></span>
+                <span class="tag tag-ok" id="sd-status"></span>
+              </div>
+              <div class="scard-meta" id="sd-rate" style="font-size:13px;margin-top:8px"></div>
+              <div class="scard-meta" id="sd-addr" style="font-size:13px;margin-top:6px"></div>
+              <div class="scard-meta" id="sd-tags" style="font-size:13px;margin-top:6px"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+            <div class="panel"><div class="panel-h"><h3>寄养信息</h3></div><div id="sd-info"></div></div>
+            <div class="panel"><div class="panel-h"><h3>机构简介</h3></div><div class="panel-b" id="sd-desc" style="line-height:1.8"></div>
+              <div style="margin-top:14px"><div class="f-label" style="margin:0 0 8px">服务项目</div><div id="sd-services" style="display:grid;gap:9px"></div></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-h"><h3>容量日历</h3><p>近 7 日床位排期</p><div class="ml-auto"><button class="btn-text" onclick="go('booking')">去预约 ›</button></div></div>
+            <div id="sd-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px"></div>
+          </div>
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-h"><h3>主人评价</h3><p id="sd-review-head"></p><div class="ml-auto"><span class="tag tag-brand">综合评分</span></div></div>
+            <div id="sd-reviews"></div>
+          </div>
+          <div style="position:sticky;bottom:0;background:#fff;border:1px solid var(--line2);border-radius:12px;padding:14px 20px;margin-top:16px;display:flex;align-items:center;gap:16px;box-shadow:0 -6px 20px rgba(175,74,98,.08)">
+            <div><div style="font-size:12px;color:var(--ink3)">家庭寄养 · 日单价</div><div style="font-size:22px;font-weight:700;color:var(--brand-ink)" id="sd-price"></div></div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" onclick="__demo('演示稿：联系机构')">联系机构</button>
+            <button class="btn btn-primary" style="padding:11px 24px" onclick="go('booking')">立即预约</button>
+          </div>
+        </section>
+
+        <!-- ===== 新增 / 编辑宠物 ===== -->
+        <section class="view hidden" data-view="pet-edit">
+          <div class="page-h"><button class="btn btn-ghost" style="padding:7px 14px;font-size:12.5px" onclick="go('pets')">返回</button>
+            <div class="ml-auto"><h1 style="font-size:16px" id="pe-title">新增宠物</h1></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:16px">
+            <div class="panel">
+              <div class="panel-h"><h3>宠物照片</h3><p>用于机构识别与档案展示</p></div>
+              <div id="pe-photo" style="height:220px;border:1.5px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--ink3);gap:10px;cursor:pointer" onclick="__demo('演示稿：选择照片')">
+                <svg class="icon" style="width:34px;height:34px" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg>
+                <div style="font-size:12.5px">点击上传宠物照片</div><div style="font-size:11px">支持 JPG / PNG，≤ 5MB</div>
+              </div>
+              <div style="margin-top:14px;font-size:12px;color:var(--ink3)">已上传后将用于机构确认与寄养动态</div>
+            </div>
+            <div class="panel">
+              <div class="panel-h"><h3>基本信息</h3></div>
+              <div style="display:grid;gap:12px">
+                <div style="display:flex;gap:12px">
+                  <div style="flex:1"><div class="f-label">宠物类型</div><select class="f-input"><option>猫</option><option>狗</option><option>其他</option></select></div>
+                  <div style="flex:1"><div class="f-label">宠物名字</div><input class="f-input" placeholder="如：豆包"></div>
+                </div>
+                <div style="display:flex;gap:12px">
+                  <div style="flex:1"><div class="f-label">体型</div><select class="f-input"><option>小型</option><option>中型</option><option>大型</option></select></div>
+                  <div style="flex:1"><div class="f-label">年龄</div><input class="f-input" placeholder="如：2 岁"></div>
+                </div>
+                <div><div class="f-label">疫苗情况</div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <span class="tab active">已接种</span><span class="tab">待补种</span><span class="tab">不适用</span>
+                  </div>
+                </div>
+                <div><div class="f-label">免疫证明（照片）</div>
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <div style="flex:1;border:1.5px dashed var(--line);border-radius:9px;padding:10px;color:var(--ink3);font-size:12.5px;text-align:center;cursor:pointer" onclick="__demo('演示稿：上传免疫证明')">上传接种证 / 疫苗本照片</div>
+                  </div>
+                </div>
+                <div><div class="f-label">健康与行为备注</div><textarea class="f-input" rows="2" placeholder="忌口、性格、过敏史、常用用品等，供机构照料参考"></textarea></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:18px">
+                <button class="btn btn-ghost" style="flex:1" onclick="go('pets')">取消</button>
+                <button class="btn btn-primary" style="flex:1" onclick="__demo('演示稿：保存宠物档案')">保存宠物档案</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 支付 ===== -->
+        <section class="view hidden" data-view="pay">
+          <div class="page-h"><h1>收银台</h1><p>确认订单后完成支付</p><div class="ml-auto"><button class="btn-text" onclick="go('orders')">返回订单</button></div></div>
+          <div style="max-width:560px">
+            <div class="panel"><div class="panel-h"><h3>订单摘要</h3></div><div id="pay-summary"></div></div>
+            <div class="panel" style="margin-top:14px">
+              <div class="panel-h"><h3>支付方式</h3></div>
+              <div id="pay-methods" style="display:grid;gap:10px">
+                <div class="pmethod"><span class="picon" style="background:var(--brand-soft);color:var(--brand-ink)"><svg class="icon" style="width:18px;height:18px" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M4 10h16M7 15h4"/></svg></span><div style="flex:1"><div style="font-weight:600;font-size:13.5px">余额支付</div><div style="font-size:11.5px;color:var(--ink3)">当前余额 ¥236.50</div></div><span class="radio"></span></div>
+                <div class="pmethod"><span class="picon" style="background:#E7F1FD;color:var(--info)"><svg class="icon" style="width:18px;height:18px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span><div style="flex:1"><div style="font-weight:600;font-size:13.5px">模拟支付通道</div><div style="font-size:11.5px;color:var(--ink3)">个人主体演示通道（微信支付资质待申请）</div></div><span class="radio on"></span></div>
+                <div class="pmethod"><span class="picon" style="background:#F5F0F1;color:var(--ink2)"><svg class="icon" style="width:18px;height:18px" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg></span><div style="flex:1"><div style="font-weight:600;font-size:13.5px">银行卡（演示）</div><div style="font-size:11.5px;color:var(--ink3)">储蓄卡 / 信用卡</div></div><span class="radio"></span></div>
+              </div>
+            </div>
+            <div class="panel" style="margin-top:14px;display:flex;align-items:center;gap:16px">
+              <div style="flex:1"><div style="font-size:12px;color:var(--ink3)">应付金额</div><div style="font-size:24px;font-weight:700;color:var(--brand-ink)" id="pay-amount"></div></div>
+              <button class="btn btn-primary" style="padding:12px 30px" onclick="payDone()">确认支付</button>
+            </div>
+            <div id="pay-result" class="hidden">
+              <div class="panel" style="margin-top:14px;text-align:center;padding:34px 20px">
+                <div style="width:52px;height:52px;border-radius:50%;background:#E2F5EA;color:var(--ok);display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5 11-11"/></svg></div>
+                <h3 style="margin-bottom:6px">支付成功</h3>
+                <p style="font-size:12.5px;color:var(--ink2)">订单已进入「待确认」状态，等待机构确认后开始寄养</p>
+                <div style="display:flex;gap:10px;justify-content:center;margin-top:18px">
+                  <button class="btn btn-ghost" onclick="go('orders')">查看订单</button>
+                  <button class="btn btn-primary" onclick="go('dynamics')">订阅动态提醒</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 四维评价 ===== -->
+        <section class="view hidden" data-view="review">
+          <div class="page-h"><button class="btn btn-ghost" style="padding:7px 14px;font-size:12.5px" onclick="go('orders')">返回订单</button>
+            <div class="ml-auto"><span class="tag tag-brand">寄养已完成</span></div></div>
+          <div style="max-width:620px">
+            <div class="panel">
+              <div class="panel-h"><h3>评价「遛遛上门」</h3><p>雪球 · 银渐层 · 10/25 - 10/27</p></div>
+              <div style="margin-top:6px"><div class="f-label" style="margin:0 0 10px">综合评分</div>
+                <div style="display:flex;gap:6px" id="review-stars">
+                  <span class="rstar" data-v="1"><svg viewBox="0 0 24 24" width="30" height="30" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg></span>
+                  <span class="rstar" data-v="2"><svg viewBox="0 0 24 24" width="30" height="30" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg></span>
+                  <span class="rstar" data-v="3"><svg viewBox="0 0 24 24" width="30" height="30" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg></span>
+                  <span class="rstar" data-v="4"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#EAB308" stroke-width="1.6"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg></span>
+                  <span class="rstar" data-v="5"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#EAB308" stroke-width="1.6"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg></span>
+                </div>
+                <div style="font-size:12px;color:var(--ink3);margin-top:8px" id="review-score-hint">已选 3 星</div>
+              </div>
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <div class="panel-h"><h3>四维评分</h3><p>分项打星</p></div>
+              <div style="display:grid;gap:14px">
+                <div style="display:flex;align-items:center;gap:14px"><span style="width:56px;font-size:13px;color:var(--ink2)">环境</span><div class="mini-stars" style="flex:1"><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms"></span></div></div>
+                <div style="display:flex;align-items:center;gap:14px"><span style="width:56px;font-size:13px;color:var(--ink2)">服务</span><div class="mini-stars" style="flex:1"><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms"></span></div></div>
+                <div style="display:flex;align-items:center;gap:14px"><span style="width:56px;font-size:13px;color:var(--ink2)">安全</span><div class="mini-stars" style="flex:1"><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms"></span><span class="ms"></span></div></div>
+                <div style="display:flex;align-items:center;gap:14px"><span style="width:56px;font-size:13px;color:var(--ink2)">性价比</span><div class="mini-stars" style="flex:1"><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span><span class="ms on"></span></div></div>
+              </div>
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <div class="panel-h"><h3>文字评价</h3><p>选填</p></div>
+              <textarea class="f-input" rows="4" placeholder="分享寄养体验，帮助更多主人选择……" style="resize:vertical"></textarea>
+              <div style="margin-top:10px;font-size:11.5px;color:var(--ink3)">可补充照片，最多 3 张</div>
+            </div>
+            <button class="btn btn-primary btn-block" style="margin-top:16px;padding:12px" onclick="__demo('演示稿：提交评价 → 订单进入已评价')">提交评价</button>
+          </div>
+        </section>
+
+        <!-- ===== 我的收藏 ===== -->
+        <section class="view hidden" data-view="favorites">
+          <div class="page-h"><div><h1>我的收藏</h1><p>常用机构快捷入口</p></div>
+            <div class="ml-auto"><span class="tag tag-soft">共 4 家</span></div></div>
+          <div class="s-grid" id="fav-list"></div>
+        </section>
+
+        <!-- ===== 优惠券 ===== -->
+        <section class="view hidden" data-view="coupons">
+          <div class="page-h"><div><h1>优惠券</h1><p>下单时自动抵扣</p></div>
+            <div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：领券中心')">领券中心</button></div></div>
+          <div style="display:flex;gap:10px;margin-bottom:16px" id="coupon-tabs">
+            <span class="tab active">可用（2）</span><span class="tab">已使用</span><span class="tab">已过期</span>
+          </div>
+          <div id="coupon-list"></div>
+        </section>
+
+        <!-- ===== 消息通知 ===== -->
+        <section class="view hidden" data-view="messages">
+          <div class="page-h"><div><h1>消息通知</h1><p>订单、动态与系统消息</p></div></div>
+          <div id="msg-list"></div>
+        </section>
+
+        <!-- ===== 机构端 · 经营概览 ===== -->
+        <section class="view hidden" data-view="sb-dash">
+          <div class="page-h"><div><h1>经营概览</h1><p>萌宠之家 · 本机构数据</p></div>
+            <div class="ml-auto"><span class="tag tag-ok"><span class="tag-dot" style="background:var(--ok)"></span>营业中</span></div></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">
+            <div class="sbd-stat"><div class="lbl">今日待确认订单</div><div class="num">3 <small>单</small></div><div class="trend">需 2h 内处理</div></div>
+            <div class="sbd-stat"><div class="lbl">进行中寄养</div><div class="num">6 <small>只</small></div><div class="trend">家庭 3 · 门店 3</div></div>
+            <div class="sbd-stat"><div class="lbl">今日收入</div><div class="num">¥1,180</div><div class="trend">较昨日 +12%</div></div>
+            <div class="sbd-stat"><div class="lbl">床位入住率</div><div class="num">72%</div><div class="trend">10/31 假期预计满员</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px">
+            <div class="panel">
+              <div class="panel-h"><h3>近 7 日订单趋势</h3><p>订单量 / 收入</p></div>
+              <div style="display:flex;align-items:flex-end;gap:14px;height:180px;padding:10px 4px 0">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:40%;background:var(--brand-soft);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">10/24</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:52%;background:var(--brand-soft);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">25</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:64%;background:var(--brand-soft);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">26</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:48%;background:var(--brand-soft);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">27</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:78%;background:var(--brand);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">28</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:86%;background:var(--brand);width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">29</span></div>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;height:100%"><div style="height:92%;background:linear-gradient(180deg,var(--brand),var(--brand-900));width:70%;border-radius:6px 6px 0 0"></div><span style="font-size:10.5px;color:var(--ink3);margin-top:6px">今</span></div>
+              </div>
+              <div style="display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--ink3)"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--brand);margin-right:5px"></i>收入</span></div>
+            </div>
+            <div class="panel">
+              <div class="panel-h"><h3>待办事项</h3><p>需要处理</p></div>
+              <div id="sb-todo"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== 机构端 · 接单管理 ===== -->
+        <section class="view hidden" data-view="sb-orders">
+          <div class="page-h"><div><h1>接单管理</h1><p>确认 / 拒绝预约，管理寄养进度</p></div>
+            <div class="ml-auto"><span class="tag tag-warn">待确认 3</span></div></div>
+          <div class="panel">
+            <div style="display:flex;gap:10px;flex-wrap:wrap" id="sb-order-tabs">
+              <span class="tab active">全部</span><span class="tab">待确认</span><span class="tab">寄养中</span><span class="tab">已完成</span>
+            </div>
+            <div class="tbl-wrap" style="margin-top:14px"><table class="tbl">
+              <tr><th>订单号</th><th>主人</th><th>宠物</th><th>区间</th><th>天数</th><th>金额</th><th>状态</th><th>操作</th></tr>
+              <tbody id="tb-sb-orders"></tbody>
+            </table></div>
+          </div>
+        </section>
+
+        <!-- ===== 机构端 · 容量日历 ===== -->
+        <section class="view hidden" data-view="sb-capacity">
+          <div class="page-h"><div><h1>容量日历</h1><p>本机构床位排期与节假日定价</p></div>
+            <div class="ml-auto"><button class="btn btn-ghost" onclick="__demo('演示稿：节假日定价')">节假日定价</button></div></div>
+          <div class="panel">
+            <div class="panel-h"><h3>近 7 日床位排期</h3><p>家庭 / 门店</p></div>
+            <div id="sb-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px"></div>
+            <div style="display:flex;gap:16px;margin-top:14px;font-size:12.5px;color:var(--ink2);flex-wrap:wrap">
+              <span><span class="slot slot-free" style="margin-right:5px">空闲</span>余量充足</span>
+              <span><span class="slot slot-busy" style="margin-right:5px">紧张</span>余量 ≤ 1</span>
+              <span><span class="slot slot-full" style="margin-right:5px">满员</span>不可下单</span>
+              <span style="color:var(--danger)">节假日</span>
+            </div>
+          </div>
+          <div class="panel" style="margin-top:16px">
+            <div class="panel-h"><h3>容量与定价规则</h3><p>家庭 3 只 / 门店 5 只</p></div>
+            <div class="inc-row"><span>家庭寄养 · 日单价</span><b>¥130/天</b></div>
+            <div class="inc-row"><span>门店寄养 · 日单价</span><b>¥180/天</b></div>
+            <div class="inc-row"><span>节假日上浮</span><b>+20%</b></div>
+            <div class="inc-row"><span>上门喂养 · 次单价</span><b>¥60/次</b></div>
+            <div style="margin-top:14px"><button class="btn btn-primary" onclick="__demo('演示稿：保存定价')">保存定价</button></div>
+          </div>
+        </section>
+
+        <!-- ===== 机构端 · 发布动态 ===== -->
+        <section class="view hidden" data-view="sb-publish">
+          <div class="page-h"><div><h1>寄养动态发布</h1><p>记录宠物近况，审核后对主人可见</p></div>
+            <div class="ml-auto"><button class="btn btn-primary" onclick="openPublish()"><svg class="icon" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>发布动态</button></div></div>
+          <div id="sb-dyn-list"></div>
+        </section>
+
+        <!-- ===== 机构端 · 评价回复 ===== -->
+        <section class="view hidden" data-view="sb-reviews">
+          <div class="page-h"><div><h1>评价管理</h1><p>查看并回复主人评价</p></div>
+            <div class="ml-auto"><span class="tag tag-brand">综合评分 4.6</span></div></div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+            <div class="sbd-stat"><div class="lbl">环境</div><div class="num">4.8</div></div>
+            <div class="sbd-stat"><div class="lbl">服务</div><div class="num">4.7</div></div>
+            <div class="sbd-stat"><div class="lbl">安全</div><div class="num">4.9</div></div>
+            <div class="sbd-stat"><div class="lbl">性价比</div><div class="num">4.2</div></div>
+          </div>
+          <div id="sb-rev-list"></div>
+        </section>
+
+        <!-- ===== 机构端 · 收益结算 ===== -->
+        <section class="view hidden" data-view="sb-income">
+          <div class="page-h"><div><h1>收益结算</h1><p>收入明细与提现</p></div>
+            <div class="ml-auto"><button class="btn btn-primary" onclick="__demo('演示稿：申请提现')">申请提现</button></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">
+            <div class="sbd-stat"><div class="lbl">本月收入</div><div class="num">¥12,460</div><div class="trend">+18% vs 上月</div></div>
+            <div class="sbd-stat"><div class="lbl">可结算金额</div><div class="num">¥8,320</div><div class="trend">已扣除平台佣金 10%</div></div>
+            <div class="sbd-stat"><div class="lbl">累计收入</div><div class="num">¥56,800</div><div class="trend">入驻至今</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-h"><h3>结算明细</h3><p>按订单</p></div>
+            <div class="tbl-wrap"><table class="tbl">
+              <tr><th>订单号</th><th>主人</th><th>宠物</th><th>金额</th><th>平台佣金</th><th>实收</th><th>状态</th></tr>
+              <tbody id="tb-sb-income"></tbody>
+            </table></div>
+          </div>
+        </section>
+
+        <!-- ===== 机构端 · 机构资料 ===== -->
+        <section class="view hidden" data-view="sb-profile">
+          <div class="page-h"><div><h1>机构资料</h1><p>维护本机构信息与资质</p></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:16px">
+            <div class="panel">
+              <div class="panel-h"><h3>环境照片</h3><p>用于机构展示</p></div>
+              <div style="height:180px;border:1.5px dashed var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ink3);gap:8px;flex-direction:column;cursor:pointer" onclick="__demo('演示稿：上传照片')"><svg class="icon" style="width:30px;height:30px" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg><div style="font-size:12.5px">点击上传环境照片</div></div>
+              <div style="margin-top:14px;font-size:12px;color:var(--ink3)">建议 3-5 张，展示寄养区 / 院落 / 活动区</div>
+            </div>
+            <div class="panel">
+              <div class="panel-h"><h3>基本信息</h3></div>
+              <div style="display:grid;gap:12px">
+                <div style="display:flex;gap:12px"><div style="flex:1"><div class="f-label">机构名称</div><input class="f-input" value="萌宠之家"></div><div style="flex:1"><div class="f-label">类型</div><select class="f-input"><option>家庭寄养</option><option>门店寄养</option></select></div></div>
+                <div><div class="f-label">所在地址</div><input class="f-input" value="呼和浩特 · 赛罕区"></div>
+                <div style="display:flex;gap:12px"><div style="flex:1"><div class="f-label">家庭容量</div><input class="f-input" value="3 只"></div><div style="flex:1"><div class="f-label">门店容量</div><input class="f-input" value="5 只"></div></div>
+                <div><div class="f-label">机构简介</div><textarea class="f-input" rows="2">自有院落，专人陪护，每日视频反馈，适合中小型犬猫。</textarea></div>
+                <div><div class="f-label">环境标签</div><input class="f-input" value="院落 · 专人陪护 · 每日视频"></div>
+              </div>
+              <div style="margin-top:16px"><button class="btn btn-primary" onclick="__demo('演示稿：保存资料')">保存资料</button></div>
+            </div>
+          </div>
+        </section>
+
+<!-- ===== 抽屉 / 弹窗 ===== -->
+<div class="mask" id="mask"></div>
+<aside class="drawer" id="drawer"><div class="d-head"><h2 id="dTitle"></h2><span style="cursor:pointer;color:var(--ink3);display:inline-flex" onclick="closeDrawer()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+<div class="d-body" id="dBody"></div><div class="d-foot" id="dFoot"></div></aside>
+<div class="modal" id="modal"><div class="m-head"><span id="mTitle"></span><span style="cursor:pointer;color:var(--ink3);display:inline-flex" onclick="closeModal()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+<div class="m-body" id="mBody"></div><div class="m-foot" id="mFoot"></div></div>
+
+<style>
+.tab{display:inline-flex;padding:6px 14px;border-radius:8px;font-size:13px;color:var(--ink2);cursor:pointer;user-select:none;transition:.15s}
+.tab:hover{background:#F5F0F1}
+.tab.active{background:var(--brand-soft);color:var(--brand-ink);font-weight:600}
+.switch{width:38px;height:22px;border-radius:12px;background:var(--line);position:relative;cursor:pointer;transition:.2s;flex:none}
+.switch.on{background:var(--brand)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch.on::after{left:19px}
+.modal{position:fixed;left:50%;top:44%;transform:translate(-50%,-44%) scale(.96);width:400px;max-width:92vw;background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.2);z-index:52;opacity:0;pointer-events:none;transition:.2s}
+.modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-44%) scale(1)}
+.m-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line2);font-size:15px;font-weight:600}
+.m-body{padding:6px 20px 16px}
+.m-foot{padding:14px 20px;border-top:1px solid var(--line2);display:flex;justify-content:flex-end;gap:10px}
+.pmethod{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line2);border-radius:10px;padding:12px 14px;cursor:pointer;transition:.15s}
+.pmethod:hover{border-color:var(--brand)}
+.pmethod.selected{border-color:var(--brand);background:var(--brand-soft)}
+.picon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
+.radio{width:17px;height:17px;border-radius:50%;border:1.6px solid var(--line);flex:none}
+.radio.on{border-color:var(--brand);position:relative}
+.radio.on::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--brand)}
+.rstar{cursor:pointer}
+.mini-stars{display:flex;gap:4px}
+.ms{width:20px;height:20px;cursor:pointer}
+.ms.on::before,.ms::before{content:"";display:block;width:20px;height:20px;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z'/%3E%3C/svg%3E") center/contain no-repeat;background:#E8DDE1}
+.ms.on::before{background:#EAB308}
+.coupon{display:flex;border:1px solid var(--line2);border-radius:12px;background:#fff;overflow:hidden;margin-bottom:12px}
+.coupon-l{width:118px;background:linear-gradient(160deg,var(--brand),var(--brand-ink));color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px}
+.coupon-l b{font-size:22px}
+.coupon-l small{font-size:11px;opacity:.9}
+.coupon-r{flex:1;padding:13px 16px}
+.coupon-name{font-weight:600;font-size:14px}
+.coupon-desc{font-size:11.5px;color:var(--ink3);margin-top:4px}
+.coupon-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.coupon-foot span{font-size:11.5px;color:var(--ink3)}
+.msg-item{display:flex;gap:13px;border:1px solid var(--line2);border-radius:12px;background:#fff;padding:14px 16px;margin-bottom:12px}
+.msg-ico{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none}
+.msg-title{font-size:13.5px;font-weight:600}
+.msg-time{font-size:11px;color:var(--ink3);margin:2px 0 6px}
+.msg-txt{font-size:12.5px;color:var(--ink2);line-height:1.6}
+.msg-unread{width:7px;height:7px;border-radius:50%;background:var(--danger);margin-top:6px;flex:none}
+.cal-day{border:1px solid var(--line2);border-radius:10px;padding:10px;text-align:center}
+.cal-day .d{font-size:12.5px;font-weight:600}
+.cal-day .w{font-size:10.5px;color:var(--ink3);margin:2px 0 8px}
+.cal-day .slot{font-size:11px;padding:3px 6px;border-radius:5px;margin-top:4px}
+.slot-free{background:#E2F5EA;color:var(--ok)}
+.slot-busy{background:#FBF0DF;color:var(--warn)}
+.slot-full{background:#F9E4E8;color:var(--danger)}
+.cal-day.holiday{border-color:var(--brand);background:var(--brand-soft)}
+.rev-item{border-bottom:1px solid var(--line2);padding:13px 0}
+.rev-item:last-child{border-bottom:none}
+.rev-top{display:flex;align-items:center;gap:8px;font-size:13px}
+.rev-top b{font-size:13px}
+.rev-top .dim{font-size:11.5px;color:var(--ink3)}
+.rev-txt{font-size:12.5px;color:var(--ink2);margin-top:6px;line-height:1.7}
+.svc-row{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--line2)}
+.svc-row:last-child{border-bottom:none}
+.svc-row b{margin-left:auto;color:var(--ink)}
+.role-switch{display:inline-flex;background:#F5F0F1;border-radius:8px;padding:3px}
+.rs-opt{padding:5px 13px;border-radius:6px;font-size:12.5px;color:var(--ink2);cursor:pointer;user-select:none;transition:.15s}
+.rs-opt.active{background:#fff;color:var(--brand-ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.inc-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--ink2)}
+.inc-row:last-child{border-bottom:none}
+.inc-row b{margin-left:auto;color:var(--ink)}
+.sbd-stat{background:#fff;border:1px solid var(--line2);border-radius:12px;padding:15px 18px}
+.sbd-stat .lbl{font-size:11.5px;color:var(--ink2);margin-bottom:7px}
+.sbd-stat .num{font-size:24px;font-weight:700;color:var(--ink)}
+.sbd-stat .num small{font-size:12px;color:var(--ink3);font-weight:400}
+.sbd-stat .trend{font-size:11.5px;color:var(--ink3);margin-top:5px}
+</style>
+
+<script>
+(function(){/* 路由 */
+  var TITLES={home:'首页',sitters:'找机构',pets:'我的宠物',booking:'预约下单',orders:'我的订单',dynamics:'寄养动态',profile:'个人中心',favorites:'我的收藏',coupons:'优惠券',messages:'消息通知',sitter_detail:'机构详情',pet_edit:'新增宠物',pay:'收银台',review:'四维评价'};
+  function show(name){
+    document.getElementById('login').classList.toggle('hidden',name!=='login');
+    document.getElementById('app').classList.toggle('hidden',name==='login');
+    document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('hidden',s.getAttribute('data-view')!==name);});
+    document.querySelectorAll('.nav-item').forEach(function(i){i.classList.toggle('active',i.getAttribute('data-view')===name);});
+    if(TITLES[name]){document.getElementById('topTitle').textContent=TITLES[name];document.getElementById('topCrumb').textContent='宠栖 Desktop > '+TITLES[name];}
+    var c=document.querySelector('.content');if(c)c.scrollTop=0;
+  }
+  window.go=show;
+  document.getElementById('app').querySelectorAll('.nav-item').forEach(function(it){it.addEventListener('click',function(){show(it.getAttribute('data-view'));});});
+  show('home');
+})();
+(function(){/* toast + 星星 + 通用点击 */
+  var t=null;
+  function toast(m){if(t)t.remove();t=document.createElement('div');t.textContent=m;
+    t.style.cssText='position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#1B1E23;color:#fff;padding:10px 18px;border-radius:8px;font-size:13.5px;z-index:99;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+    document.body.appendChild(t);setTimeout(function(){t.remove();t=null;},1800);}
+  window.__demo=toast;
+  window.renderStars=function(){document.querySelectorAll('.stars').forEach(function(el){var n=parseInt(el.getAttribute('data-score')||'5',10),h='',f='<svg viewBox="0 0 24 24" width="13" height="13" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>',o='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#EAB308" stroke-width="1.5"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>';for(var i=1;i<=5;i++)h+=i<=n?f:o;el.innerHTML=h;});};
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('onclick'))return;if(b.closest('.nav-item'))return;
+    e.preventDefault();toast('演示稿：该操作尚未接入');
+  },true);
+})();
+(function(){/* 数据与业务 */
+  var D={},FL={sitter:{tab:'全部'},order:{tab:'全部'}};
+  function $(id){return document.getElementById(id);}
+  D.sitters=[
+    {name:'萌宠之家',addr:'呼和浩特 · 赛罕区',type:'家庭寄养',price:'130',unit:'天',score:5,cap:'3 只',status:'在架',owner:'王叔',tel:'186****7710',tags:'院落 · 专人陪护 · 每日视频',desc:'自有院落，专人陪护，每日视频反馈，适合中小型犬猫。',grad:'linear-gradient(135deg,#E0708A,#8E3B4E)'},
+    {name:'安心猫舍',addr:'呼和浩特 · 新城区',type:'门店寄养',price:'180',unit:'天',score:4,cap:'5 只',status:'在架',owner:'李姐',tel:'186****7721',tags:'独立猫舍 · 安静环境',desc:'专注猫科寄养，独立猫舍单间，环境安静。',grad:'linear-gradient(135deg,#C084C7,#6A4A96)'},
+    {name:'遛遛上门',addr:'呼和浩特 · 全城',type:'上门喂养',price:'60',unit:'次',score:5,cap:'—',status:'在架',owner:'小周',tel:'186****7732',tags:'上门投喂 · 拍照打卡',desc:'按次上门，投喂、遛宠、拍照打卡，适合短途出差。',grad:'linear-gradient(135deg,#7FB3E0,#4A6C96)'},
+    {name:'宠物营地',addr:'呼和浩特 · 玉泉区',type:'门店寄养',price:'210',unit:'天',score:4,cap:'8 只',status:'在架',owner:'张总',tel:'186****7743',tags:'户外活动 · 恒温寄养间',desc:'户外活动区 + 恒温寄养间，适合大型犬。',grad:'linear-gradient(135deg,#6FBF8B,#2F7A5B)'},
+    {name:'暖窝寄养',addr:'呼和浩特 · 回民区',type:'家庭寄养',price:'150',unit:'天',score:4,cap:'2 只',status:'在架',owner:'赵姨',tel:'186****7754',tags:'小型家庭 · 安静居家',desc:'小型家庭寄养，安静居家环境，一对一照料。',grad:'linear-gradient(135deg,#E9A15B,#B56A2E)'}
+  ];
+  D.pets=[
+    {name:'豆包',breed:'橘猫',type:'猫',size:'中型',age:'2 岁',vaccine:'已接种',cert:'已核验',orders:5,note:'温顺亲人，需定时投喂，对猫粮不过敏。'},
+    {name:'元宝',breed:'金毛',type:'狗',size:'大型',age:'3 岁',vaccine:'已接种',cert:'已核验',orders:3,note:'精力旺盛，需每日遛 40 分钟。'},
+    {name:'团子',breed:'布偶猫',type:'猫',size:'小型',age:'1 岁',vaccine:'待补种',cert:'待核验',orders:2,note:'怕生，宜安静环境，需独立空间。'},
+    {name:'雪球',breed:'银渐层',type:'猫',size:'中型',age:'2 岁',vaccine:'已接种',cert:'已核验',orders:4,note:'胆小，需熟悉后再亲近。'}
+  ];
+  D.orders=[
+    {no:'PO20261028017',org:'萌宠之家',pet:'豆包（橘猫）',range:'10/28 - 11/01',days:'4 天',amount:520,fee:'130 × 4 天',status:'寄养中',made:'10/28 09:12'},
+    {no:'PO20261028090',org:'萌宠之家',pet:'豆包（橘猫）',range:'10/31 - 11/04',days:'4 天',amount:500,fee:'130 × 4 天 - 新人券20',status:'待支付',made:'10/29 08:20'},
+    {no:'PO20261027951',org:'宠物营地',pet:'团子（布偶）',range:'10/27 - 11/03',days:'7 天',amount:1470,fee:'210 × 7 天',status:'寄养中',made:'10/27 21:03'},
+    {no:'PO20261027722',org:'遛遛上门',pet:'雪球（银渐层）',range:'10/25 - 10/27',days:'2 次',amount:120,fee:'60 × 2 次',status:'已结束',made:'10/25 18:50'}
+  ];
+  D.dynamics=[
+    {org:'萌宠之家',pet:'豆包（橘猫）',txt:'豆包今天胃口很好，午后在院子里晒了会太阳，已按时投喂两次。',time:'10/28 18:20',likes:12,notes:3},
+    {org:'宠物营地',pet:'团子（布偶）',txt:'团子有点认生，暂时安排独立单间，观察中。',time:'10/28 14:10',likes:5,notes:0},
+    {org:'遛遛上门',pet:'雪球（银渐层）',txt:'上门投喂完成，雪球状态稳定，已拍照打卡。',time:'10/27 19:30',likes:6,notes:1}
+  ];
+  D.services=[
+    {n:'遛宠散步',p:'¥20/次'},{n:'宠物洗澡',p:'¥50/次'},{n:'视频陪伴',p:'¥15/天'},{n:'专车接送',p:'¥30/次'}
+  ];
+  D.reviews=[
+    {u:'陈雨',score:5,time:'10/28',txt:'环境很干净，店员每天都发豆包的视频，很放心。'},
+    {u:'李然',score:4,time:'10/27',txt:'整体不错，接宠时等待稍久，建议优化交接流程。'},
+    {u:'周舟',score:5,time:'10/25',txt:'服务周到，宠物回来状态很好，已二刷。'},
+    {u:'孙阳',score:4,time:'10/22',txt:'位置好找，沟通顺畅，环境舒适。'}
+  ];
+  D.cal=[
+    {d:'10/26',w:'周一',slots:[['家庭 1/3','free'],['门店 3/5','free']]},
+    {d:'10/27',w:'周二',slots:[['家庭 2/3','free'],['门店 4/5','busy']]},
+    {d:'10/28',w:'周三',slots:[['家庭 2/3','free'],['门店 4/5','busy']]},
+    {d:'10/29',w:'周四',slots:[['家庭 2/3','free'],['门店 5/5','full']]},
+    {d:'10/30',w:'周五',slots:[['家庭 3/3','full'],['门店 5/5','full']]},
+    {d:'10/31',w:'周六',slots:[['家庭 3/3','full'],['门店 5/5','full']],hol:true},
+    {d:'11/01',w:'周日',slots:[['家庭 3/3','full'],['门店 5/5','full']],hol:true}
+  ];
+  D.coupons=[
+    {t:'新人寄养券',v:'¥20',cond:'满 ¥100 可用',from:'10/28',to:'11/15',state:'可用'},
+    {t:'国庆返场券',v:'¥30',cond:'满 ¥300 可用',from:'10/01',to:'10/31',state:'可用'},
+    {t:'上门喂养券',v:'¥15',cond:'满 ¥60 可用',from:'10/10',to:'10/31',state:'已使用'}
+  ];
+  D.messages=[
+    {ico:'order',bg:'#E2F5EA',c:'#2F9E63',title:'订单已确认',time:'今天 09:15',txt:'萌宠之家已确认您的寄养预约（豆包 · 10/28 - 11/01）。'},
+    {ico:'dyn',bg:'var(--brand-soft)',c:'var(--brand-ink)',title:'新的寄养动态',time:'今天 08:40',txt:'萌宠之家发布了「豆包」的动态：豆包今天胃口很好…'},
+    {ico:'sys',bg:'#E7F1FD',c:'#3E7BFA',title:'免疫证明核验通过',time:'昨天 18:02',txt:'「豆包」的免疫证明已通过平台核验。'},
+    {ico:'sys',bg:'#FBF0DF',c:'#D97706',title:'优惠券即将过期',time:'昨天 10:30',txt:'「国庆返场券 ¥30」将于 10/31 过期，请及时使用。'}
+  ];
+  var CUR_S=0,CUR_O=0;
+  function stars(n){return '<span class="stars" data-score="'+n+'"></span>';}
+  function stTag(s){return s==='寄养中'?'<span class="tag tag-ok"><span class="tag-dot" style="background:var(--ok)"></span>'+s+'</span>':s==='待支付'?'<span class="tag tag-warn">'+s+'</span>':s==='已结束'?'<span class="tag tag-brand">'+s+'</span>':'<span class="tag tag-soft">'+s+'</span>';}
+  function scard(s,i,bk){return '<div class="scard" onclick="openSitter('+i+')"><div class="scard-img" style="background:'+s.grad+'"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg><span class="tag tag-brand img-tag" style="background:rgba(255,255,255,.9)">'+s.type+'</span></div><div class="scard-body"><div class="scard-name"><svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 8h6"/></svg>'+s.name+'</div><div class="scard-meta">'+stars(s.score)+' · '+s.score+'.0</div><div class="scard-meta">'+s.addr+' · 容量 '+s.cap+'</div><div class="scard-meta">'+s.tags+'</div><div class="scard-foot"><span class="price">¥'+s.price+'<small> /'+s.unit+'</small></span>'+(bk?'<span style="color:var(--brand-ink);font-size:12.5px;font-weight:600">选择 ›</span>':'<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();go(\'booking\')">立即预约</button>')+'</div></div></div>';}
+  function pcard(p,i){return '<div class="pcard" onclick="openPet('+i+')"><div class="pcard-top"><span class="pet-ava"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><path d="M12 2c1.5 0 2.7 1.2 2.7 2.7 0 1.2-.8 2.2-2 2.6.6.3 1.3.4 2 .4 2.6 0 4.7 2 4.7 4.6 0 .8-.2 1.6-.6 2.2L20 20H4l1.2-5.5A4.9 4.9 0 0 1 4.6 12c0-2.6 2.1-4.6 4.7-4.6.7 0 1.4-.1 2-.4-.6-.4-1-1-1-1.9C10.3 3.2 11 2 12 2z"/></svg></span><div><div class="pcard-name">'+p.name+'</div><div class="pcard-breed">'+p.breed+'</div></div></div><div class="pcard-line"><span>体型</span><b>'+p.size+'</b></div><div class="pcard-line"><span>年龄</span><b>'+p.age+'</b></div><div class="pcard-line"><span>疫苗</span><b>'+p.vaccine+'</b></div><div class="pcard-foot"><button class="btn btn-ghost" onclick="event.stopPropagation();openPet('+i+')">详情</button><button class="btn btn-primary" onclick="event.stopPropagation();go(\'booking\')">预约</button></div></div>';}
+  function render(){
+    $('home-pets').innerHTML=D.pets.slice(0,2).map(function(p,i){return pcard(p,i);}).join('');
+    $('home-sitters').innerHTML=D.sitters.slice(0,3).map(function(s,i){return scard(s,i);}).join('');
+    var rowsS=D.sitters.filter(function(r){return FL.sitter.tab==='全部'||r.type===FL.sitter.tab;});
+    $('sitter-list').innerHTML=rowsS.map(function(s,i){return scard(s,i);}).join('');
+    $('pet-list').innerHTML=D.pets.map(function(p,i){return pcard(p,i);}).join('');
+    $('tb-cert').innerHTML=D.pets.map(function(p,i){return '<tr><td><div class="cell-main">'+p.name+'</div><div class="cell-sub">'+p.breed+'</div></td><td>'+p.vaccine+'</td><td>'+p.cert+'</td><td>'+stTag(p.cert==='已核验'?'已核验':'待核验')+'</td><td><button class="btn-text" onclick="openPet('+i+')">详情</button></td></tr>';}).join('');
+    $('bk-sitters').innerHTML=D.sitters.slice(0,4).map(function(s,i){return scard(s,i,true);}).join('');
+    $('bk-pets').innerHTML=D.pets.slice(0,2).map(function(p,i){return '<div class="scard" style="padding:12px;display:flex;align-items:center;gap:10px;cursor:pointer"><span class="pet-ava"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><path d="M12 2c1.5 0 2.7 1.2 2.7 2.7 0 1.2-.8 2.2-2 2.6.6.3 1.3.4 2 .4 2.6 0 4.7 2 4.7 4.6 0 .8-.2 1.6-.6 2.2L20 20H4l1.2-5.5A5.3 5.3 0 0 1 4.6 12c0-2.6 2.1-4.6 4.7-4.6.7 0 1.4-.1 2-.4-.6-.4-1-1-1-1.9C10.3 3.2 11 2 12 2z"/></svg></span><div><div style="font-weight:600;font-size:13px">'+p.name+'</div><div style="font-size:11.5px;color:var(--ink3)">'+p.breed+' · '+p.vaccine+'</div></div><div style="margin-left:auto;color:var(--brand-ink)">选择</div></div>';}).join('');
+    var rowsO=D.orders.filter(function(r){return FL.order.tab==='全部'||r.status===FL.order.tab;});
+    $('tb-orders').innerHTML=rowsO.map(function(r,i){return '<tr><td class="mono">'+r.no+'</td><td class="cell-main">'+r.org+'</td><td>'+r.pet+'</td><td class="muted" style="color:var(--ink3)">'+r.range+'</td><td>'+(r.days.indexOf('次')>=0?'<span style="color:var(--ink3)">'+r.days+'</span>':r.days)+'</td><td class="mono">¥'+r.amount+'</td><td>'+stTag(r.status)+'</td><td><button class="btn-text" onclick="openOrder('+i+')">详情</button>'+(r.status==='待支付'?'<button class="btn btn-primary btn-sm" onclick="__demo(\'演示稿：去支付 ¥500\')">去支付</button>':r.status==='已结束'?'<button class="btn btn-primary btn-sm" onclick="__demo(\'演示稿：去评价\')">去评价</button>':'')+'</td></tr>';}).join('');
+    $('dyn-list').innerHTML=D.dynamics.map(function(d,i){return '<div class="dyn-card"><div class="dyn-thumb"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg></div><div class="dyn-body"><div class="dyn-title">'+d.org+' · '+d.pet+'</div><div class="dyn-meta">'+d.time+' · 点赞 '+d.likes+' · 留言 '+d.notes+'</div><div class="dyn-txt">'+d.txt+'</div><div class="dyn-actions"><button class="btn-text" onclick="openDyn('+i+')">查看详情</button><button class="btn-text" onclick="__demo(\'演示稿：点赞\')">点赞</button></div></div></div>';}).join('');
+    $('fav-list').innerHTML=D.sitters.slice(0,3).map(function(s,i){return scard(s,i);}).join('')+'<div class="scard" style="border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink3);cursor:pointer" onclick="go(\'sitters\')"><div style="text-align:center"><svg class="icon" style="width:26px;height:26px;margin:0 auto 8px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><div style="font-size:12.5px">继续添加收藏</div></div></div>';
+    $('coupon-list').innerHTML=D.coupons.map(function(c){return '<div class="coupon"><div class="coupon-l"><b>'+c.v+'</b><small>'+c.cond+'</small></div><div class="coupon-r"><div class="coupon-name">'+c.t+'</div><div class="coupon-desc">'+c.from+' - '+c.to+'</div><div class="coupon-foot"><span>'+(c.state==='可用'?'点击去使用 ›':'已使用')+'</span>'+(c.state==='可用'?'<button class="btn btn-primary btn-sm" onclick="__demo(\'演示稿：去下单使用\')">立即使用</button>':'<span class="tag tag-soft">'+c.state+'</span>')+'</div></div></div>';}).join('');
+    $('msg-list').innerHTML=D.messages.map(function(m){return '<div class="msg-item"><div class="msg-ico" style="background:'+m.bg+';color:'+m.c+'"><svg class="icon" style="width:19px;height:19px" viewBox="0 0 24 24">'+(m.ico==='order'?'<path d="M4 6h16M4 12h16M4 18h10"/><path d="m18 14 2 2 3-3"/>':m.ico==='dyn'?'<rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/>':'<circle cx="12" cy="12" r="9"/><path d="M8.5 12l2.5 2.5 4.5-5"/>')+'</svg></div><div style="flex:1"><div class="msg-title">'+m.title+'</div><div class="msg-time">'+m.time+'</div><div class="msg-txt">'+m.txt+'</div></div><span class="msg-unread"></span></div>';}).join('');
+    renderStars();
+  }
+  ['sitters','orders'].forEach(function(v){});
+  (function(){var tb=$('sitter-tabs');tb.querySelectorAll('.tab').forEach(function(x){x.addEventListener('click',function(){tb.querySelectorAll('.tab').forEach(function(y){y.classList.remove('active');});x.classList.add('active');FL.sitter.tab=x.textContent;render();});});
+  var to=$('order-tabs');to.querySelectorAll('.tab').forEach(function(x){x.addEventListener('click',function(){to.querySelectorAll('.tab').forEach(function(y){y.classList.remove('active');});x.classList.add('active');FL.order.tab=x.textContent;render();});});})();
+  /* 抽屉 */
+  function openSitter(i){var s=D.sitters[i];CUR_S=i;
+    $('sd-img').style.background=s.grad;
+    $('sd-name').textContent=s.name;$('sd-type').textContent=s.type;$('sd-status').textContent=s.status;
+    $('sd-rate').innerHTML=stars(s.score)+' · '+s.score+'.0 分 · 好评率 96%';
+    $('sd-addr').textContent='地址：'+s.addr+'　容量 '+s.cap+'　负责人 '+s.owner+'　'+s.tel;
+    $('sd-tags').textContent='标签：'+s.tags;
+    $('sd-desc').textContent=s.desc;
+    $('sd-price').innerHTML='¥'+s.price+' <span style="font-size:13px;font-weight:400;color:var(--ink3)">/'+s.unit+'</span>';
+    $('sd-info').innerHTML=[['寄养类型',s.type],['所在地址',s.addr],['可同时容量',s.cap],['负责人',s.owner],['联系电话',s.tel],['环境标签',s.tags]].map(function(p){return '<div class="kv"><span class="k">'+p[0]+'</span><span class="v">'+p[1]+'</span></div>';}).join('');
+    $('sd-services').innerHTML=D.services.map(function(x){return '<div class="svc-row"><span>'+x.n+'</span><b>'+x.p+'</b></div>';}).join('');
+    $('sd-cal').innerHTML=D.cal.map(function(c){return '<div class="cal-day'+(c.hol?' holiday':'')+'"><div class="d">'+c.d+'</div><div class="w">'+c.w+(c.hol?' · 假期':'')+'</div>'+c.slots.map(function(x){return '<div class="slot slot-'+x[1]+'">'+x[0]+'</div>';}).join('')+'</div>';}).join('');
+    $('sd-review-head').textContent='共 '+D.reviews.length+' 条 · 平均 4.5 分';
+    $('sd-reviews').innerHTML=D.reviews.map(function(r){return '<div class="rev-item"><div class="rev-top">'+stars(r.score)+'<b>'+r.u+'</b><span class="dim">'+r.time+'</span></div><div class="rev-txt">'+r.txt+'</div></div>';}).join('');
+    go('sitter-detail');renderStars();}
+  function renderPay(){var o=D.orders[CUR_O];
+    $('pay-summary').innerHTML=[['订单号',o.no],['机构',o.org],['宠物',o.pet],['寄养区间',o.range],['费用构成',o.fee]].map(function(x){return '<div class="kv"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('');
+    $('pay-amount').textContent='¥'+o.amount;$('pay-result').classList.add('hidden');}
+  function goPay(i){CUR_O=i;renderPay();go('pay');}
+  function goReview(i){CUR_O=i;go('review');}
+  function payDone(){$('pay-result').classList.remove('hidden');}
+  function openPet(i){var p=D.pets[i];$('dTitle').textContent='宠物档案';
+    $('dBody').innerHTML='<div style="padding-top:6px">'+[['宠物名',p.name],['品种',p.breed],['类型',p.type],['体型',p.size],['年龄',p.age],['疫苗情况',p.vaccine],['免疫证明',p.cert],['累计寄养',p.orders+' 单'],['健康备注',p.note]].map(function(x){return '<div class="kv"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('')+'</div>';
+    $('dFoot').innerHTML='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button><button class="btn btn-primary" onclick="closeDrawer();go(\'booking\')">预约此宠物</button>';open();}
+  function openOrder(i){var r=D.orders[i];CUR_O=i;$('dTitle').textContent='订单详情';
+    $('dBody').innerHTML='<div style="padding-top:6px">'+[['订单号',r.no],['机构',r.org],['宠物',r.pet],['寄养区间',r.range],['天数 / 次数',r.days],['费用构成',r.fee],['应付金额','¥'+r.amount],['下单时间',r.made],['订单状态',r.status]].map(function(x){return '<div class="kv"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('')+'</div>';
+    $('dFoot').innerHTML='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>'+(r.status==='待支付'?'<button class="btn btn-primary" onclick="closeDrawer();goPay('+i+')">去支付</button>':r.status==='已结束'?'<button class="btn btn-primary" onclick="closeDrawer();goReview('+i+')">去评价</button>':'<button class="btn btn-primary" onclick="closeDrawer();go(\'dynamics\')">查看动态</button>');open();}
+  function openDyn(i){var d=D.dynamics[i];$('dTitle').textContent='动态详情';
+    $('dBody').innerHTML='<div style="padding-top:6px">'+[['发布机构',d.org],['寄养宠物',d.pet],['发布时间',d.time],['点赞 / 留言',d.likes+' / '+d.notes],['动态内容',d.txt]].map(function(x){return '<div class="kv"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('')+'</div>';
+    $('dFoot').innerHTML='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button><button class="btn btn-primary" onclick="__demo(\'演示稿：点赞\')">点赞</button>';open();}
+  function open(){$('mask').classList.add('on');$('drawer').classList.add('on');}
+  function closeDrawer(){$('mask').classList.remove('on');$('drawer').classList.remove('on');}
+  var curOk=null;
+  function openConfirm(t,m,fn){curOk=fn;$('mTitle').textContent=t;$('mBody').innerHTML='<div style="padding:14px 2px 6px;color:var(--ink2);font-size:14px;line-height:1.7">'+m+'</div>';$('mFoot').innerHTML='<button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="runOk()">确定</button>';$('mask').classList.add('on');$('modal').classList.add('on');}
+  function runOk(){var f=curOk;closeModal();if(f)f();}
+  function closeModal(){$('mask').classList.remove('on');$('modal').classList.remove('on');$('mFoot').innerHTML='';}
+  function closeAll(){closeDrawer();closeModal();}
+  /* 预约向导 */
+  var BK={s:0};
+  function bkNext(i){BK.s=i;$('bk-step1').classList.toggle('hidden',i!==0);$('bk-step2').classList.toggle('hidden',i!==1);$('bk-step3').classList.toggle('hidden',i!==2);
+    for(var n=1;n<=3;n++){var sp=$('sp'+n);sp.className='step'+(n<=i?' done':n===i+1?' active':'');}
+    if(i===2){var total=500;$('bk-step3').innerHTML=$('bk-step3').innerHTML;}
+    window.scrollTo(0,0);}
+  function bkPrev(){bkNext(BK.s-1);}
+  (function(){var inp=$('bk-step2').querySelectorAll('input[type=date]');inp.forEach(function(x){x.addEventListener('change',function(){var s=inp[0].value,e=inp[1].value;if(!s||!e)return;var d=(new Date(e)-new Date(s))/86400000;if(d<0){d=0;}if(d>0){$('fee-days').textContent=d+' 天';}});});})();
+  window.openSitter=openSitter;window.openPet=openPet;window.openOrder=openOrder;window.openDyn=openDyn;
+  window.goPay=goPay;window.goReview=goReview;window.payDone=payDone;
+  window.closeDrawer=closeDrawer;window.closeModal=closeModal;window.runOk=runOk;window.closeAll=closeAll;
+  window.bkNext=bkNext;window.bkPrev=bkPrev;window.openConfirm=openConfirm;
+  $('mask').addEventListener('click',closeAll);
+  (function(){var st=$('review-stars');if(!st)return;var rs=st.querySelectorAll('.rstar');
+    function paint(n){var f='<svg viewBox="0 0 24 24" width="30" height="30" fill="#EAB308"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>',o='<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#EAB308" stroke-width="1.6"><path d="M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z"/></svg>';
+      rs.forEach(function(s){var v=parseInt(s.getAttribute('data-v'),10);s.innerHTML=v<=n?f:o;});}
+    rs.forEach(function(s){s.addEventListener('click',function(){var n=parseInt(s.getAttribute('data-v'),10);paint(n);var h=$('review-score-hint');if(h)h.textContent='已选 '+n+' 星';});});paint(3);})();
+  (function(){var ps=document.querySelectorAll('.pmethod');ps.forEach(function(p){p.addEventListener('click',function(){ps.forEach(function(x){x.classList.remove('selected');var r=x.querySelector('.radio');if(r)r.classList.remove('on');});p.classList.add('selected');var r2=p.querySelector('.radio');if(r2)r2.classList.add('on');});});})();
+  /* 角色切换 + 机构端 */
+  var ROLE='owner';
+  D.sbOrders=[
+    {no:'PO20261028017',owner:'陈雨',pet:'豆包（橘猫）',range:'10/28 - 11/01',days:'4 天',amount:520,status:'寄养中',made:'10/28 09:12'},
+    {no:'PO20261028009',owner:'李然',pet:'元宝（金毛）',range:'10/28 - 10/30',days:'2 天',amount:360,status:'待确认',made:'10/28 08:40'},
+    {no:'PO20261027960',owner:'赵敏',pet:'团子（布偶）',range:'10/29 - 11/03',days:'5 天',amount:650,status:'待确认',made:'10/29 09:02'},
+    {no:'PO20261027951',owner:'赵敏',pet:'团子（布偶）',range:'10/27 - 11/03',days:'7 天',amount:1470,status:'寄养中',made:'10/27 21:03'},
+    {no:'PO20261027895',owner:'孙阳',pet:'来福（柯基）',range:'10/26 - 10/28',days:'2 天',amount:300,status:'已完成',made:'10/26 19:20'}
+  ];
+  D.sbDyn=[
+    {pet:'豆包（橘猫）',txt:'豆包今天胃口很好，午后在院子里晒了会太阳，已按时投喂两次。',time:'10/28 18:20',likes:12,notes:3,status:'已上架'},
+    {pet:'来福（柯基）',txt:'来福早上遛弯回来精神不错，喝水量正常。',time:'10/27 20:40',likes:9,notes:2,status:'已上架'},
+    {pet:'团子（布偶）',txt:'团子有点认生，安排独立单间，明日补充动态。',time:'10/28 14:10',likes:0,notes:0,status:'待审核'}
+  ];
+  function buildNav(role){
+    var OWN=[['home','首页','M3 11 12 3l9 8M5 10v10h4v-6h6v6h4V10'],['sitters','找机构','M3 21h18M5 21V10l7-5 7 5v11M9 8h6'],['pets','我的宠物','M12 2c1.5 0 2.7 1.2 2.7 2.7 0 1.2-.8 2.2-2 2.6.6.3 1.3.4 2 .4 2.6 0 4.7 2 4.7 4.6 0 .8-.2 1.6-.6 2.2L20 20H4l1.2-5.5A4.9 4.9 0 0 1 4.6 12c0-2.6 2.1-4.6 4.7-4.6.7 0 1.4-.1 2-.4-.6-.4-1-1-1-1.9C10.3 3.2 11 2 12 2z'],['booking','预约下单','M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],['orders','我的订单','M4 6h16M4 12h16M4 18h10m4-4 2 2 3-3','1'],['dynamics','寄养动态','M3 4h18v14H3zM8.5 10a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2M21 16l-5-5-4 4-3-3-6 6']];
+    var SIT=[['sb-dash','经营概览','M3 11 12 3l9 8M5 10v10h4v-6h6v6h4V10'],['sb-orders','接单管理','M4 6h16M4 12h16M4 18h10m4-4 2 2 3-3','3'],['sb-capacity','容量日历','M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],['sb-publish','发布动态','M12 5v14M5 12h14'],['sb-reviews','评价管理','M12 3.5 14.5 9l6 .5-4.6 4 1.4 5.9L12 15.8 6.7 19.4 8.1 13.5 3.5 9.5 9.5 9Z'],['sb-income','收益结算','M4 6h16M4 12h16M4 18h10'],['sb-profile','机构资料','M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c0-4 3.6-6 8-6s8 2 8 6']];
+    var groups=role==='owner'
+      ?[['常用',OWN.slice(0,4)],['寄养',OWN.slice(4,6)],['账户',[['profile','个人中心','M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21c0-4 3.6-6 8-6s8 2 8 6'],['favorites','我的收藏','M12 20s-7-4.5-9-8.5C1.5 8 4 5 7 5c2 0 3 1 5 3 2-2 3-3 5-3 3 0 5.5 3 4 6.5-2 4-9 8.5-9 8.5z'],['coupons','优惠券','M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4zM9.5 10.5v3'],['messages','消息通知','M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0']]]]
+      :[['经营',SIT.slice(0,1)],['业务',SIT.slice(1,5)],['财务',SIT.slice(5,6)],['设置',SIT.slice(6,7)]];
+    var h='';
+    groups.forEach(function(g){h+='<div class="rail-sec">'+g[0]+'</div>'+g[1].map(function(n){var badge=n[3]?'<span class="badge">'+n[3]+'</span>':'';return '<div class="nav-item" data-view="'+n[0]+'"><svg class="icon" viewBox="0 0 24 24"><path d="'+n[2]+'"/></svg><span>'+n[1]+'</span>'+badge+'</div>';}).join('');});
+    $('rail-menu').innerHTML=h;
+    $('rail-menu').querySelectorAll('.nav-item').forEach(function(it){it.addEventListener('click',function(){go(it.getAttribute('data-view'));});});
+    var vis=document.querySelector('.view:not(.hidden)'),cv=vis?vis.getAttribute('data-view'):'home';
+    $('rail-menu').querySelectorAll('.nav-item').forEach(function(it){it.classList.toggle('active',it.getAttribute('data-view')===cv);});
+  }
+  function sbSt(s){return s==='寄养中'?'<span class="tag tag-ok"><span class="tag-dot" style="background:var(--ok)"></span>'+s+'</span>':s==='待确认'?'<span class="tag tag-warn">'+s+'</span>':s==='已完成'?'<span class="tag tag-brand">'+s+'</span>':'<span class="tag tag-soft">'+s+'</span>';}
+  function renderSb(){
+    $('sb-todo').innerHTML=[['3 笔待确认订单','请在 2 小时内处理','去处理','sb-orders'],['团子今天需补做驱虫','寄养中 · 照料记录待补充','去记录','sb-orders'],['10/31 假期床位已满','建议启用节假日上浮定价','去配置','sb-capacity']].map(function(t){return '<div class="msg-item"><div class="msg-ico" style="background:var(--brand-soft);color:var(--brand-ink)"><svg class="icon" style="width:18px;height:18px" viewBox="0 0 24 24"><path d="M12 3v3M6.5 6.5l2 2M3 12h3M6.5 17.5l2-2M12 18v3M15.5 15.5l2 2M18 12h3M15.5 6.5l-2 2"/></svg></div><div style="flex:1"><div class="msg-title">'+t[0]+'</div><div class="msg-time">'+t[1]+'</div></div><button class="btn btn-primary btn-sm" onclick="go(\''+t[3]+'\')">'+t[2]+'</button></div>';}).join('');
+    var fo={tab:'全部'};
+    $('tb-sb-orders').innerHTML=D.sbOrders.filter(function(r){return fo.tab==='全部'||r.status===fo.tab;}).map(function(r,i){return '<tr><td class="mono">'+r.no+'</td><td class="cell-main">'+r.owner+'</td><td>'+r.pet+'</td><td class="muted" style="color:var(--ink3)">'+r.range+'</td><td>'+r.days+'</td><td class="mono">¥'+r.amount+'</td><td>'+sbSt(r.status)+'</td><td><button class="btn-text" onclick="openSbOrder('+i+')">详情</button>'+(r.status==='待确认'?'<button class="btn btn-primary btn-sm" onclick="__demo(\'演示稿：确认订单\')">确认</button>':r.status==='寄养中'?'<button class="btn-text" onclick="__demo(\'演示稿：标记完成\')">完成</button>':'')+'</td></tr>';}).join('');
+    $('sb-cal').innerHTML=D.cal.map(function(c){return '<div class="cal-day'+(c.hol?' holiday':'')+'"><div class="d">'+c.d+'</div><div class="w">'+c.w+(c.hol?' · 假期':'')+'</div>'+c.slots.map(function(x){return '<div class="slot slot-'+x[1]+'">'+x[0]+'</div>';}).join('')+'</div>';}).join('');
+    $('sb-dyn-list').innerHTML=D.sbDyn.map(function(d,i){return '<div class="dyn-card"><div class="dyn-thumb"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16 16 11l-4 4-3-3-6 6"/></svg></div><div class="dyn-body"><div class="dyn-title">'+d.pet+' '+(d.status==='待审核'?'<span class="tag tag-warn">待审核</span>':'<span class="tag tag-ok">已上架</span>')+'</div><div class="dyn-meta">'+d.time+' · 点赞 '+d.likes+' · 留言 '+d.notes+'</div><div class="dyn-txt">'+d.txt+'</div></div><div class="dyn-actions"><button class="btn-text" onclick="__demo(\'演示稿：查看动态\')">详情</button>'+(d.status==='已上架'?'<button class="btn-danger-text" onclick="__demo(\'演示稿：下架\')">下架</button>':'<button class="btn-text" onclick="__demo(\'演示稿：撤回\')">撤回</button>')+'</div></div>';}).join('');
+    $('sb-rev-list').innerHTML=D.reviews.map(function(r,i){return '<div class="rev-item"><div class="rev-top">'+stars(r.score)+'<b>'+r.u+'</b><span class="dim">'+r.time+'</span><span class="ml-auto"><button class="btn btn-primary btn-sm" onclick="__demo(\'演示稿：回复评价\')">回复</button></span></div><div class="rev-txt">'+r.txt+'</div></div>';}).join('');
+    $('tb-sb-income').innerHTML=D.sbOrders.map(function(r){var c=Math.round(r.amount*0.1);return '<tr><td class="mono">'+r.no+'</td><td class="cell-main">'+r.owner+'</td><td>'+r.pet+'</td><td class="mono">¥'+r.amount+'</td><td class="muted">¥'+c+'</td><td class="mono">¥'+(r.amount-c)+'</td><td>'+sbSt(r.status==='寄养中'?'寄养中':r.status==='已完成'?'已完成':'待确认')+'</td></tr>';}).join('');
+    renderStars();
+  }
+  (function(){var to=$('sb-order-tabs');if(to)to.querySelectorAll('.tab').forEach(function(x){x.addEventListener('click',function(){to.querySelectorAll('.tab').forEach(function(y){y.classList.remove('active');});x.classList.add('active');renderSb();});});})();
+  function switchRole(r){
+    ROLE=r;
+    document.querySelectorAll('.rs-opt').forEach(function(o){o.classList.toggle('active',o.getAttribute('data-r')===r);});
+    buildNav(r);
+    var uc=$('rail-user-card');
+    if(r==='owner'){uc.querySelector('b').textContent='陈雨';uc.querySelector('span').textContent='主人 · 138****2201';uc.querySelector('.avatar').textContent='陈';}
+    else {uc.querySelector('b').textContent='萌宠之家';uc.querySelector('span').textContent='机构主 · 王叔';uc.querySelector('.avatar').textContent='萌';}
+    if(r==='sitter')renderSb();
+    go(r==='owner'?'home':'sb-dash');
+  }
+  function openSbOrder(i){var r=D.sbOrders[i];$('dTitle').textContent='机构订单详情';
+    $('dBody').innerHTML='<div style="padding-top:6px">'+[['订单号',r.no],['主人',r.owner],['宠物',r.pet],['寄养区间',r.range],['天数',r.days],['费用构成','¥'+r.amount],['下单时间',r.made],['订单状态',r.status]].map(function(x){return '<div class="kv"><span class="k">'+x[0]+'</span><span class="v">'+x[1]+'</span></div>';}).join('')+'</div>';
+    $('dFoot').innerHTML='<button class="btn btn-ghost" onclick="closeDrawer()">关闭</button>'+(r.status==='待确认'?'<button class="btn btn-primary" onclick="__demo(\'演示稿：确认接单\')">确认接单</button><button class="btn btn-danger-text" onclick="__demo(\'演示稿：拒绝订单\')">拒绝</button>':r.status==='寄养中'?'<button class="btn btn-primary" onclick="__demo(\'演示稿：标记完成\')">标记完成</button>':'');open();}
+  function openPublish(){
+    $('mTitle').textContent='发布寄养动态';
+    $('mBody').innerHTML='<div class="f-label">寄养宠物</div><select class="f-input" id="pub-pet"><option>豆包（橘猫）· 订单 PO...017</option><option>来福（柯基）· 订单 PO...895</option><option>团子（布偶）· 订单 PO...951</option></select><div class="f-label" style="margin-top:12px">动态内容</div><textarea class="f-input" id="pub-txt" rows="3" placeholder="记录宠物近况、喂食、遛宠情况……"></textarea><div class="f-label" style="margin-top:12px">照片</div><div style="border:1.5px dashed var(--line);border-radius:9px;padding:14px;color:var(--ink3);font-size:12.5px;text-align:center;cursor:pointer" onclick="__demo(\'演示稿：上传照片\')">点击上传照片（最多 9 张）</div><div style="margin-top:10px;font-size:11.5px;color:var(--ink3)">提交后经平台审核，通过后对主人可见</div>';
+    $('mFoot').innerHTML='<button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="onSubmitPublish()">提交审核</button>';
+    $('mask').classList.add('on');$('modal').classList.add('on');
+  }
+  function onSubmitPublish(){var t=$('pub-txt')?$('pub-txt').value.trim():'';D.sbDyn.unshift({pet:'豆包（橘猫）',txt:t||'豆包状态良好，按时投喂。',time:'今天 '+new Date().getHours()+':'+String(new Date().getMinutes()).padStart(2,'0'),likes:0,notes:0,status:'待审核'});closeModal();renderSb();toast('动态已提交，等待平台审核');}
+  window.switchRole=switchRole;window.openSbOrder=openSbOrder;window.openPublish=openPublish;window.onSubmitPublish=onSubmitPublish;
+  buildNav('owner');
+  render();
+})();
+</script>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->

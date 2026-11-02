@@ -23,6 +23,16 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
+        maven("https://cache-redirector.jetbrains.com/intellij-repository/releases") {
+            mavenContent {
+                includeGroupAndSubgroups("com.jetbrains.intellij.platform")
+            }
+        }
+        maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies") {
+            mavenContent {
+                includeGroupAndSubgroups("com.jetbrains.intellij.platform")
+            }
+        }
         mavenCentral()
     }
 }
