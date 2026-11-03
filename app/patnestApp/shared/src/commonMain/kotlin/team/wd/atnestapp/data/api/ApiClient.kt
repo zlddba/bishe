@@ -12,6 +12,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -283,6 +284,77 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun updateMyShop(payload: UpdateShopPayload): SitterDto =
         putData("/sitter/shop/me", payload)
 
+    /** 城市 + 地址 → GCJ-02 坐标（后端调高德地理编码，桌面端没有系统定位时用）。 */
+    suspend fun geocodeAddress(payload: GeocodePayload): GeocodeDto =
+        postData("/geo/geocode", payload)
+
+    /** GCJ-02 坐标 → 地址文本。 */
+    suspend fun reverseGeocode(payload: ReversePayload): GeocodeDto =
+        postData("/geo/reverse", payload)
+
+    /**
+     * 取一张以 (latitude, longitude) 为中心的静态地图 PNG 字节。
+     * 成功时响应是图片，失败时后端仍返回统一信封，这里照样翻译成能直接展示的提示。
+     */
+    suspend fun fetchStaticMap(
+        latitude: Double,
+        longitude: Double,
+        zoom: Int,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val params = mapOf(
+            "latitude" to latitude.toString(),
+            "longitude" to longitude.toString(),
+            "zoom" to zoom.toString(),
+            "width" to width.toString(),
+            "height" to height.toString(),
+        )
+        return getImage("/geo/static-map", params)
+    }
+
+    /** 取一张 256x256 地图瓦片（桌面端弹框连续拖动用）。 */
+    suspend fun fetchTile(zoom: Int, x: Int, y: Int): ByteArray = getImage(
+        "/geo/tile",
+        mapOf("z" to zoom.toString(), "x" to x.toString(), "y" to y.toString()),
+    )
+
+    /**
+     * 图片类接口的统一读取：body 只能读一次，所以先取字节再判断。
+     * 光看 Content-Type 不可靠（代理或老版本可能不声明），因此同时认 PNG 魔数。
+     */
+    private suspend fun getImage(path: String, params: Map<String, String>): ByteArray {
+        val response = http.get(apiBase + path) {
+            token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+            params.forEach { (key, value) -> parameter(key, value) }
+        }
+        val bytes = response.bodyAsBytes()
+        val mimeType = response.contentType()?.contentType.orEmpty()
+        if (mimeType.startsWith("image/") || isPngImage(bytes)) return bytes
+
+        val text = bytes.decodeToString()
+        if (response.status.value == 404) {
+            throw ApiException("后端没有 $path 这条路由（HTTP 404），需要重新发布后端")
+        }
+        // 后端正常报错时仍是统一 JSON 信封，优先用它给出的原因
+        ensureSuccess(text, response.status)
+        // 走到这里说明 HTTP 成功、但既不是图片也不是信封：
+        // 多半是请求没打到接口（被网关或静态站点兜回了页面），把状态码、类型和响应开头一起报出来
+        val snippet = text.replace("\n", " ").trim().take(60)
+        throw ApiException(
+            "接口没返回图片（HTTP ${response.status.value}，类型 ${mimeType.ifBlank { "未声明" }}，" +
+                "响应开头「$snippet」）",
+        )
+    }
+
+    /** 地图选点第一步：创建一次性选点会话，返回浏览器里打开的相对路径。 */
+    suspend fun createGeoPick(payload: GeoPickPayload): GeoPickSessionDto =
+        postData("/geo/pick", payload)
+
+    /** 轮询选点结果；done 之后后端即销毁会话，重复轮询会得到 expired。 */
+    suspend fun pollGeoPick(token: String): GeoPickResultDto =
+        getData("/geo/pick-result/$token")
+
     /** 机构入驻申请：提交资质材料，平台审核通过后账号才升级为机构。 */
     suspend fun applySitter(payload: ApplySitterPayload): ApplySitterResult =
         postData("/pet-owner/apply-sitter", payload)
@@ -412,3 +484,11 @@ private fun normalizeBaseUrl(raw: String): String {
     }
     return value.trimEnd('/')
 }
+
+/** PNG 文件头 \x89PNG\r\n\x1a\n 的前四字节，用来在 Content-Type 缺失时仍能认出图片。 */
+private fun isPngImage(bytes: ByteArray): Boolean =
+    bytes.size > 8 &&
+        bytes[0] == 0x89.toByte() &&
+        bytes[1] == 'P'.code.toByte() &&
+        bytes[2] == 'N'.code.toByte() &&
+        bytes[3] == 'G'.code.toByte()

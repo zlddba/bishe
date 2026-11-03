@@ -27,6 +27,10 @@ type Config struct {
 	// 高德地图 Web 服务 API（机构地理编码 / POI / 距离计算），仅后端使用，禁止下发客户端
 	AMapKey     string
 	AMapBaseURL string
+	// 高德 Web 端（JS API）Key：桌面端"地图选点"页面用它加载交互地图。
+	// JS Key 天生是公开的（靠域名/IP 白名单与 securityJsCode 约束），与上面的 Web服务 Key 不是同一张。
+	AMapJSKey      string
+	AMapJSSecurity string
 }
 
 func Load() *Config {
@@ -51,6 +55,8 @@ func Load() *Config {
 		RedisDB:        getInt("REDIS_DB", 0),
 		AMapKey:        getStr("AMAP_KEY", ""),
 		AMapBaseURL:    getStr("AMAP_BASE_URL", "https://restapi.amap.com"),
+		AMapJSKey:      getStr("AMAP_JS_KEY", ""),
+		AMapJSSecurity: getStr("AMAP_JS_SECURITY_CODE", ""),
 	}
 }
 

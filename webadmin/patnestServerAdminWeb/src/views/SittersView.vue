@@ -95,9 +95,16 @@
           <el-input v-model="form.address" placeholder="选填" />
         </el-form-item>
         <el-form-item label="经纬度">
-          <div style="display:flex;gap:8px;width:100%">
+          <div class="coord-row">
             <el-input-number v-model="form.latitude" :precision="7" :controls="false" placeholder="纬度" style="flex:1" />
             <el-input-number v-model="form.longitude" :precision="7" :controls="false" placeholder="经度" style="flex:1" />
+            <el-tooltip content="在地图上选择机构位置" placement="top">
+              <el-button :icon="Location" @click="mapPicker = true">地图选点</el-button>
+            </el-tooltip>
+          </div>
+          <div v-if="coordText" class="coord-hint">
+            <span>{{ coordText }}</span>
+            <el-button link type="primary" size="small" @click="openInAmap">在高德地图中查看</el-button>
           </div>
         </el-form-item>
         <el-form-item label="封面图">
@@ -164,6 +171,9 @@
           <el-descriptions-item label="地址" :span="2">{{ detail.address || '-' }}</el-descriptions-item>
           <el-descriptions-item label="经纬度" :span="2">
             {{ detail.latitude ?? '-' }}, {{ detail.longitude ?? '-' }}
+            <el-button v-if="detailCoordText(detail)" link type="primary" size="small" @click="openInAmap(detail)">
+              在高德地图中查看
+            </el-button>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{ detail.created_at }}</el-descriptions-item>
           <el-descriptions-item label="机构介绍" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
@@ -189,14 +199,24 @@
         <div v-else class="sd-empty">暂无详情图</div>
       </div>
     </el-drawer>
+
+    <MapPickerDialog
+      v-model:visible="mapPicker"
+      :latitude="form.latitude"
+      :longitude="form.longitude"
+      :address="form.address"
+      @confirm="onMapPicked"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
+import { Location } from '@element-plus/icons-vue'
 import { adminApi } from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ImageUpload from '@/components/ImageUpload.vue'
+import MapPickerDialog from '@/components/MapPickerDialog.vue'
 import { downloadCSV } from '@/utils/download'
 
 const loading = ref(false)
@@ -226,6 +246,50 @@ const rejectTarget = ref(null)
 const detailDrawer = ref(false)
 const detail = ref(null)
 
+const mapPicker = ref(false)
+// 记住由地图写入过的地址，用户手改过就不再覆盖
+const mapAddress = ref('')
+
+function coordPair(lat, lng) {
+  const la = Number(lat)
+  const ln = Number(lng)
+  if (!Number.isFinite(la) || !Number.isFinite(ln) || (la === 0 && ln === 0)) return null
+  return [la, ln]
+}
+
+function formatCoord(lat, lng) {
+  const pair = coordPair(lat, lng)
+  return pair ? `${pair[0].toFixed(6)}, ${pair[1].toFixed(6)}` : ''
+}
+
+const coordText = computed(() => formatCoord(form.latitude, form.longitude))
+
+function detailCoordText(d) {
+  return formatCoord(d.latitude, d.longitude)
+}
+
+// 高德 URI 无需 Key，也不把 JS API Key 暴露在地址栏里
+function openInAmap(row) {
+  const src = row || form
+  const pair = coordPair(src.latitude, src.longitude)
+  if (!pair) {
+    ElMessage.warning('尚未填写有效坐标')
+    return
+  }
+  const name = encodeURIComponent(row ? row.name : form.name || '机构位置')
+  window.open(`https://uri.amap.com/marker?position=${pair[1]},${pair[0]}&name=${name}`, '_blank', 'noopener')
+}
+
+function onMapPicked(p) {
+  form.latitude = p.latitude
+  form.longitude = p.longitude
+  if (p.address && (!form.address.trim() || form.address === mapAddress.value)) {
+    form.address = p.address
+    mapAddress.value = p.address
+  }
+  ElMessage.success('坐标已写入，保存后生效')
+}
+
 function typeLabel(t) { return { home: '家庭', shop: '门店', visit: '上门', other: '其他' }[t] || t }
 function statusClass(s) { return { active: 'pn-tag-ok', pending: 'pn-tag-warn', banned: 'pn-tag-danger', rejected: 'pn-tag-danger', inactive: 'pn-tag-soft' }[s] || 'pn-tag-soft' }
 function statusLabel(s) { return { active: '已上架', pending: '待审核', banned: '已封禁', rejected: '已驳回', inactive: '已下架' }[s] || s }
@@ -247,6 +311,7 @@ function openCreate() {
     address: '', status: 'pending', latitude: undefined, longitude: undefined,
     cover_photo_url: '', detail_photos: [],
   })
+  mapAddress.value = ''
   formDialog.value = true
 }
 
@@ -262,6 +327,7 @@ async function openEdit(row) {
       latitude: d.latitude ?? undefined, longitude: d.longitude ?? undefined,
       cover_photo_url: d.cover_photo_url || '', detail_photos: [...(d.detail_photos || [])],
     })
+    mapAddress.value = ''
     formDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '加载机构详情失败')
@@ -379,4 +445,13 @@ onMounted(loadData)
 }
 .sd-cert figcaption { font-size: 12px; color: var(--ink3); margin-top: 4px; }
 .sd-empty { font-size: 13px; color: var(--ink3); }
+.coord-row { display: flex; gap: 8px; width: 100%; }
+.coord-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink3);
+}
 </style>

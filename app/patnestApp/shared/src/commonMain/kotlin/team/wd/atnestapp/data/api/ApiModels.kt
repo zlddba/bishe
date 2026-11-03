@@ -103,6 +103,8 @@ data class SitterDto(
     @SerialName("price_mode") val priceMode: String = "per_day",
     val capacity: Int = 0,
     val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     @SerialName("avg_score") val avgScore: Double = 0.0,
     @SerialName("review_count") val reviewCount: Int = 0,
     @SerialName("cover_photo_url") val coverPhotoUrl: String? = null,
@@ -372,6 +374,58 @@ data class UpdateShopPayload(
     val address: String,
     @SerialName("cover_photo_url") val coverPhotoUrl: String = "",
     @SerialName("detail_photos") val detailPhotos: List<String> = emptyList(),
+    // null 表示本次不改动坐标（后端按指针字段判空更新）
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+)
+
+/** 桌面端等没有系统定位的客户端，用"城市 + 地址"向后端换 GCJ-02 坐标。 */
+@Serializable
+data class GeocodePayload(
+    val address: String,
+    val city: String = "",
+)
+
+/** 坐标 → 地址（弹框里选完点后回填地址文本）。 */
+@Serializable
+data class ReversePayload(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+@Serializable
+data class GeocodeDto(
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    @SerialName("formatted_address") val formattedAddress: String = "",
+    @SerialName("resolved_city") val resolvedCity: String = "",
+    val district: String = "",
+    val adcode: String = "",
+    val level: String = "",
+    @SerialName("from_cache") val fromCache: Boolean = false,
+)
+
+/** 桌面端地图选点：先建会话拿到一次性链接，再轮询取回用户浏览器里选中的坐标。 */
+@Serializable
+data class GeoPickPayload(
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @SerialName("place_name") val placeName: String = "",
+)
+
+@Serializable
+data class GeoPickSessionDto(
+    val token: String = "",
+    val path: String = "",
+    @SerialName("expires_in") val expiresIn: Int = 0,
+)
+
+@Serializable
+data class GeoPickResultDto(
+    val status: String = "pending",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    @SerialName("formatted_address") val formattedAddress: String = "",
 )
 
 @Serializable

@@ -49,6 +49,10 @@ import team.wd.atnestapp.data.api.CouponListDto
 import team.wd.atnestapp.data.api.DynamicDto
 import team.wd.atnestapp.data.api.CapacityItemDto
 import team.wd.atnestapp.data.api.EarningsDto
+import team.wd.atnestapp.data.api.GeocodeDto
+import team.wd.atnestapp.data.api.GeocodePayload
+import team.wd.atnestapp.data.api.GeoPickPayload
+import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.ReceivedOrderDto
 import team.wd.atnestapp.data.api.SitterDto
 import team.wd.atnestapp.data.api.SitterReviewDto
@@ -77,6 +81,7 @@ import team.wd.atnestapp.ui.components.FieldLabel
 import team.wd.atnestapp.ui.components.GhostButton
 import team.wd.atnestapp.ui.components.KeyValueRow
 import team.wd.atnestapp.ui.components.PrimaryButton
+import team.wd.atnestapp.ui.components.MapPickerPanel
 import team.wd.atnestapp.ui.components.SoftTextField
 import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.ThinDivider
@@ -87,6 +92,7 @@ import team.wd.atnestapp.ui.theme.PatNestColors
 import team.wd.atnestapp.ui.theme.PatNestShape
 import team.wd.atnestapp.ui.theme.patShadow
 import team.wd.atnestapp.ui.theme.patShadowSoft
+import team.wd.atnestapp.ui.util.openUrl
 import kotlin.math.roundToInt
 
 enum class AppRole { Owner, Sitter }
@@ -135,6 +141,12 @@ sealed interface ModalKind {
     data class CouponForm(val coupon: SitterCouponDto? = null) : ModalKind
     /** 机构调整指定日期（YYYY-MM-DD）的接待容量 */
     data class AdjustCapacity(val date: String) : ModalKind
+    /** 地图选点：应用内弹框，红点即选中位置；lat/lng 为已有坐标时以其为中心 */
+    data class MapPicker(
+        val latitude: Double?,
+        val longitude: Double?,
+        val onPicked: (lat: Double, lng: Double, address: String) -> Unit,
+    ) : ModalKind
 }
 
 class AppState {
@@ -197,6 +209,8 @@ class AppState {
     var myShop by mutableStateOf<SitterDto?>(null)
     var shopLoading by mutableStateOf(false)
     var shopError by mutableStateOf<String?>(null)
+    var shopGeoResolving by mutableStateOf(false)
+    var mapPicking by mutableStateOf(false)
 
     var receivedOrders by mutableStateOf<List<SbOrder>>(emptyList())
     var receivedOrdersLoading by mutableStateOf(false)
@@ -910,18 +924,130 @@ class AppState {
         address: String,
         coverPhotoUrl: String = "",
         detailPhotos: List<String> = emptyList(),
+        latitude: Double? = null,
+        longitude: Double? = null,
     ) {
         try {
             myShop = api.updateMyShop(
                 UpdateShopPayload(
-                    name, type, description, dailyPrice, visitPrice, priceMode, capacity, address,
-                    coverPhotoUrl, detailPhotos,
+                    name = name,
+                    type = type,
+                    description = description,
+                    dailyPrice = dailyPrice,
+                    visitPrice = visitPrice,
+                    priceMode = priceMode,
+                    capacity = capacity,
+                    address = address,
+                    coverPhotoUrl = coverPhotoUrl,
+                    detailPhotos = detailPhotos,
+                    latitude = latitude,
+                    longitude = longitude,
                 ),
             )
             toast("机构资料已保存")
         } catch (e: Exception) {
             toast(e.message ?: "保存失败")
         }
+    }
+
+    /**
+     * 地址 → 坐标。桌面端没有系统定位，靠后端调高德地理编码；
+     * 解析成功只更新页面状态，仍需点"保存资料"才落库。
+     */
+    suspend fun resolveShopAddress(address: String, city: String): GeocodeDto? {
+        if (address.isBlank()) {
+            toast("请先填写所在地址")
+            return null
+        }
+        if (shopGeoResolving) return null
+        shopGeoResolving = true
+        return try {
+            val result = api.geocodeAddress(GeocodePayload(address.trim(), city.trim()))
+            toast(if (result.fromCache) "坐标已解析（读自缓存）" else "坐标已解析，记得保存资料")
+            result
+        } catch (e: Exception) {
+            toast(e.message ?: "地址解析失败")
+            null
+        } finally {
+            shopGeoResolving = false
+        }
+    }
+
+    /**
+     * 地图选点。Compose Desktop 没有内嵌浏览器，也不值得为选点引入 JCEF：
+     * 改成让后端发一张一次性选点页，用系统浏览器打开，用户选完点后这里轮询取回坐标。
+     * 令牌 5 分钟过期、取走即销毁；轮询超过有效期再多等一会儿就放弃。
+     */
+    suspend fun pickLocationOnMap(
+        placeName: String,
+        latitude: Double?,
+        longitude: Double?,
+    ): GeocodeDto? {
+        if (mapPicking) return null
+        mapPicking = true
+        try {
+            val session = runCatching {
+                api.createGeoPick(GeoPickPayload(latitude, longitude, placeName))
+            }.getOrElse {
+                toast(it.message ?: "地图选点暂时不可用")
+                return null
+            }
+            if (!openUrl(api.baseUrl + session.path)) {
+                toast("无法打开系统浏览器，请改用“按地址解析坐标”")
+                return null
+            }
+            toast("已在浏览器打开选点页，选完位置即可回来")
+
+            val deadline = System.currentTimeMillis() + (session.expiresIn.coerceAtLeast(30) + 20) * 1000L
+            while (System.currentTimeMillis() < deadline) {
+                delay(800)
+                // 单次轮询失败不中断：网络抖一下不该让整个选点作废
+                val result = runCatching { api.pollGeoPick(session.token) }.getOrNull() ?: continue
+                when (result.status) {
+                    "done" -> return GeocodeDto(
+                        latitude = result.latitude,
+                        longitude = result.longitude,
+                        formattedAddress = result.formattedAddress,
+                    )
+                    "expired" -> {
+                        toast("选点链接已过期，请重新发起")
+                        return null
+                    }
+                }
+            }
+            toast("没有等到选点结果，可重新发起或改用地址解析")
+            return null
+        } finally {
+            mapPicking = false
+        }
+    }
+
+    /**
+     * 取一张以该点为中心的静态地图 PNG。
+     * 失败时把后端原文带出来（404=还没出包、501=没配 AMAP_KEY、其它=高德或网络），
+     * 别在这里把原因吞成一句"配额或网络问题"。
+     */
+    suspend fun loadMapImage(
+        latitude: Double,
+        longitude: Double,
+        zoom: Int,
+        width: Int,
+        height: Int,
+    ): Result<ByteArray> = runCatching {
+        api.fetchStaticMap(latitude, longitude, zoom, width, height)
+    }
+
+    /** 坐标 → 地址文本，用于选点时实时显示位置说明。 */
+    suspend fun reverseLocation(latitude: Double, longitude: Double): GeocodeDto? = runCatching {
+        api.reverseGeocode(ReversePayload(latitude, longitude))
+    }.getOrNull()
+
+    /**
+     * 取一张地图瓦片。单张失败不该打断整幅图，所以这里只回 Result，
+     * 由弹框决定留空还是重试。
+     */
+    suspend fun loadTile(zoom: Int, x: Int, y: Int): Result<ByteArray> = runCatching {
+        api.fetchTile(zoom, x, y)
     }
 
     suspend fun loadReceivedOrders(force: Boolean = false) {
@@ -1468,7 +1594,7 @@ private fun BoxScope.ModalOverlay(app: AppState) {
     Column(
         Modifier
             .align(Alignment.Center)
-            .width(420.dp)
+            .width(if (modal is ModalKind.MapPicker) 760.dp else 420.dp)
             .patShadow(30.dp, PatNestShape.Xl)
             .clip(PatNestShape.Xl)
             .background(Color.White)
@@ -1490,6 +1616,7 @@ private fun BoxScope.ModalOverlay(app: AppState) {
                     ModalKind.PriceRule -> "节假日定价"
                     is ModalKind.CouponForm -> if (modal.coupon == null) "发布优惠券" else "编辑优惠券"
                     is ModalKind.AdjustCapacity -> "调整容量 · ${modal.date}"
+                    is ModalKind.MapPicker -> "地图选点"
                 },
                 color = PatNestColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             )
@@ -1499,11 +1626,15 @@ private fun BoxScope.ModalOverlay(app: AppState) {
             }
         }
         ThinDivider()
+        // 地图弹框不能套 verticalScroll：拖动地图的手势会被滚动容器吃掉
+        val mapModal = modal is ModalKind.MapPicker
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 480.dp)
-                .verticalScroll(rememberScrollState())
+                .then(
+                    if (mapModal) Modifier
+                    else Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())
+                )
                 .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
             ModalBody(app, modal)
@@ -1933,6 +2064,15 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
                 }, Modifier.weight(1f))
             }
         }
+        is ModalKind.MapPicker -> MapPickerPanel(
+            app = app,
+            initialLat = modal.latitude,
+            initialLng = modal.longitude,
+            onConfirm = { lat, lng, addr ->
+                app.modal = null
+                modal.onPicked(lat, lng, addr)
+            },
+        )
     }
 }
 

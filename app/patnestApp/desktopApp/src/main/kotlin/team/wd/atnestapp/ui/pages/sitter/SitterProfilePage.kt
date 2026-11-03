@@ -39,6 +39,14 @@ fun SitterProfilePage(app: AppState) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("家庭寄养") }
     var address by remember { mutableStateOf("") }
+    var city by remember { mutableStateOf("") }
+    var pickedLat by remember { mutableStateOf<Double?>(null) }
+    var pickedLng by remember { mutableStateOf<Double?>(null) }
+    // 坐标来源：address=地址解析、map=地图选点、saved=服务端已有。
+    // 只有 address 来源才需要比对地址是否改动过，否则地图选点回来会被误判成"地址已修改"
+    var coordSource by remember { mutableStateOf("") }
+    var resolvedAddress by remember { mutableStateOf("") }
+    var resolvedNote by remember { mutableStateOf("") }
     var capacityText by remember { mutableStateOf("") }
     var dailyPriceText by remember { mutableStateOf("") }
     var visitPriceText by remember { mutableStateOf("") }
@@ -59,6 +67,12 @@ fun SitterProfilePage(app: AppState) {
                 else -> "家庭寄养"
             }
             address = shop.address.orEmpty()
+            pickedLat = shop.latitude
+            pickedLng = shop.longitude
+            val hasCoord = shop.latitude != null && shop.longitude != null
+            coordSource = if (hasCoord) "saved" else ""
+            // 服务端已有坐标就当成"已与当前地址对齐"，不弹过期提示
+            resolvedAddress = if (hasCoord) normalizeAddress(address) else ""
             capacityText = shop.capacity.toString()
             dailyPriceText = shop.dailyPrice.toInt().toString()
             visitPriceText = shop.visitPrice.toInt().toString()
@@ -120,6 +134,64 @@ fun SitterProfilePage(app: AppState) {
                 FieldLabel("所在地址")
                 SoftTextField(address, { address = it }, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
+                FieldLabel("所在城市（选填，提高解析准确度）")
+                SoftTextField(city, { city = it }, Modifier.fillMaxWidth(), placeholder = "如：呼和浩特")
+                Spacer(Modifier.height(8.dp))
+                ChipRow(listOf("呼和浩特", "北京", "上海", "成都"), city) { city = it }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GhostButton(
+                        if (app.shopGeoResolving) "解析中…" else "按地址解析坐标",
+                        {
+                            app.scope.launch {
+                                val geo = app.resolveShopAddress(address, city) ?: return@launch
+                                pickedLat = geo.latitude
+                                pickedLng = geo.longitude
+                                coordSource = "address"
+                                resolvedAddress = normalizeAddress(address)
+                                resolvedNote = listOf(geo.formattedAddress, geo.district, geo.level)
+                                    .filter { it.isNotBlank() }
+                                    .distinct()
+                                    .joinToString(" · ")
+                            }
+                        },
+                        height = 38.dp,
+                    )
+                    GhostButton(
+                        "地图查看 / 选点",
+                        {
+                            app.modal = ModalKind.MapPicker(pickedLat, pickedLng) { lat, lng, addr ->
+                                pickedLat = lat
+                                pickedLng = lng
+                                coordSource = "map"
+                                resolvedAddress = normalizeAddress(address)
+                                resolvedNote = addr
+                            }
+                        },
+                        height = 38.dp,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                val hasCoord = pickedLat != null && pickedLng != null
+                val coordStale = hasCoord && coordSource == "address" &&
+                    normalizeAddress(address) != resolvedAddress
+                val coordShown = if (hasCoord) "$pickedLat, $pickedLng" else ""
+                val coordNote = if (resolvedNote.isNotBlank()) "（$resolvedNote）" else ""
+                Text(
+                    when {
+                        !hasCoord -> "尚未设置位置：填好地址后点“按地址解析坐标”，或直接开“地图查看 / 选点”"
+                        coordStale -> "地址已修改，建议重新解析坐标（当前 $coordShown）"
+                        coordSource == "map" -> "地图选点 GCJ-02：$coordShown$coordNote"
+                        else -> "坐标 GCJ-02：$coordShown$coordNote"
+                    },
+                    color = when {
+                        !hasCoord -> PatNestColors.Ink3
+                        coordStale -> PatNestColors.Warn
+                        else -> PatNestColors.Ink2
+                    },
+                    fontSize = 12.sp,
+                )
+                Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         FieldLabel("同时接待容量")
@@ -148,6 +220,8 @@ fun SitterProfilePage(app: AppState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PrimaryButton("保存资料", {
                         app.scope.launch {
+                            // 经纬度只有一边有值时视为未设置，避免写进对不上的组合
+                            val hasCoord = pickedLat != null && pickedLng != null
                             app.saveMyShop(
                                 name = name.trim(),
                                 type = when (type) {
@@ -164,6 +238,8 @@ fun SitterProfilePage(app: AppState) {
                                 address = address.trim(),
                                 coverPhotoUrl = coverUrl,
                                 detailPhotos = detailUrls,
+                                latitude = if (hasCoord) pickedLat else null,
+                                longitude = if (hasCoord) pickedLng else null,
                             )
                         }
                     })
@@ -175,3 +251,6 @@ fun SitterProfilePage(app: AppState) {
         }
     }
 }
+
+/** 与后端一致地归一化地址（去首尾空白、压缩中间空白），否则缓存键和"地址已改"判断会错位。 */
+private fun normalizeAddress(text: String): String = text.trim().replace(Regex("\\s+"), " ")

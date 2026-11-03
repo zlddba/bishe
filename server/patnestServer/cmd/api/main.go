@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"patnestServer/internal/amap"
 	"patnestServer/internal/cache"
 	"patnestServer/internal/config"
 	"patnestServer/internal/db"
@@ -37,6 +38,18 @@ func main() {
 
 	// Initialize JWT
 	middleware.InitJWT(cfg.JWTSecret)
+
+	// 高德 Web 服务：地址转坐标（桌面端等无系统定位的客户端用），Key 只在后端
+	amap.Init(cfg.AMapKey, cfg.AMapBaseURL)
+	if !amap.Enabled() {
+		log.Println("[AMap] SKIPPED: AMAP_KEY not set, /geo/geocode will return 501 until configured")
+	}
+
+	// 高德 JS API：桌面端"地图选点"页面的交互地图（Key 是浏览器公开的，靠白名单约束）
+	handler.InitGeoPicker(cfg.AMapJSKey, cfg.AMapJSSecurity)
+	if cfg.AMapJSKey == "" {
+		log.Println("[AMap] JS API key not set, desktop map picker disabled (/geo/pick returns 501)")
+	}
 
 	// --- Test Database Connection ---
 	log.Println("[DB] Connecting to PostgreSQL...")

@@ -8,7 +8,7 @@
 biyezuopin/
 ├─ app/patnestApp/               Kotlin Multiplatform + Compose，Android / iOS / Desktop
 ├─ server/patnestServer/         Go 后端（规划：Gin + SQLite），目前只有 go.mod
-├─ uniapp/patnestUniapp/         uni-app 用户端（微信小程序 / H5 / App）
+├─ uniapp/patnestUniapp/         uni-app 用户端（只做微信小程序，不出 H5 / App）
 ├─ webadmin/patnestServerAdminWeb/  Vue 3 + Vite 管理后台
 ├─ docs/                         需求、数据库设计、接口文档、论文素材
 ├─ .gitignore                    全仓库公共忽略规则
@@ -49,9 +49,10 @@ cd app/patnestApp
 
 iOS 用 Xcode 打开 `app/patnestApp/iosApp`。工程目标 JVM 21，本机是 JDK 25，若 Gradle 报工具链不匹配，需要装一个 JDK 21。
 
-### 小程序 / H5 uniapp
+### 微信小程序 uniapp
 
-用 HBuilderX 直接导入 `uniapp/patnestUniapp` 运行；该工程没有 `package.json`，不通过 npm 启动。
+用 HBuilderX 直接导入 `uniapp/patnestUniapp`，只发行微信小程序；该工程没有 `package.json`，不通过 npm 启动。
+App 形态（Android / iOS / Desktop）全部走上面的 KMP 工程，不用 uni-app 打包 5+App。
 
 ## Git 约定
 

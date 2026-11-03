@@ -30,6 +30,10 @@ func Setup() *gin.Engine {
 	v1.GET("/sitters/:id/addons", handler.ListAddons)
 	v1.GET("/sitters/:id/reviews", handler.SitterReviewsPublic)
 
+	// 地图选点页：浏览器打开，凭一次性令牌访问，不带登录态
+	v1.GET("/geo/pick/:token", handler.GeoPickerPage)
+	v1.POST("/geo/pick/:token", handler.SubmitGeoPick)
+
 	// === Public routes ===
 	auth := v1.Group("/auth")
 	{
@@ -259,6 +263,14 @@ func Setup() *gin.Engine {
 
 		// --- Upload (any authenticated user) ---
 		protected.POST("/upload/image", handler.UploadImage)
+
+		// --- 地理位置（任何登录用户）：桌面端等无系统定位的客户端用地址换坐标 ---
+		protected.POST("/geo/geocode", handler.GeocodeAddress)
+		protected.GET("/geo/static-map", handler.GeoStaticMap)
+		protected.GET("/geo/tile", handler.GeoTile)
+		protected.POST("/geo/reverse", handler.ReverseGeocode)
+		protected.POST("/geo/pick", handler.CreateGeoPick)
+		protected.GET("/geo/pick-result/:token", handler.PollGeoPick)
 	}
 
 	return r
