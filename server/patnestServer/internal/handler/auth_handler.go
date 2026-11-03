@@ -206,10 +206,10 @@ func Login(c *gin.Context) {
 			Nickname: nickname,
 			Role:     user.Role,
 		},
-		AccessToken:   accessToken,
-		RefreshToken:  refreshToken,
-		ExpiresIn:     7200,
-		SingleSession: user.Role == "admin",
+		AccessToken:     accessToken,
+		RefreshToken:    refreshToken,
+		ExpiresIn:       7200,
+		SingleSession:   user.Role == "admin",
 		CancelWithdrawn: cancelWithdrawn,
 	})
 }
@@ -322,22 +322,34 @@ func GetProfile(c *gin.Context) {
 		cancelDeadlineStr = &s
 	}
 
+	// 机构入驻申请状态：owner 端用于展示"审核中 / 已驳回（原因）"
+	var sitterApplication any
+	var appStatus, appNote *string
+	_ = db.Pool.QueryRow(context.Background(),
+		`SELECT status::text, review_note FROM sitters
+		 WHERE user_id = $1 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`,
+		userID).Scan(&appStatus, &appNote)
+	if appStatus != nil {
+		sitterApplication = gin.H{"status": *appStatus, "review_note": appNote}
+	}
+
 	OK(c, gin.H{
-		"id":            user.ID,
-		"username":      user.Username,
-		"nickname":      user.Nickname,
-		"phone":         user.Phone,
-		"email":         user.Email,
-		"role":          user.Role,
-		"avatar_url":    user.AvatarURL,
-		"status":        user.Status,
-		"created_at":    user.CreatedAt,
-		"points":        points,
-		"address":       address,
-		"contact_name":  contactName,
-		"contact_phone": contactPhone,
+		"id":                 user.ID,
+		"username":           user.Username,
+		"nickname":           user.Nickname,
+		"phone":              user.Phone,
+		"email":              user.Email,
+		"role":               user.Role,
+		"avatar_url":         user.AvatarURL,
+		"status":             user.Status,
+		"created_at":         user.CreatedAt,
+		"points":             points,
+		"address":            address,
+		"contact_name":       contactName,
+		"contact_phone":      contactPhone,
 		"cancel_mode":        cancelMode,
 		"cancel_deadline":    cancelDeadlineStr,
+		"sitter_application": sitterApplication,
 	})
 }
 

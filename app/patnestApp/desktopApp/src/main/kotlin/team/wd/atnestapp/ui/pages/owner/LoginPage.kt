@@ -152,7 +152,7 @@ fun LoginPage(
                         value = account,
                         onValueChange = { account = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "手机号 / 用户名",
+                        placeholder = "用户名",
                     )
                     Spacer(Modifier.height(14.dp))
                     FieldLabel("密码")
@@ -193,7 +193,7 @@ fun LoginPage(
                         value = account,
                         onValueChange = { account = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "手机号 / 用户名",
+                        placeholder = "用户名",
                     )
                     Spacer(Modifier.height(13.dp))
                     FieldLabel("密码")

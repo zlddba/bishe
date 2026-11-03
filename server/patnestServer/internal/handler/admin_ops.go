@@ -62,8 +62,9 @@ func AdminListCoupons(c *gin.Context) {
 		SELECT c.id, c.code, c.title, c.type, c.value, c.min_amount, c.total_qty, c.claimed_qty,
 		       c.used_qty, c.per_user, to_char(c.starts_at, 'YYYY-MM-DD'),
 		       COALESCE(to_char(c.ends_at, 'YYYY-MM-DD'), ''), c.enabled,
-		       to_char(c.created_at, 'YYYY-MM-DD HH24:MI')
-		FROM coupons c `+where+`
+		       to_char(c.created_at, 'YYYY-MM-DD HH24:MI'),
+		       COALESCE(c.sitter_id, 0), COALESCE(s.name, '')
+		FROM coupons c LEFT JOIN sitters s ON s.id = c.sitter_id `+where+`
 		ORDER BY c.id DESC LIMIT $2 OFFSET $3`, enabled, perPage, offset)
 	if err != nil {
 		InternalError(c, "查询优惠券失败: "+err.Error())
@@ -78,9 +79,11 @@ func AdminListCoupons(c *gin.Context) {
 			code, title, ctype, starts, ends, at string
 			value, minAmount                     float64
 			on                                   bool
+			sitID                                int64
+			issuer                               string
 		)
 		if err := rows.Scan(&id, &code, &title, &ctype, &value, &minAmount, &totalQty, &claimed,
-			&used, &perUser, &starts, &ends, &on, &at); err != nil {
+			&used, &perUser, &starts, &ends, &on, &at, &sitID, &issuer); err != nil {
 			continue
 		}
 		items = append(items, gin.H{
@@ -88,6 +91,7 @@ func AdminListCoupons(c *gin.Context) {
 			"min_amount": minAmount, "total_qty": totalQty, "claimed_qty": claimed,
 			"used_qty": used, "per_user": perUser, "starts_at": starts, "ends_at": ends,
 			"enabled": on, "created_at": at,
+			"sitter_id": sitID, "issuer": issuer,
 		})
 	}
 	OK(c, gin.H{"items": items, "total": total, "page": page, "per_page": perPage})
@@ -144,7 +148,7 @@ func AdminCreateCoupon(c *gin.Context) {
 		strings.ToUpper(in.Code), in.Title, in.Type, in.Value, in.MinAmount, in.TotalQty,
 		in.PerUser, start, end, enabled).Scan(&id)
 	if err != nil {
-		if strings.Contains(err.Error(), "uq_coupons_code") || strings.Contains(err.Error(), "coupons_code_key") {
+		if strings.Contains(err.Error(), "uq_coupons_") || strings.Contains(err.Error(), "coupons_code_key") {
 			Conflict(c, "优惠券码已存在")
 			return
 		}
@@ -190,19 +194,36 @@ func AdminUpdateCoupon(c *gin.Context) {
 }
 
 func AdminDeleteCoupon(c *gin.Context) {
-	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	tag, err := db.Pool.Exec(context.Background(),
-		"UPDATE coupons SET enabled = FALSE, updated_at = now() WHERE id = $1", id)
+	// 平台券物理删除。已被订单核销的券拒绝删除（历史订单只存券 id，删了无法追溯），请改为停用；
+	// 领取未使用的券包记录随外键级联清除。
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		InternalError(c, "停用优惠券失败")
+		BadRequest(c, "无效的优惠券ID")
+		return
+	}
+
+	var usedInOrder bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM orders WHERE coupon_id = $1)", id).Scan(&usedInOrder); err != nil {
+		InternalError(c, "查询优惠券使用情况失败")
+		return
+	}
+	if usedInOrder {
+		Conflict(c, "该优惠券已被订单核销，无法删除，请改为停用")
+		return
+	}
+
+	tag, err := db.Pool.Exec(context.Background(), "DELETE FROM coupons WHERE id = $1", id)
+	if err != nil {
+		InternalError(c, "删除优惠券失败")
 		return
 	}
 	if tag.RowsAffected() == 0 {
 		NotFound(c, "优惠券不存在")
 		return
 	}
-	writeAudit(c, "DISABLE_COUPON", "coupon", id, "{}")
-	OK(c, gin.H{"id": id, "enabled": false})
+	writeAudit(c, "DELETE_COUPON", "coupon", id, "{}")
+	OK(c, gin.H{"id": id, "deleted": true})
 }
 
 // ---------------- 通知模板 ----------------

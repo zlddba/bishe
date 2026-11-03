@@ -21,6 +21,8 @@ data class Coupon(
     val from: String,
     val to: String,
     val state: String,
+    /** 机构专属券的发券机构名；平台券为空 */
+    val issuer: String = "",
 )
 
 data class ReviewItemData(
@@ -35,4 +37,6 @@ data class CalDay(
     val week: String,
     val slots: List<Pair<String, String>>,
     val holiday: Boolean = false,
+    /** 原始 YYYY-MM-DD 日期，用于容量调整接口 */
+    val rawDate: String = "",
 )

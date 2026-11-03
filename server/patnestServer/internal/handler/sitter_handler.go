@@ -111,14 +111,14 @@ func GetSitter(c *gin.Context) {
 	err = db.Pool.QueryRow(context.Background(),
 		`SELECT id, user_id, name, type, description, daily_price, visit_price, price_mode, capacity,
 		 address, latitude, longitude, avg_score, review_count, cover_photo_url, detail_photos, status, created_at, updated_at
-		 FROM sitters WHERE id = $1 AND deleted_at IS NULL`,
+		 FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL`,
 		sitterID,
 	).Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
 		&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
 		&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt)
 
 	if err != nil {
-		NotFound(c, "sitter not found")
+		NotFound(c, "机构不存在或已下架")
 		return
 	}
 

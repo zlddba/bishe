@@ -66,6 +66,7 @@ func Setup() *gin.Engine {
 			owner.PUT("/pets/:id", handler.UpdatePet)
 			owner.DELETE("/pets/:id", handler.DeletePet)
 			owner.PUT("/pets/:id/vaccine", handler.UpdatePetVaccine)
+			owner.GET("/pets/:id/stays", handler.GetPetStays)
 
 			owner.POST("/orders", handler.CreateOrder)
 			owner.GET("/orders", handler.ListMyOrders)
@@ -90,9 +91,12 @@ func Setup() *gin.Engine {
 			owner.GET("/points", handler.MyPoints)
 			owner.GET("/coupons", handler.MyCoupons)
 			owner.POST("/coupons/:id/claim", handler.ClaimCoupon)
+			// 删除券包中的优惠券，:id 是 user_coupons 记录 id（claim 的 :id 是券模板 id）
+			owner.DELETE("/coupons/mine/:id", handler.DeleteMyCoupon)
 
 			owner.POST("/dynamics/:id/like", handler.LikeDynamic)
 			owner.DELETE("/dynamics/:id/like", handler.UnlikeDynamic)
+			owner.GET("/dynamics/:id", handler.GetDynamic)
 			owner.GET("/dynamics/:id/comments", handler.ListDynamicComments)
 			owner.POST("/dynamics/:id/comments", handler.CreateDynamicComment)
 			owner.POST("/reviews/:id/followup", handler.FollowUpReview)
@@ -113,6 +117,7 @@ func Setup() *gin.Engine {
 			browse.GET("/sitters/:id", handler.GetSitter)
 			browse.GET("/sitters/:id/capacity", handler.SitterCapacityPublic)
 			browse.GET("/sitters/:id/addons", handler.ListAddons)
+			browse.GET("/sitters/:id/estimate", handler.EstimateOrder)
 		}
 
 		// --- Notifications (any authenticated user) ---
@@ -156,6 +161,12 @@ func Setup() *gin.Engine {
 			sitter.GET("/earnings", handler.SitterEarnings)
 			sitter.GET("/settlements", handler.ListMySettlements)
 			sitter.POST("/settlements", handler.ApplySettlement)
+
+			// --- 机构优惠券：自助发布与管理，仅限本机构订单核销 ---
+			sitter.GET("/coupons", handler.ListSitterCoupons)
+			sitter.POST("/coupons", handler.CreateSitterCoupon)
+			sitter.PUT("/coupons/:id", handler.UpdateSitterCoupon)
+			sitter.DELETE("/coupons/:id", handler.DeleteSitterCoupon)
 		}
 
 		// --- Admin namespace ---

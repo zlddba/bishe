@@ -8,6 +8,7 @@
           <el-option label="已上架" value="active" />
           <el-option label="已下架" value="inactive" />
           <el-option label="已封禁" value="banned" />
+          <el-option label="已驳回" value="rejected" />
         </el-select>
         <el-button type="primary" @click="loadData">筛选</el-button>
         <el-button :loading="exporting" @click="exportCSV">导出 CSV</el-button>
@@ -43,6 +44,7 @@
             <el-button size="small" @click="openDetail(row)">详情</el-button>
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
             <el-button v-if="row.status==='pending'" type="success" size="small" @click="updateStatus(row.id,'active')">通过</el-button>
+            <el-button v-if="row.status==='pending'" type="danger" plain size="small" @click="handleReject(row)">驳回</el-button>
             <el-button v-if="row.status==='active'" type="warning" size="small" @click="updateStatus(row.id,'inactive')">下架</el-button><el-button v-if="row.status==='inactive'" type="success" size="small" @click="updateStatus(row.id,'active')">上架</el-button>
             <el-button v-if="row.status==='banned'" type="success" size="small" @click="updateStatus(row.id,'active')">解封</el-button>
             <el-button v-if="row.status!=='banned'" type="danger" size="small" @click="handleBan(row)">封禁</el-button>
@@ -68,6 +70,7 @@
             <el-option label="家庭寄养" value="home" />
             <el-option label="门店寄养" value="shop" />
             <el-option label="上门喂养" value="visit" />
+            <el-option label="其他" value="other" />
           </el-select>
         </el-form-item>
         <el-form-item label="描述">
@@ -129,6 +132,18 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="rejectDialog" title="驳回机构申请" width="400px">
+      <el-form>
+        <el-form-item label="驳回原因">
+          <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请说明资质材料不符合要求的原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectDialog = false">取消</el-button>
+        <el-button type="danger" @click="confirmReject">确认驳回</el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="detailDrawer" title="机构详情" size="520px">
       <div v-if="detail" class="sitter-detail">
         <div class="sd-cover">
@@ -138,6 +153,7 @@
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="机构名称" :span="2">{{ detail.name }}</el-descriptions-item>
           <el-descriptions-item label="所属账号">{{ detail.username }}</el-descriptions-item>
+          <el-descriptions-item label="联系人">{{ detail.contact_person || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ typeLabel(detail.type) }}</el-descriptions-item>
           <el-descriptions-item label="容量">{{ detail.capacity }}</el-descriptions-item>
@@ -151,8 +167,21 @@
           </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{ detail.created_at }}</el-descriptions-item>
           <el-descriptions-item label="机构介绍" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="驳回原因" :span="2" v-if="detail.review_note">{{ detail.review_note }}</el-descriptions-item>
           <el-descriptions-item label="封禁原因" :span="2" v-if="detail.banned_reason">{{ detail.banned_reason }}</el-descriptions-item>
         </el-descriptions>
+        <div class="sd-sub">资质材料</div>
+        <div class="sd-photos" v-if="detail.license_photo_url || detail.id_card_photo_url">
+          <figure v-if="detail.license_photo_url" class="sd-cert">
+            <img :src="detail.license_photo_url" alt="" />
+            <figcaption>营业执照</figcaption>
+          </figure>
+          <figure v-if="detail.id_card_photo_url" class="sd-cert">
+            <img :src="detail.id_card_photo_url" alt="" />
+            <figcaption>联系人身份证</figcaption>
+          </figure>
+        </div>
+        <div v-else class="sd-empty">未上传资质材料</div>
         <div class="sd-sub">详情图</div>
         <div class="sd-photos" v-if="(detail.detail_photos || []).length">
           <img v-for="p in detail.detail_photos" :key="p" :src="p" alt="" />
@@ -190,12 +219,16 @@ const banDialog = ref(false)
 const banReason = ref('')
 const banTarget = ref(null)
 
+const rejectDialog = ref(false)
+const rejectReason = ref('')
+const rejectTarget = ref(null)
+
 const detailDrawer = ref(false)
 const detail = ref(null)
 
-function typeLabel(t) { return { home: '家庭', shop: '门店', visit: '上门' }[t] || t }
-function statusClass(s) { return { active: 'pn-tag-ok', pending: 'pn-tag-warn', banned: 'pn-tag-danger', inactive: 'pn-tag-soft' }[s] || 'pn-tag-soft' }
-function statusLabel(s) { return { active: '已上架', pending: '待审核', banned: '已封禁', inactive: '已下架' }[s] || s }
+function typeLabel(t) { return { home: '家庭', shop: '门店', visit: '上门', other: '其他' }[t] || t }
+function statusClass(s) { return { active: 'pn-tag-ok', pending: 'pn-tag-warn', banned: 'pn-tag-danger', rejected: 'pn-tag-danger', inactive: 'pn-tag-soft' }[s] || 'pn-tag-soft' }
+function statusLabel(s) { return { active: '已上架', pending: '待审核', banned: '已封禁', rejected: '已驳回', inactive: '已下架' }[s] || s }
 
 async function loadData() {
   loading.value = true
@@ -285,6 +318,13 @@ async function confirmBan() {
   banDialog.value = false
 }
 
+function handleReject(row) { rejectTarget.value = row; rejectReason.value = ''; rejectDialog.value = true }
+async function confirmReject() {
+  if (!rejectReason.value.trim()) { ElMessage.warning('请输入驳回原因'); return }
+  await updateStatus(rejectTarget.value.id, 'rejected', rejectReason.value)
+  rejectDialog.value = false
+}
+
 async function handleDelete(row) {
   try {
     await ElMessageBox.confirm('确认删除机构「' + row.name + '」吗？该操作不可恢复。', '删除确认', { type: 'warning' })
@@ -332,5 +372,11 @@ onMounted(loadData)
   width: 104px; height: 104px; object-fit: cover;
   border-radius: 8px; border: 1px solid var(--line);
 }
+.sd-cert { margin: 0; text-align: center; }
+.sd-cert img {
+  width: 148px; height: 104px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--line); display: block;
+}
+.sd-cert figcaption { font-size: 12px; color: var(--ink3); margin-top: 4px; }
 .sd-empty { font-size: 13px; color: var(--ink3); }
 </style>

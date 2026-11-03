@@ -1,6 +1,5 @@
 package team.wd.atnestapp.ui.pages.owner
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -147,16 +145,58 @@ fun ProfilePage(app: AppState) {
 
         if (app.accountRole != "sitter") {
             Spacer(Modifier.height(16.dp))
-            Panel(title = "机构入驻", subtitle = "申请成为机构账号，审核通过后可发布寄养服务") {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            val application = app.profile?.sitterApplication
+            when (application?.status) {
+                "pending" -> Panel(title = "机构入驻", subtitle = "申请审核中") {
                     Text(
-                        "提交机构名称、类型、地址、容量和价格，平台审核通过后即可接单。",
+                        "入驻申请已提交，平台正在审核营业执照等资质材料；审核通过后账号自动升级为机构。",
                         color = PatNestColors.Ink2, fontSize = 12.5.sp,
-                        modifier = Modifier.weight(1f),
                     )
-                    PrimaryButton("申请成为机构", {
-                        app.modal = ModalKind.ApplySitter
-                    }, height = 36.dp)
+                }
+                "rejected" -> Panel(title = "机构入驻", subtitle = "申请已驳回") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "资质审核未通过，可修改材料后重新提交。",
+                                color = PatNestColors.Danger, fontSize = 12.5.sp,
+                            )
+                            application?.reviewNote?.takeIf { it.isNotBlank() }?.let {
+                                Text(
+                                    "驳回原因：$it",
+                                    color = PatNestColors.Ink2, fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        PrimaryButton("重新申请", {
+                            app.modal = ModalKind.ApplySitter
+                        }, height = 36.dp)
+                    }
+                }
+                "active", "inactive" -> Panel(title = "机构入驻", subtitle = "审核已通过") {
+                    Text(
+                        "资质审核已通过，重新登录后即可进入机构端管理店铺与接单。",
+                        color = PatNestColors.Ink2, fontSize = 12.5.sp,
+                    )
+                }
+                "banned" -> Panel(title = "机构入驻", subtitle = "机构已被封禁") {
+                    Text(
+                        "该账号关联的机构已被平台封禁，如需恢复请联系管理员。",
+                        color = PatNestColors.Danger, fontSize = 12.5.sp,
+                    )
+                }
+                else -> Panel(title = "机构入驻", subtitle = "上传资质材料，审核通过后可发布寄养服务") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "提交机构名称、联系人及营业执照等证明材料，平台审核通过后即可接单。",
+                            color = PatNestColors.Ink2, fontSize = 12.5.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        PrimaryButton("申请成为机构", {
+                            app.modal = ModalKind.ApplySitter
+                        }, height = 36.dp)
+                    }
                 }
             }
         }
@@ -166,65 +206,38 @@ fun ProfilePage(app: AppState) {
     }
 }
 
-/** 账户安全：注销账户 / 注销机构，含冷静期提示与撤销入口。 */
+/** 账户安全：注销账户 / 注销机构；申请提交成功后立即退出登录，3 天内重新登录自动撤销。 */
 @Composable
 private fun AccountSecurityPanel(app: AppState) {
-    val cancelMode = app.profile?.cancelMode
-    val cancelDeadline = app.profile?.cancelDeadline
-
-    Panel(title = "账户安全", subtitle = "注销采用冷静期机制：申请后 3 天内登录即自动撤销") {
-        if (cancelMode != null && cancelDeadline != null) {
-            val modeText = if (cancelMode == "sitter") "仅注销机构" else "注销整个账户"
-            val deadlineText = cancelDeadline.replace('T', ' ').take(16)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(PatNestColors.DangerSoft, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
-            ) {
+    Panel(title = "账户安全", subtitle = "申请提交成功后将立即退出登录；3 天内重新登录可自动撤销") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("注销账户", color = PatNestColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "注销申请已提交：$modeText",
-                    color = PatNestColors.Danger, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold,
+                    if (app.isSitterAccount) {
+                        "可选择注销整个账户或仅注销机构；申请后立即退出登录，3 天内重新登录自动撤销。"
+                    } else {
+                        "申请后立即退出登录，进入 3 天冷静期；重新登录自动撤销，到期后自动删除账号数据。"
+                    },
+                    color = PatNestColors.Ink2, fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 3.dp),
                 )
-                Text(
-                    "冷静期至 $deadlineText 自动注销；期间登录将自动撤销该申请。",
-                    color = PatNestColors.Danger, fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 5.dp),
-                )
-                PrimaryButton("撤销注销", {
-                    app.scope.launch { app.withdrawAccountCancel() }
-                }, Modifier.padding(top = 12.dp), height = 34.dp)
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("注销账户", color = PatNestColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (app.isSitterAccount) {
-                            "可选择注销整个账户或仅注销机构；申请后进入 3 天冷静期，登录即撤销。"
-                        } else {
-                            "申请后进入 3 天冷静期，登录即撤销；到期后自动删除账号数据。"
-                        },
-                        color = PatNestColors.Ink2, fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 3.dp),
-                    )
-                }
-                if (app.isSitterAccount) {
-                    GhostButton("注销机构", {
-                        app.modal = ModalKind.Confirm(
-                            "注销机构",
-                            "申请后进入 3 天冷静期：期间登录自动撤销；到期后机构将被注销，账号退回主人角色。",
-                        ) { app.scope.launch { app.requestAccountCancel("sitter") } }
-                    }, textColor = PatNestColors.Danger, height = 36.dp)
-                    Spacer(Modifier.width(10.dp))
-                }
-                GhostButton("注销账户", {
+            if (app.isSitterAccount) {
+                GhostButton("注销机构", {
                     app.modal = ModalKind.Confirm(
-                        "注销整个账户",
-                        "申请后进入 3 天冷静期：期间登录自动撤销；到期后账号及个人数据将被删除（存在订单等业务记录时转为已删除状态）。",
-                    ) { app.scope.launch { app.requestAccountCancel("account") } }
+                        "注销机构",
+                        "提交后将立即退出登录并进入 3 天冷静期：重新登录自动撤销；到期后机构将被注销，账号退回主人角色。",
+                    ) { app.scope.launch { app.requestAccountCancel("sitter") } }
                 }, textColor = PatNestColors.Danger, height = 36.dp)
+                Spacer(Modifier.width(10.dp))
             }
+            GhostButton("注销账户", {
+                app.modal = ModalKind.Confirm(
+                    "注销整个账户",
+                    "提交后将立即退出登录并进入 3 天冷静期：重新登录自动撤销；到期后账号及个人数据将被删除（存在订单等业务记录时转为已删除状态）。",
+                ) { app.scope.launch { app.requestAccountCancel("account") } }
+            }, textColor = PatNestColors.Danger, height = 36.dp)
         }
     }
 }

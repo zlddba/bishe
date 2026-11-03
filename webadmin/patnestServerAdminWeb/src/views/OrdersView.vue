@@ -271,7 +271,7 @@ function payRecordStatusLabel(s) {
   return { created: '已创建', paid: '支付成功', failed: '支付失败', refunded: '已退款' }[s] || s
 }
 function typeLabel(t) {
-  return { home: '家庭', shop: '门店', visit: '上门' }[t] || t
+  return { home: '家庭', shop: '门店', visit: '上门', other: '其他' }[t] || t
 }
 function speciesLabel(s) {
   return { cat: '猫', dog: '狗', other: '其他' }[s] || s

@@ -2,14 +2,18 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"patnestServer/internal/db"
 	"patnestServer/internal/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 // CreateOrder handles POST /api/v1/pet-owner/orders
@@ -37,54 +41,7 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	totalDays := int(endDate.Sub(startDate).Hours() / 24)
 	petCount := len(req.Pets)
-
-	// Verify sitter exists and is active
-	var sitterName string
-	var priceMode string
-	var dailyPrice, visitPrice float64
-	err = db.Pool.QueryRow(context.Background(),
-		"SELECT name, price_mode, daily_price, visit_price FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL",
-		req.SitterID).Scan(&sitterName, &priceMode, &dailyPrice, &visitPrice)
-	if err != nil {
-		BadRequest(c, "sitter not found or not active")
-		return
-	}
-
-	// 计算基础费用：按天计费时逐日叠加节假日上浮规则
-	var estimatedAmount float64
-	if priceMode == "per_day" {
-		type rule struct {
-			start, end time.Time
-			multiplier float64
-		}
-		rules := make([]rule, 0)
-		if rows, err := db.Pool.Query(context.Background(), `
-			SELECT start_date, end_date, multiplier FROM sitter_price_rules
-			WHERE sitter_id = $1 AND end_date >= $2 AND start_date < $3`,
-			req.SitterID, startDate, endDate); err == nil {
-			for rows.Next() {
-				var r rule
-				if rows.Scan(&r.start, &r.end, &r.multiplier) == nil {
-					rules = append(rules, r)
-				}
-			}
-			rows.Close()
-		}
-		for d := startDate; d.Before(endDate); d = d.AddDate(0, 0, 1) {
-			multiplier := 1.0
-			for _, r := range rules {
-				if !d.Before(r.start) && !d.After(r.end) && r.multiplier > multiplier {
-					multiplier = r.multiplier
-				}
-			}
-			estimatedAmount += dailyPrice * multiplier
-		}
-		estimatedAmount *= float64(petCount)
-	} else {
-		estimatedAmount = visitPrice * float64(petCount)
-	}
 
 	// Start transaction
 	tx, err := db.Pool.Begin(context.Background())
@@ -94,100 +51,21 @@ func CreateOrder(c *gin.Context) {
 	}
 	defer tx.Rollback(context.Background())
 
-	// ---- 加购服务 ----
-	type addonLine struct {
-		ID     int64
-		Name   string
-		Price  float64
-		Qty    int
-		Amount float64
+	// 与预估接口共用同一套核算逻辑（含机构校验、节假日逐日上浮、加购、优惠券、积分）
+	pricing, e := computeOrderPricing(context.Background(), tx, ownerID, req.SitterID,
+		startDate, endDate, petCount, req.Addons, req.UserCouponID, req.PointsUsed, true)
+	if e != nil {
+		respondHTTPErr(c, e)
+		return
 	}
-	addonLines := make([]addonLine, 0, len(req.Addons))
-	addonAmount := 0.0
-	for _, a := range req.Addons {
-		qty := a.Qty
-		if qty <= 0 {
-			qty = 1
-		}
-		if qty > 20 {
-			BadRequest(c, "加购数量不能超过 20")
-			return
-		}
-		var name string
-		var price float64
-		err = tx.QueryRow(context.Background(),
-			`SELECT name, price FROM sitter_addons
-			 WHERE id = $1 AND sitter_id = $2 AND enabled`, a.AddonID, req.SitterID).Scan(&name, &price)
-		if err != nil {
-			BadRequest(c, "加购服务不存在或已下架")
-			return
-		}
-		amount := price * float64(qty)
-		addonAmount += amount
-		addonLines = append(addonLines, addonLine{ID: a.AddonID, Name: name, Price: price, Qty: qty, Amount: amount})
-	}
-
-	// ---- 优惠券 ----
-	subtotal := estimatedAmount + addonAmount
-	discountAmount := 0.0
-	if req.UserCouponID > 0 {
-		var ctype string
-		var value, minAmount float64
-		var ucStatus string
-		err = tx.QueryRow(context.Background(), `
-			SELECT c.type, c.value, c.min_amount, uc.status
-			FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
-			WHERE uc.id = $1 AND uc.user_id = $2 AND c.enabled
-			  AND (c.ends_at IS NULL OR c.ends_at >= now())
-			FOR UPDATE`, req.UserCouponID, ownerID).Scan(&ctype, &value, &minAmount, &ucStatus)
-		if err != nil || ucStatus != "unused" {
-			BadRequest(c, "优惠券不可用或已使用")
-			return
-		}
-		if subtotal < minAmount {
-			BadRequest(c, "订单金额未达到优惠券使用门槛")
-			return
-		}
-		if ctype == "fixed" {
-			discountAmount = value
-		} else {
-			discountAmount = subtotal * value / 100
-		}
-		if discountAmount > subtotal {
-			discountAmount = subtotal
-		}
-	}
-
-	// ---- 积分抵扣（100 积分 = 1 元） ----
-	remaining := subtotal - discountAmount
-	if remaining < 0 {
-		remaining = 0
-	}
-	pointsDiscount := 0.0
-	if req.PointsUsed > 0 {
-		var balance int
-		if err = tx.QueryRow(context.Background(),
-			"SELECT points FROM users WHERE id = $1 FOR UPDATE", ownerID).Scan(&balance); err != nil {
-			InternalError(c, "读取积分失败")
-			return
-		}
-		if req.PointsUsed > balance {
-			BadRequest(c, "积分余额不足")
-			return
-		}
-		maxPoints := int(remaining * pointsPerYuan)
-		if req.PointsUsed > maxPoints {
-			req.PointsUsed = maxPoints
-		}
-		pointsDiscount = float64(req.PointsUsed) / pointsPerYuan
-		if pointsDiscount > remaining {
-			pointsDiscount = remaining
-		}
-	}
-	totalAmount := remaining - pointsDiscount
-	if totalAmount < 0 {
-		totalAmount = 0
-	}
+	totalDays := pricing.TotalDays
+	sitterName := pricing.SitterName
+	estimatedAmount := pricing.EstimatedAmount
+	addonAmount := pricing.AddonAmount
+	discountAmount := pricing.DiscountAmount
+	pointsDiscount := pricing.PointsDiscount
+	totalAmount := pricing.TotalAmount
+	req.PointsUsed = pricing.PointsUsed // 可能被抵扣上限截断，落库用实际值
 
 	// Verify all pets belong to this owner and are available
 	for _, p := range req.Pets {
@@ -263,7 +141,7 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	// 加购明细、优惠券核销、积分扣减
-	for _, a := range addonLines {
+	for _, a := range pricing.AddonLines {
 		_, err = tx.Exec(context.Background(),
 			`INSERT INTO order_addons (order_id, addon_id, name, price, qty, amount)
 			 VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -325,6 +203,129 @@ func CreateOrder(c *gin.Context) {
 	})
 }
 
+// validOrderStatus 订单状态白名单，用于 status_filter 多状态筛选校验
+var validOrderStatus = map[string]bool{
+	"pending_pay": true, "confirmed": true, "accepted": true, "staying": true,
+	"completed": true, "evaluated": true, "cancelled": true, "rejected": true,
+}
+
+// EstimateOrder handles GET /api/v1/pet-owner/sitters/:id/estimate
+// 下单前费用预估：与下单共用 computeOrderPricing，口径一致（含节假日逐日上浮、加购、优惠券、积分）。
+// 入参（query）：start_date、end_date（YYYY-MM-DD，必填）、pet_ids（逗号分隔）、
+// addons（逗号分隔，元素为 addon_id 或 addon_id:qty，qty 默认 1）、user_coupon_id、points_used。
+func EstimateOrder(c *gin.Context) {
+	sitterID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || sitterID == 0 {
+		BadRequest(c, "invalid sitter id")
+		return
+	}
+	ownerID := c.GetInt64("user_id")
+
+	startDate, err := time.Parse("2006-01-02", c.Query("start_date"))
+	if err != nil {
+		BadRequest(c, "invalid start_date format, use YYYY-MM-DD")
+		return
+	}
+	endDate, err := time.Parse("2006-01-02", c.Query("end_date"))
+	if err != nil {
+		BadRequest(c, "invalid end_date format, use YYYY-MM-DD")
+		return
+	}
+	if !endDate.After(startDate) {
+		BadRequest(c, "end_date must be after start_date")
+		return
+	}
+
+	petIDs := make([]int64, 0, 10)
+	for _, p := range strings.Split(c.Query("pet_ids"), ",") {
+		if id, e := strconv.ParseInt(strings.TrimSpace(p), 10, 64); e == nil && id > 0 {
+			petIDs = append(petIDs, id)
+		}
+	}
+	if len(petIDs) == 0 || len(petIDs) > 10 {
+		BadRequest(c, "pet_ids 为空或超过 10 只")
+		return
+	}
+
+	// 宠物归属校验（只读，不做档期冲突检查）
+	var owned int
+	_ = db.Pool.QueryRow(context.Background(),
+		"SELECT COUNT(*) FROM pets WHERE owner_id = $1 AND id = ANY($2) AND deleted_at IS NULL",
+		ownerID, petIDs).Scan(&owned)
+	if owned != len(petIDs) {
+		BadRequest(c, "宠物不存在或不属于当前账号")
+		return
+	}
+
+	addons := make([]model.CreateOrderAddon, 0, 4)
+	for _, item := range strings.Split(c.Query("addons"), ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		idStr, qtyStr := item, "1"
+		if i := strings.IndexByte(item, ':'); i >= 0 {
+			idStr, qtyStr = item[:i], item[i+1:]
+		}
+		id, e1 := strconv.ParseInt(idStr, 10, 64)
+		qty, e2 := strconv.Atoi(qtyStr)
+		if e1 != nil || id <= 0 {
+			BadRequest(c, "addons 参数格式：id 或 id:qty，逗号分隔")
+			return
+		}
+		if e2 != nil || qty <= 0 {
+			qty = 1
+		}
+		addons = append(addons, model.CreateOrderAddon{AddonID: id, Qty: qty})
+	}
+
+	userCouponID, _ := strconv.ParseInt(c.Query("user_coupon_id"), 10, 64)
+	pointsUsed, _ := strconv.Atoi(c.Query("points_used"))
+
+	pricing, e := computeOrderPricing(context.Background(), db.Pool, ownerID, sitterID,
+		startDate, endDate, len(petIDs), addons, userCouponID, pointsUsed, false)
+	if e != nil {
+		respondHTTPErr(c, e)
+		return
+	}
+
+	breakdown := make([]gin.H, 0, len(pricing.AddonLines)+3)
+	breakdown = append(breakdown, gin.H{
+		"type": "base", "label": "寄养费用", "amount": pricing.EstimatedAmount,
+	})
+	for _, line := range pricing.AddonLines {
+		breakdown = append(breakdown, gin.H{
+			"type": "addon", "label": line.Name, "price": line.Price, "qty": line.Qty, "amount": line.Amount,
+		})
+	}
+	if pricing.DiscountAmount > 0 {
+		breakdown = append(breakdown, gin.H{
+			"type": "discount", "label": "优惠券-" + pricing.CouponTitle, "amount": -pricing.DiscountAmount,
+		})
+	}
+	if pricing.PointsDiscount > 0 {
+		breakdown = append(breakdown, gin.H{
+			"type": "points", "label": "积分抵扣", "points_used": pricing.PointsUsed,
+			"amount": -pricing.PointsDiscount,
+		})
+	}
+
+	OK(c, gin.H{
+		"sitter_id":        sitterID,
+		"sitter_name":      pricing.SitterName,
+		"total_days":       pricing.TotalDays,
+		"pet_count":        len(petIDs),
+		"estimated_amount": pricing.EstimatedAmount,
+		"addon_amount":     pricing.AddonAmount,
+		"subtotal":         pricing.Subtotal,
+		"discount_amount":  pricing.DiscountAmount,
+		"points_used":      pricing.PointsUsed,
+		"points_discount":  pricing.PointsDiscount,
+		"total_amount":     pricing.TotalAmount,
+		"breakdown":        breakdown,
+	})
+}
+
 // ListMyOrders handles GET /api/v1/pet-owner/orders
 func ListMyOrders(c *gin.Context) {
 	ownerID := c.GetInt64("user_id")
@@ -343,16 +344,31 @@ func ListMyOrders(c *gin.Context) {
 	idx := 2
 
 	if status := c.Query("status_filter"); status != "" {
-		where += fmt.Sprintf(" AND o.status = $%d", idx)
-		args = append(args, status)
-		idx++
+		// 支持逗号分隔的多状态筛选（如 confirmed,accepted,staying），单值同样兼容
+		seen := make([]string, 0, 8)
+		for _, s := range strings.Split(status, ",") {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			if !validOrderStatus[s] {
+				BadRequest(c, "未知订单状态: "+s)
+				return
+			}
+			seen = append(seen, s)
+		}
+		if len(seen) > 0 {
+			where += fmt.Sprintf(" AND o.status::text = ANY($%d)", idx)
+			args = append(args, seen)
+			idx++
+		}
 	}
 
 	var total int
 	_ = db.Pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM orders o "+where, args...).Scan(&total)
 
-	query := fmt.Sprintf(`SELECT o.id, o.order_no, o.status, o.payment_status, o.start_date, o.end_date,
-		o.total_days, o.pet_count, o.estimated_amount, o.total_amount, o.created_at, s.name
+	query := fmt.Sprintf(`SELECT o.id, o.order_no, o.status, o.payment_status, o.start_date::text, o.end_date::text,
+		o.total_days, o.pet_count, o.estimated_amount, o.total_amount, o.created_at, s.name, o.sitter_id
 		FROM orders o JOIN sitters s ON s.id = o.sitter_id
 		%s ORDER BY o.created_at DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, perPage, offset)
@@ -368,7 +384,9 @@ func ListMyOrders(c *gin.Context) {
 	for rows.Next() {
 		var o model.Order
 		if err := rows.Scan(&o.ID, &o.OrderNo, &o.Status, &o.PaymentStatus, &o.StartDate, &o.EndDate,
-			&o.TotalDays, &o.PetCount, &o.EstimatedAmount, &o.TotalAmount, &o.CreatedAt, &o.SitterName); err != nil {
+			&o.TotalDays, &o.PetCount, &o.EstimatedAmount, &o.TotalAmount, &o.CreatedAt, &o.SitterName,
+			&o.SitterID); err != nil {
+			log.Printf("[ListMyOrders] scan error: %v", err)
 			continue
 		}
 		orders = append(orders, o)
@@ -396,7 +414,7 @@ func ListReceivedOrders(c *gin.Context) {
 		 WHERE s.user_id = $1 AND o.deleted_at IS NULL`, userID).Scan(&total)
 
 	rows, err := db.Pool.Query(context.Background(),
-		`SELECT o.id, o.order_no, o.status, o.payment_status, o.start_date, o.end_date,
+		`SELECT o.id, o.order_no, o.status, o.payment_status, o.start_date::text, o.end_date::text,
 		 o.total_days, o.pet_count, o.estimated_amount, o.total_amount, o.created_at,
 		 u.username
 		 FROM orders o
@@ -416,6 +434,7 @@ func ListReceivedOrders(c *gin.Context) {
 		var o model.Order
 		if err := rows.Scan(&o.ID, &o.OrderNo, &o.Status, &o.PaymentStatus, &o.StartDate, &o.EndDate,
 			&o.TotalDays, &o.PetCount, &o.EstimatedAmount, &o.TotalAmount, &o.CreatedAt, &o.OwnerName); err != nil {
+			log.Printf("[ListReceivedOrders] scan error: %v", err)
 			continue
 		}
 		orders = append(orders, o)
@@ -438,14 +457,14 @@ func GetOrderDetail(c *gin.Context) {
 	var query string
 	if role == "sitter" {
 		query = `SELECT o.id, o.order_no, o.owner_id, o.sitter_id, o.status, o.payment_status,
-			o.start_date, o.end_date, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
+			o.start_date::text, o.end_date::text, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
 			o.cancel_reason, o.cancel_time, o.paid_at, o.accepted_at, o.completed_at, o.evaluated_at,
 			o.remark, o.created_at, o.updated_at, s.name, u.username
 			FROM orders o JOIN sitters s ON s.id = o.sitter_id JOIN users u ON u.id = o.owner_id
 			WHERE o.id = $1 AND s.user_id = $2 AND o.deleted_at IS NULL`
 	} else {
 		query = `SELECT o.id, o.order_no, o.owner_id, o.sitter_id, o.status, o.payment_status,
-			o.start_date, o.end_date, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
+			o.start_date::text, o.end_date::text, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
 			o.cancel_reason, o.cancel_time, o.paid_at, o.accepted_at, o.completed_at, o.evaluated_at,
 			o.remark, o.created_at, o.updated_at, s.name, u.username
 			FROM orders o JOIN sitters s ON s.id = o.sitter_id JOIN users u ON u.id = o.owner_id
@@ -458,25 +477,89 @@ func GetOrderDetail(c *gin.Context) {
 		&o.CancelReason, &o.CancelTime, &o.PaidAt, &o.AcceptedAt, &o.CompletedAt, &o.EvaluatedAt,
 		&o.Remark, &o.CreatedAt, &o.UpdatedAt, &o.SitterName, &o.OwnerName)
 
+	// 类型错误等查询故障不能被当成"订单不存在"，否则问题会被 404 掩盖
 	if err != nil {
-		NotFound(c, "order not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			NotFound(c, "order not found")
+		} else {
+			log.Printf("[GetOrderDetail] scan error: %v", err)
+			InternalError(c, "读取订单失败")
+		}
 		return
 	}
 
 	// Get order pets
-	petRows, _ := db.Pool.Query(context.Background(),
-		`SELECT op.id, op.order_id, op.pet_id, op.stay_date, op.status, p.name
+	petRows, err := db.Pool.Query(context.Background(),
+		`SELECT op.id, op.order_id, op.pet_id, op.stay_date::text, op.status, p.name
 		 FROM order_pet op JOIN pets p ON p.id = op.pet_id WHERE op.order_id = $1`, orderID)
-	defer petRows.Close()
+	if err != nil {
+		log.Printf("[GetOrderDetail] order_pet query error: %v", err)
+		petRows = nil
+	} else {
+		defer petRows.Close()
+	}
 
 	pets := make([]model.OrderPet, 0)
-	for petRows.Next() {
+	for petRows != nil && petRows.Next() {
 		var op model.OrderPet
-		_ = petRows.Scan(&op.ID, &op.OrderID, &op.PetID, &op.StayDate, &op.Status, &op.PetName)
+		if err := petRows.Scan(&op.ID, &op.OrderID, &op.PetID, &op.StayDate, &op.Status, &op.PetName); err != nil {
+			log.Printf("[GetOrderDetail] order_pet scan error: %v", err)
+			continue
+		}
 		pets = append(pets, op)
 	}
 
-	OK(c, model.OrderDetailResponse{Order: o, Pets: pets})
+	// 附带动态与评价，省去客户端二次补拉
+	dynRows, _ := db.Pool.Query(context.Background(),
+		`SELECT id, order_id, sitter_id, author_id, content, photos, tags, created_at, updated_at
+		 FROM dynamics WHERE order_id = $1 ORDER BY created_at DESC LIMIT 20`, orderID)
+	dynamics := make([]model.Dynamic, 0)
+	if dynRows != nil {
+		for dynRows.Next() {
+			var d model.Dynamic
+			if err := dynRows.Scan(&d.ID, &d.OrderID, &d.SitterID, &d.AuthorID, &d.Content,
+				&d.Photos, &d.Tags, &d.CreatedAt, &d.UpdatedAt); err == nil {
+				dynamics = append(dynamics, d)
+			}
+		}
+		dynRows.Close()
+	}
+
+	var review *model.Review
+	var r model.Review
+	if err := db.Pool.QueryRow(context.Background(),
+		`SELECT id, order_id, sitter_id, owner_id, overall_score, service_score, environment_score,
+		 hygiene_score, owner_comment, owner_photos, reply_text, reply_at, is_visible, created_at, updated_at
+		 FROM reviews WHERE order_id = $1`, orderID,
+	).Scan(&r.ID, &r.OrderID, &r.SitterID, &r.OwnerID, &r.OverallScore, &r.ServiceScore,
+		&r.EnvironmentScore, &r.HygieneScore, &r.OwnerComment, &r.OwnerPhotos,
+		&r.ReplyText, &r.ReplyAt, &r.IsVisible, &r.CreatedAt, &r.UpdatedAt); err == nil {
+		review = &r
+	}
+
+	// 支付/退款流水仅主人可见
+	var payments []model.Payment
+	if role != "sitter" {
+		payRows, _ := db.Pool.Query(context.Background(),
+			`SELECT id, amount, method::text, status, COALESCE(transaction_id, ''),
+			        to_char(created_at, 'YYYY-MM-DD HH24:MI'),
+			        COALESCE(to_char(paid_at, 'YYYY-MM-DD HH24:MI'), ''),
+			        COALESCE(to_char(refunded_at, 'YYYY-MM-DD HH24:MI'), '')
+			 FROM payments WHERE order_id = $1 ORDER BY id DESC`, orderID)
+		payments = make([]model.Payment, 0)
+		if payRows != nil {
+			for payRows.Next() {
+				var p model.Payment
+				if err := payRows.Scan(&p.ID, &p.Amount, &p.Method, &p.Status, &p.TransactionID,
+					&p.CreatedAt, &p.PaidAt, &p.RefundedAt); err == nil {
+					payments = append(payments, p)
+				}
+			}
+			payRows.Close()
+		}
+	}
+
+	OK(c, model.OrderDetailResponse{Order: o, Pets: pets, Dynamics: dynamics, Review: review, Payments: payments})
 }
 
 // PayOrder handles PUT /api/v1/pet-owner/orders/:id/pay
@@ -514,19 +597,33 @@ func PayOrder(c *gin.Context) {
 	}
 
 	now := time.Now()
-	_, err = tx.Exec(context.Background(),
-		"UPDATE orders SET status = 'confirmed', payment_status = 'paid', paid_at = $1 WHERE id = $2",
-		now, orderID)
-	if err != nil {
-		InternalError(c, "failed to update order")
-		return
-	}
+	// 0 元订单（全额抵扣）不需要支付流水，直接确认；否则 payments 的 amount > 0 约束会让事务提交失败
+	txID := ""
+	if totalAmount <= 0 {
+		if _, err = tx.Exec(context.Background(),
+			"UPDATE orders SET status = 'confirmed', payment_status = 'paid', paid_at = $1 WHERE id = $2",
+			now, orderID); err != nil {
+			InternalError(c, "failed to update order")
+			return
+		}
+	} else {
+		if _, err = tx.Exec(context.Background(),
+			"UPDATE orders SET status = 'confirmed', payment_status = 'paid', paid_at = $1 WHERE id = $2",
+			now, orderID); err != nil {
+			InternalError(c, "failed to update order")
+			return
+		}
 
-	txID := fmt.Sprintf("PAY-MOCK-%s-%d", now.Format("20060102"), orderID)
-	_, _ = tx.Exec(context.Background(),
-		`INSERT INTO payments (order_id, amount, method, transaction_id, status, paid_at)
-		 VALUES ($1, $2, 'mock', $3, 'paid', $4)`,
-		orderID, totalAmount, txID, now)
+		txID = fmt.Sprintf("PAY-MOCK-%s-%d", now.Format("20060102"), orderID)
+		if _, err = tx.Exec(context.Background(),
+			`INSERT INTO payments (order_id, amount, method, transaction_id, status, paid_at)
+			 VALUES ($1, $2, 'mock', $3, 'paid', $4)`,
+			orderID, totalAmount, txID, now); err != nil {
+			log.Printf("[PayOrder] insert payment error: %v", err)
+			InternalError(c, "写入支付流水失败: "+err.Error())
+			return
+		}
+	}
 
 	// Notify sitter
 	var sitterUserID int64
@@ -538,7 +635,8 @@ func PayOrder(c *gin.Context) {
 		fmt.Sprintf(`{"order_id": %d}`, orderID))
 
 	if err := tx.Commit(context.Background()); err != nil {
-		InternalError(c, "commit failed")
+		log.Printf("[PayOrder] commit error: %v", err)
+		InternalError(c, "支付提交失败: "+err.Error())
 		return
 	}
 

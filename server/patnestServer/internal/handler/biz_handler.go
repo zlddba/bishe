@@ -19,6 +19,15 @@ func ListDynamics(c *gin.Context) {
 		return
 	}
 
+	// 归属校验：仅订单主人可查看
+	var owns bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL)",
+		orderID, c.GetInt64("user_id")).Scan(&owns); err != nil || !owns {
+		NotFound(c, "订单不存在")
+		return
+	}
+
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
 	if page < 1 {
@@ -123,6 +132,15 @@ func GetReview(c *gin.Context) {
 		return
 	}
 
+	// 归属校验：仅订单主人可查看
+	var owns bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL)",
+		orderID, c.GetInt64("user_id")).Scan(&owns); err != nil || !owns {
+		NotFound(c, "订单不存在")
+		return
+	}
+
 	var r model.Review
 	err = db.Pool.QueryRow(context.Background(),
 		`SELECT id, order_id, sitter_id, owner_id, overall_score, service_score, environment_score,
@@ -139,6 +157,54 @@ func GetReview(c *gin.Context) {
 	}
 
 	OK(c, r)
+}
+
+// GetDynamic handles GET /api/v1/pet-owner/dynamics/:id
+// 单条寄养动态详情（带订单号与机构名，供小程序直接进详情页）。
+func GetDynamic(c *gin.Context) {
+	dynamicID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || dynamicID == 0 {
+		BadRequest(c, "invalid dynamic id")
+		return
+	}
+
+	var (
+		d            model.Dynamic
+		orderNo      string
+		sitterName   string
+		orderOwnerID int64
+	)
+	err = db.Pool.QueryRow(context.Background(), `
+		SELECT d.id, d.order_id, d.sitter_id, d.author_id, d.content, d.photos, d.tags,
+		       d.created_at, d.updated_at, o.order_no, o.owner_id, s.name
+		FROM dynamics d
+		JOIN orders o ON o.id = d.order_id
+		JOIN sitters s ON s.id = d.sitter_id
+		WHERE d.id = $1`, dynamicID,
+	).Scan(&d.ID, &d.OrderID, &d.SitterID, &d.AuthorID, &d.Content, &d.Photos, &d.Tags,
+		&d.CreatedAt, &d.UpdatedAt, &orderNo, &orderOwnerID, &sitterName)
+	if err != nil {
+		NotFound(c, "动态不存在")
+		return
+	}
+	if orderOwnerID != c.GetInt64("user_id") {
+		Forbidden(c, "无权查看该动态")
+		return
+	}
+
+	OK(c, gin.H{
+		"id":          d.ID,
+		"order_id":    d.OrderID,
+		"order_no":    orderNo,
+		"sitter_id":   d.SitterID,
+		"sitter_name": sitterName,
+		"author_id":   d.AuthorID,
+		"content":     d.Content,
+		"photos":      d.Photos,
+		"tags":        d.Tags,
+		"created_at":  d.CreatedAt,
+		"updated_at":  d.UpdatedAt,
+	})
 }
 
 // SubmitReview handles POST /api/v1/pet-owner/orders/:id/review

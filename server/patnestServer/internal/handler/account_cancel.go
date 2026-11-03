@@ -15,7 +15,8 @@ const cancelCoolingPeriod = 72 * time.Hour
 
 // RequestAccountCancel handles POST /api/v1/pet-owner/account/cancel-request
 // 申请注销：进入 3 天冷静期（account=整个账户，sitter=仅注销机构）。
-// 冷静期内登录会自动撤销；到期由 account-cancel worker 执行。
+// 申请成功后立即吊销该用户全部刷新令牌（直接退出登录，所有会话无法再续期）；
+// 冷静期内重新登录会自动撤销注销申请；到期由 account-cancel worker 执行。
 func RequestAccountCancel(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
@@ -55,6 +56,11 @@ func RequestAccountCancel(c *gin.Context) {
 		NotFound(c, "用户不存在")
 		return
 	}
+
+	// 申请注销后直接退出登录：吊销全部刷新令牌，与 Logout 的吊销逻辑一致
+	_, _ = db.Pool.Exec(context.Background(),
+		"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+		userID)
 
 	_, _ = db.Pool.Exec(context.Background(),
 		"SELECT fn_audit($1, 'REQUEST_CANCEL', 'user', $2, $3)",

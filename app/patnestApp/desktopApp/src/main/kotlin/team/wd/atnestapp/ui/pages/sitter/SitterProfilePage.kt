@@ -55,6 +55,7 @@ fun SitterProfilePage(app: AppState) {
             type = when (shop.type) {
                 "shop" -> "门店寄养"
                 "visit" -> "上门喂养"
+                "other" -> "其他"
                 else -> "家庭寄养"
             }
             address = shop.address.orEmpty()
@@ -112,7 +113,7 @@ fun SitterProfilePage(app: AppState) {
                     }
                     Column(Modifier.weight(1f)) {
                         FieldLabel("类型")
-                        ChipRow(listOf("家庭寄养", "门店寄养", "上门喂养"), type) { type = it }
+                        ChipRow(listOf("家庭寄养", "门店寄养", "上门喂养", "其他"), type) { type = it }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -152,6 +153,7 @@ fun SitterProfilePage(app: AppState) {
                                 type = when (type) {
                                     "门店寄养" -> "shop"
                                     "上门喂养" -> "visit"
+                                    "其他" -> "other"
                                     else -> "home"
                                 },
                                 description = desc.trim(),

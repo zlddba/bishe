@@ -10,6 +10,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// petColumns 主人端宠物查询统一列清单（含免疫核验状态回读，免疫证明核验闭环 P0）
+const petColumns = `id, owner_id, name, species, breed, body_size, age_month, weight_kg,
+	vaccinated, sterilized, photo_urls, avatar_url, notes,
+	vaccine_urls, vaccine_status, vaccine_note, created_at, updated_at`
+
+// scanPetRow 统一扫描宠物行，pgx.Row 与 pgx.Rows 均适用。
+func scanPetRow(row interface{ Scan(dest ...any) error }) (model.Pet, error) {
+	var p model.Pet
+	err := row.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Species, &p.Breed, &p.BodySize,
+		&p.AgeMonth, &p.WeightKg, &p.Vaccinated, &p.Sterilized,
+		&p.PhotoURLs, &p.AvatarURL, &p.Notes,
+		&p.VaccineURLs, &p.VaccineStatus, &p.VaccineNote, &p.CreatedAt, &p.UpdatedAt)
+	return p, err
+}
+
 // ListPets handles GET /api/v1/pet-owner/pets
 func ListPets(c *gin.Context) {
 	ownerID := c.GetInt64("user_id")
@@ -26,7 +41,7 @@ func ListPets(c *gin.Context) {
 	species := c.Query("species")
 	name := c.Query("name")
 
-	query := "SELECT id, owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, photo_urls, avatar_url, notes, created_at, updated_at FROM pets WHERE owner_id = $1 AND deleted_at IS NULL"
+	query := "SELECT " + petColumns + " FROM pets WHERE owner_id = $1 AND deleted_at IS NULL"
 	countQuery := "SELECT COUNT(*) FROM pets WHERE owner_id = $1 AND deleted_at IS NULL"
 	args := []interface{}{ownerID}
 	argIdx := 2
@@ -62,10 +77,8 @@ func ListPets(c *gin.Context) {
 
 	pets := make([]model.Pet, 0)
 	for rows.Next() {
-		var p model.Pet
-		if err := rows.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Species, &p.Breed, &p.BodySize,
-			&p.AgeMonth, &p.WeightKg, &p.Vaccinated, &p.Sterilized,
-			&p.PhotoURLs, &p.AvatarURL, &p.Notes, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		p, err := scanPetRow(rows)
+		if err != nil {
 			InternalError(c, "failed to scan pet")
 			return
 		}
@@ -103,17 +116,14 @@ func CreatePet(c *gin.Context) {
 		photoURLs = []string{}
 	}
 
-	var pet model.Pet
-	err := db.Pool.QueryRow(context.Background(),
+	pet, err := scanPetRow(db.Pool.QueryRow(context.Background(),
 		`INSERT INTO pets (owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, photo_urls, avatar_url, notes)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		 RETURNING id, owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, photo_urls, avatar_url, notes, created_at, updated_at`,
+		 RETURNING `+petColumns,
 		ownerID, req.Name, req.Species, nilIfEmpty(req.Breed), nilIfEmpty(req.BodySize),
 		req.AgeMonth, req.WeightKg, vaccinated, sterilized,
 		photoURLs, nilIfEmpty(req.AvatarURL), nilIfEmpty(req.Notes),
-	).Scan(&pet.ID, &pet.OwnerID, &pet.Name, &pet.Species, &pet.Breed, &pet.BodySize,
-		&pet.AgeMonth, &pet.WeightKg, &pet.Vaccinated, &pet.Sterilized,
-		&pet.PhotoURLs, &pet.AvatarURL, &pet.Notes, &pet.CreatedAt, &pet.UpdatedAt)
+	))
 
 	if err != nil {
 		InternalError(c, "failed to create pet: "+err.Error())
@@ -132,14 +142,11 @@ func GetPet(c *gin.Context) {
 		return
 	}
 
-	var pet model.Pet
-	err = db.Pool.QueryRow(context.Background(),
-		`SELECT id, owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, photo_urls, avatar_url, notes, created_at, updated_at
+	pet, err := scanPetRow(db.Pool.QueryRow(context.Background(),
+		`SELECT `+petColumns+`
 		 FROM pets WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL`,
 		petID, ownerID,
-	).Scan(&pet.ID, &pet.OwnerID, &pet.Name, &pet.Species, &pet.Breed, &pet.BodySize,
-		&pet.AgeMonth, &pet.WeightKg, &pet.Vaccinated, &pet.Sterilized,
-		&pet.PhotoURLs, &pet.AvatarURL, &pet.Notes, &pet.CreatedAt, &pet.UpdatedAt)
+	))
 
 	if err != nil {
 		NotFound(c, "pet not found")
@@ -234,13 +241,9 @@ func UpdatePet(c *gin.Context) {
 	updates = updates[:len(updates)-2]
 	args = append(args, petID, ownerID)
 
-	var pet model.Pet
-	query := "UPDATE pets SET " + updates + " WHERE id = $" + strconv.Itoa(idx) + " AND owner_id = $" + strconv.Itoa(idx+1) + " AND deleted_at IS NULL RETURNING id, owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, photo_urls, avatar_url, notes, created_at, updated_at"
+	query := "UPDATE pets SET " + updates + " WHERE id = $" + strconv.Itoa(idx) + " AND owner_id = $" + strconv.Itoa(idx+1) + " AND deleted_at IS NULL RETURNING " + petColumns
 
-	err = db.Pool.QueryRow(context.Background(), query, args...).Scan(
-		&pet.ID, &pet.OwnerID, &pet.Name, &pet.Species, &pet.Breed, &pet.BodySize,
-		&pet.AgeMonth, &pet.WeightKg, &pet.Vaccinated, &pet.Sterilized,
-		&pet.PhotoURLs, &pet.AvatarURL, &pet.Notes, &pet.CreatedAt, &pet.UpdatedAt)
+	pet, err := scanPetRow(db.Pool.QueryRow(context.Background(), query, args...))
 
 	if err != nil {
 		NotFound(c, "pet not found or not owned by you")
@@ -272,4 +275,61 @@ func DeletePet(c *gin.Context) {
 	}
 
 	OK(c, nil)
+}
+
+// GetPetStays handles GET /api/v1/pet-owner/pets/:id/stays
+// 宠物维度的历史寄养记录：该宠物参与过的全部订单（按开始日期倒序）。
+func GetPetStays(c *gin.Context) {
+	ownerID := c.GetInt64("user_id")
+	petID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || petID == 0 {
+		BadRequest(c, "invalid pet id")
+		return
+	}
+
+	var owned bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM pets WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL)",
+		petID, ownerID).Scan(&owned); err != nil || !owned {
+		NotFound(c, "宠物不存在")
+		return
+	}
+
+	rows, err := db.Pool.Query(context.Background(), `
+		SELECT o.id, o.order_no, o.sitter_id, s.name, o.status::text,
+		       to_char(o.start_date, 'YYYY-MM-DD'), to_char(o.end_date, 'YYYY-MM-DD'),
+		       o.total_days, COALESCE(to_char(op.stay_date, 'YYYY-MM-DD'), ''), o.total_amount
+		FROM orders o
+		JOIN order_pet op ON op.order_id = o.id
+		JOIN sitters s ON s.id = o.sitter_id
+		WHERE op.pet_id = $1 AND o.owner_id = $2 AND o.deleted_at IS NULL AND o.status <> 'cancelled'
+		ORDER BY o.start_date DESC, o.id DESC`, petID, ownerID)
+	if err != nil {
+		InternalError(c, "查询寄养记录失败")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]gin.H, 0)
+	for rows.Next() {
+		var (
+			orderID, sitterID   int64
+			orderNo, sitterName string
+			status              string
+			start, end, stay    string
+			totalDays           int
+			totalAmount         float64
+		)
+		if err := rows.Scan(&orderID, &orderNo, &sitterID, &sitterName, &status,
+			&start, &end, &totalDays, &stay, &totalAmount); err == nil {
+			items = append(items, gin.H{
+				"order_id": orderID, "order_no": orderNo,
+				"sitter_id": sitterID, "sitter_name": sitterName,
+				"status": status, "start_date": start, "end_date": end,
+				"total_days": totalDays, "stay_date": stay, "total_amount": totalAmount,
+			})
+		}
+	}
+
+	OK(c, gin.H{"pet_id": petID, "total": len(items), "items": items})
 }

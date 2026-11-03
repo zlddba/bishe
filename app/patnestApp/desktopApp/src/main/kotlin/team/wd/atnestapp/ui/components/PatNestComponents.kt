@@ -701,12 +701,13 @@ fun SlotTag(text: String, kind: String) {
 }
 
 @Composable
-fun CalDayCard(day: CalDay, modifier: Modifier = Modifier) {
+fun CalDayCard(day: CalDay, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))
             .background(if (day.holiday) PatNestColors.Brand50 else Color.White)
             .border(1.dp, if (day.holiday) PatNestColors.Brand200 else PatNestColors.Line, RoundedCornerShape(12.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -730,7 +731,7 @@ fun CalDayCard(day: CalDay, modifier: Modifier = Modifier) {
 /* ---------- 优惠券 ---------- */
 
 @Composable
-fun CouponCard(coupon: Coupon, onUse: () -> Unit) {
+fun CouponCard(coupon: Coupon, onUse: () -> Unit, onDelete: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -749,6 +750,13 @@ fun CouponCard(coupon: Coupon, onUse: () -> Unit) {
         }
         Column(Modifier.weight(1f).padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(coupon.title, color = PatNestColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            if (coupon.issuer.isNotBlank()) {
+                Text(
+                    "发券方：${coupon.issuer}",
+                    color = PatNestColors.BrandInk, fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
             Text(
                 if (coupon.from.isBlank()) "有效期至 ${coupon.to}" else "${coupon.from} - ${coupon.to}",
                 color = PatNestColors.Ink3, fontSize = 11.5.sp,
@@ -768,6 +776,10 @@ fun CouponCard(coupon: Coupon, onUse: () -> Unit) {
                     "可用" -> PrimaryButton("立即使用", onUse, height = 30.dp)
                     "可领取" -> PrimaryButton("领取", onUse, height = 30.dp)
                     else -> Tag(coupon.state, TagKind.Soft)
+                }
+                if (onDelete != null) {
+                    Spacer(Modifier.width(8.dp))
+                    GhostButton("删除", onDelete, height = 30.dp, textColor = PatNestColors.Danger)
                 }
             }
         }

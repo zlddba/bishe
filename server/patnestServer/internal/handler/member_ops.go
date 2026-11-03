@@ -263,8 +263,11 @@ func MyCoupons(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	rows, err := db.Pool.Query(context.Background(), `
 		SELECT uc.id, c.id, c.code, c.title, c.type, c.value, c.min_amount,
-		       uc.status, to_char(c.ends_at, 'YYYY-MM-DD')
-		FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
+		       uc.status, COALESCE(to_char(c.ends_at, 'YYYY-MM-DD'), ''),
+		       COALESCE(c.sitter_id, 0), COALESCE(s.name, '')
+		FROM user_coupons uc
+		JOIN coupons c ON c.id = uc.coupon_id
+		LEFT JOIN sitters s ON s.id = c.sitter_id
 		WHERE uc.user_id = $1 ORDER BY uc.status = 'unused' DESC, uc.id DESC`, userID)
 	if err != nil {
 		InternalError(c, "查询优惠券失败")
@@ -274,20 +277,25 @@ func MyCoupons(c *gin.Context) {
 	items := make([]gin.H, 0)
 	for rows.Next() {
 		var id, couponID int64
-		var code, title, ctype, status, ends string
+		var code, title, ctype, status, ends, issuer string
+		var sitID int64
 		var value, minAmount float64
-		if err := rows.Scan(&id, &couponID, &code, &title, &ctype, &value, &minAmount, &status, &ends); err == nil {
+		if err := rows.Scan(&id, &couponID, &code, &title, &ctype, &value, &minAmount, &status, &ends,
+			&sitID, &issuer); err == nil {
 			items = append(items, gin.H{"id": id, "coupon_id": couponID, "code": code, "title": title,
-				"type": ctype, "value": value, "min_amount": minAmount, "status": status, "ends_at": ends})
+				"type": ctype, "value": value, "min_amount": minAmount, "status": status, "ends_at": ends,
+				"sitter_id": sitID, "issuer": issuer})
 		}
 	}
 
-	// 可领取的公开券
+	// 可领取的券：平台官方券 + 在营机构发布的机构专属券
 	avail, _ := db.Pool.Query(context.Background(), `
-		SELECT c.id, c.code, c.title, c.type, c.value, c.min_amount, COALESCE(to_char(c.ends_at, 'YYYY-MM-DD'), '')
-		FROM coupons c
+		SELECT c.id, c.code, c.title, c.type, c.value, c.min_amount, COALESCE(to_char(c.ends_at, 'YYYY-MM-DD'), ''),
+		       COALESCE(c.sitter_id, 0), COALESCE(s.name, '')
+		FROM coupons c LEFT JOIN sitters s ON s.id = c.sitter_id
 		WHERE c.enabled AND c.starts_at <= now() AND (c.ends_at IS NULL OR c.ends_at >= now())
 		  AND (c.total_qty = 0 OR c.claimed_qty < c.total_qty)
+		  AND (c.sitter_id IS NULL OR s.status = 'active')
 		  AND NOT EXISTS (SELECT 1 FROM user_coupons uc WHERE uc.coupon_id = c.id AND uc.user_id = $1)
 		ORDER BY c.id DESC LIMIT 20`, userID)
 	claimable := make([]gin.H, 0)
@@ -295,17 +303,49 @@ func MyCoupons(c *gin.Context) {
 		defer avail.Close()
 		for avail.Next() {
 			var id int64
-			var code, title, ctype, ends string
+			var code, title, ctype, ends, issuer string
+			var sitID int64
 			var value, minAmount float64
-			if err := avail.Scan(&id, &code, &title, &ctype, &value, &minAmount, &ends); err == nil {
+			if err := avail.Scan(&id, &code, &title, &ctype, &value, &minAmount, &ends, &sitID, &issuer); err == nil {
 				claimable = append(claimable, gin.H{"coupon_id": id, "code": code, "title": title,
-					"type": ctype, "value": value, "min_amount": minAmount, "ends_at": ends})
+					"type": ctype, "value": value, "min_amount": minAmount, "ends_at": ends,
+					"sitter_id": sitID, "issuer": issuer})
 			}
 		}
 	}
 	OK(c, gin.H{"items": items, "claimable": claimable})
 }
 
+// DeleteMyCoupon handles DELETE /api/v1/pet-owner/coupons/mine/:id
+// 删除券包中的优惠券（:id 为 user_coupons 记录 id）；已使用的券保留为消费记录，不可删除。
+func DeleteMyCoupon(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		BadRequest(c, "优惠券编号无效")
+		return
+	}
+
+	var status string
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT status FROM user_coupons WHERE id = $1 AND user_id = $2", id, userID,
+	).Scan(&status); err != nil {
+		NotFound(c, "优惠券不存在")
+		return
+	}
+	if status == "used" {
+		Conflict(c, "已使用的优惠券保留为消费记录，无法删除")
+		return
+	}
+
+	if _, err := db.Pool.Exec(context.Background(),
+		"DELETE FROM user_coupons WHERE id = $1 AND user_id = $2", id, userID); err != nil {
+		InternalError(c, "删除优惠券失败")
+		return
+	}
+
+	OK(c, gin.H{"deleted": true})
+}
 func ClaimCoupon(c *gin.Context) {
 	couponID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	userID := c.GetInt64("user_id")
@@ -379,6 +419,14 @@ func SitterCapacityPublic(c *gin.Context) {
 		BadRequest(c, "无效的机构ID")
 		return
 	}
+	// 封禁/下架机构对主人不可见
+	var isActive bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL)",
+		sitterID).Scan(&isActive); err != nil || !isActive {
+		NotFound(c, "机构不存在或已下架")
+		return
+	}
 	respondSitterCapacity(c, sitterID)
 }
 
@@ -443,6 +491,17 @@ func SetSitterCapacity(c *gin.Context) {
 	date, err := time.Parse("2006-01-02", in.Date)
 	if err != nil {
 		BadRequest(c, "日期格式应为 YYYY-MM-DD")
+		return
+	}
+	// 调整后容量不能低于当日已占用数
+	var used int
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT COALESCE(used, 0) FROM sitter_daily_capacity WHERE sitter_id = $1 AND cap_date = $2",
+		sitterID, date).Scan(&used); err != nil {
+		used = 0
+	}
+	if in.Capacity < used {
+		BadRequest(c, fmt.Sprintf("当日已有 %d 只在住，容量不能低于该数", used))
 		return
 	}
 	_, err = db.Pool.Exec(context.Background(), `
@@ -544,6 +603,14 @@ func ListAddons(c *gin.Context) {
 	var sitterID int64
 	if idStr := c.Param("id"); idStr != "" {
 		sitterID, _ = strconv.ParseInt(idStr, 10, 64)
+		// 主人浏览路径：封禁/下架机构的加购服务不对外展示
+		var isActive bool
+		if err := db.Pool.QueryRow(context.Background(),
+			"SELECT EXISTS(SELECT 1 FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL)",
+			sitterID).Scan(&isActive); err != nil || !isActive {
+			NotFound(c, "机构不存在或已下架")
+			return
+		}
 	} else {
 		var err error
 		sitterID, err = mySitterID(c.GetInt64("user_id"))

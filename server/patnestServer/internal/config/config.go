@@ -24,6 +24,9 @@ type Config struct {
 	RedisAddr      string
 	RedisPassword  string
 	RedisDB        int
+	// 高德地图 Web 服务 API（机构地理编码 / POI / 距离计算），仅后端使用，禁止下发客户端
+	AMapKey     string
+	AMapBaseURL string
 }
 
 func Load() *Config {
@@ -46,6 +49,8 @@ func Load() *Config {
 		RedisAddr:      getStr("REDIS_ADDR", ""),
 		RedisPassword:  getStr("REDIS_PASSWORD", ""),
 		RedisDB:        getInt("REDIS_DB", 0),
+		AMapKey:        getStr("AMAP_KEY", ""),
+		AMapBaseURL:    getStr("AMAP_BASE_URL", "https://restapi.amap.com"),
 	}
 }
 

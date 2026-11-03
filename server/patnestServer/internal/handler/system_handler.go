@@ -55,6 +55,7 @@ func Health(c *gin.Context) {
 		"service":        "patnest-api",
 		"version":        version.Version,
 		"commit":         version.Commit,
+		"build_time":     version.BuildTime,
 		"slot":           version.Slot,
 		"db":             dbOK,
 		"minio":          minioOK,

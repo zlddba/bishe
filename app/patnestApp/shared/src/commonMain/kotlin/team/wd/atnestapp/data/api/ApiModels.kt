@@ -43,6 +43,14 @@ data class UserDto(
     @SerialName("contact_phone") val contactPhone: String? = null,
     @SerialName("cancel_mode") val cancelMode: String? = null,
     @SerialName("cancel_deadline") val cancelDeadline: String? = null,
+    @SerialName("sitter_application") val sitterApplication: SitterApplicationDto? = null,
+)
+
+/** 机构入驻申请状态：pending=审核中，rejected=已驳回（含原因）。 */
+@Serializable
+data class SitterApplicationDto(
+    val status: String = "",
+    @SerialName("review_note") val reviewNote: String? = null,
 )
 
 @Serializable
@@ -58,6 +66,24 @@ data class AuthResponseDto(
 /** 申请注销：mode=account 整个账户 / sitter 仅注销机构。 */
 @Serializable
 data class CancelRequestPayload(val mode: String)
+
+/** 机构入驻申请：提交营业执照 / 身份证等资质材料，平台审核通过后账号才升级为机构。 */
+@Serializable
+data class ApplySitterPayload(
+    val name: String,
+    val type: String,
+    @SerialName("contact_person") val contactPerson: String,
+    @SerialName("license_photo_url") val licensePhotoUrl: String,
+    @SerialName("id_card_photo_url") val idCardPhotoUrl: String = "",
+    val address: String = "",
+    val description: String = "",
+)
+
+@Serializable
+data class ApplySitterResult(
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    val status: String = "pending",
+)
 
 @Serializable
 data class CancelRequestResult(val mode: String = "", val deadline: String = "")
@@ -270,6 +296,9 @@ data class UserCouponDto(
     @SerialName("min_amount") val minAmount: Double = 0.0,
     val status: String = "unused",
     @SerialName("ends_at") val endsAt: String = "",
+    /** 机构专属券的发券机构 id；0 = 平台官方券 */
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    val issuer: String = "",
 )
 
 @Serializable
@@ -281,6 +310,9 @@ data class ClaimableCouponDto(
     val value: Double = 0.0,
     @SerialName("min_amount") val minAmount: Double = 0.0,
     @SerialName("ends_at") val endsAt: String = "",
+    /** 机构专属券的发券机构 id；0 = 平台官方券 */
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    val issuer: String = "",
 )
 
 @Serializable
@@ -289,6 +321,42 @@ data class CouponListDto(
     val claimable: List<ClaimableCouponDto> = emptyList(),
 )
 
+/** 机构端：本机构发布的优惠券（含领取/核销统计）。 */
+@Serializable
+data class SitterCouponDto(
+    val id: Long = 0,
+    val code: String = "",
+    val title: String = "",
+    val type: String = "fixed",
+    val value: Double = 0.0,
+    @SerialName("min_amount") val minAmount: Double = 0.0,
+    @SerialName("total_qty") val totalQty: Int = 0,
+    @SerialName("claimed_qty") val claimedQty: Int = 0,
+    @SerialName("used_qty") val usedQty: Int = 0,
+    @SerialName("per_user") val perUser: Int = 1,
+    val enabled: Boolean = true,
+    @SerialName("starts_at") val startsAt: String = "",
+    @SerialName("ends_at") val endsAt: String = "",
+)
+
+@Serializable
+data class SitterCouponPageDto(
+    val items: List<SitterCouponDto> = emptyList(),
+)
+
+@Serializable
+data class SitterCouponPayload(
+    val title: String,
+    val type: String,
+    val value: Double,
+    @SerialName("min_amount") val minAmount: Double,
+    @SerialName("total_qty") val totalQty: Int,
+    @SerialName("per_user") val perUser: Int,
+    val enabled: Boolean = true,
+    /** 空字符串 = 立即生效 / 长期有效 */
+    @SerialName("starts_at") val startsAt: String = "",
+    @SerialName("ends_at") val endsAt: String = "",
+)
 @Serializable
 data class ClaimResult(val id: Long = 0)
 
@@ -341,6 +409,12 @@ data class CapacityDto(
     val items: List<CapacityItemDto> = emptyList(),
 )
 
+/** 机构调整单日接待容量（写入按日覆盖表，未覆盖日期沿用店铺默认容量）。 */
+@Serializable
+data class CapacitySetPayload(
+    val date: String,
+    val capacity: Int,
+)
 @Serializable
 data class EarningsSummaryDto(
     @SerialName("order_count") val orderCount: Int = 0,
@@ -404,17 +478,26 @@ data class RejectPayload(val reason: String)
 @Serializable
 data class PublicReviewDto(
     val id: Long = 0,
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("sitter_id") val sitterId: Long = 0,
     @SerialName("overall_score") val overallScore: Int = 0,
     @SerialName("service_score") val serviceScore: Int = 0,
     @SerialName("environment_score") val environmentScore: Int = 0,
     @SerialName("hygiene_score") val hygieneScore: Int = 0,
     @SerialName("owner_comment") val ownerComment: String = "",
+    @SerialName("owner_photos") val ownerPhotos: List<String> = emptyList(),
+    val ownerName: String = "",
     @SerialName("reply_text") val replyText: String = "",
     @SerialName("created_at") val createdAt: String = "",
 )
 
 @Serializable
-data class PublicReviewListDto(val items: List<PublicReviewDto> = emptyList())
+data class PublicReviewListDto(
+    val items: List<PublicReviewDto> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    @SerialName("per_page") val perPage: Int = 20,
+)
 
 @Serializable
 data class SettlementDto(

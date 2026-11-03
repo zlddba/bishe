@@ -63,6 +63,7 @@ import team.wd.atnestapp.ui.pages.owner.ReviewPage
 import team.wd.atnestapp.ui.pages.owner.SitterDetailPage
 import team.wd.atnestapp.ui.pages.owner.SittersPage
 import team.wd.atnestapp.ui.pages.sitter.SitterCapacityPage
+import team.wd.atnestapp.ui.pages.sitter.SitterCouponsPage
 import team.wd.atnestapp.ui.pages.sitter.SitterIncomePage
 import team.wd.atnestapp.ui.pages.sitter.SitterOrdersPage
 import team.wd.atnestapp.ui.pages.sitter.SitterOverviewPage
@@ -128,6 +129,7 @@ private val ownerNav = listOf(
 private val sitterNav = listOf(
     "经营" to listOf(
         NavItem(AppPage.SbDash, "经营概览", AppIcon.Home),
+        NavItem(AppPage.SbCoupons, "优惠券", AppIcon.Ticket),
     ),
     "业务" to listOf(
         NavItem(AppPage.SbOrders, "接单管理", AppIcon.Orders),
@@ -225,6 +227,7 @@ private fun RailNav(app: AppState) {
                 "home" -> "家庭寄养"
                 "shop" -> "门店寄养"
                 "visit" -> "上门喂养"
+                "other" -> "其他"
                 else -> "机构"
             }
             Box(
@@ -475,5 +478,6 @@ private fun PageHost(app: AppState) {
         AppPage.SbReviews -> SitterReviewsPage(app)
         AppPage.SbIncome -> SitterIncomePage(app)
         AppPage.SbProfile -> SitterProfilePage(app)
+        AppPage.SbCoupons -> SitterCouponsPage(app)
     }
 }

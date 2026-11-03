@@ -249,7 +249,7 @@ func statusLabelZh(s string) string {
 }
 
 func sitterTypeLabelZh(t string) string {
-	return map[string]string{"home": "家庭寄养", "shop": "门店寄养", "visit": "上门喂养"}[t]
+	return map[string]string{"home": "家庭寄养", "shop": "门店寄养", "visit": "上门喂养", "other": "其他"}[t]
 }
 
 func roleLabelZh(r string) string {

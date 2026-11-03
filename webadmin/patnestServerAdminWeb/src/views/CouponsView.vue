@@ -16,6 +16,12 @@
       <el-table :data="items" v-loading="loading" stripe>
         <el-table-column prop="code" label="券码" width="140" />
         <el-table-column prop="title" label="名称" min-width="160" />
+        <el-table-column label="发放方" width="130">
+          <template #default="{ row }">
+            <span v-if="row.sitter_id > 0" class="pn-tag pn-tag-warn">{{ row.issuer }}</span>
+            <span v-else class="pn-tag pn-tag-brand">平台官方</span>
+          </template>
+        </el-table-column>
         <el-table-column label="类型" width="90">
           <template #default="{ row }">
             <span class="pn-tag" :class="row.type === 'fixed' ? 'pn-tag-brand' : 'pn-tag-warn'">
@@ -48,7 +54,7 @@
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button type="danger" size="small" :disabled="!row.enabled" @click="disable(row)">停用</el-button>
+            <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -228,11 +234,15 @@ async function toggleEnabled(row) {
   }
 }
 
-async function disable(row) {
+async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm(`确认停用优惠券「${row.title}」吗？`, '停用确认', { type: 'warning' })
+    await ElMessageBox.confirm(
+      `确认删除优惠券「${row.title}」吗？已被订单核销的券无法删除；主人已领取但未使用的券会同时从券包移除。如需暂时下线，请使用状态开关停用。`,
+      '删除确认',
+      { type: 'warning' },
+    )
     await adminApi.deleteCoupon(row.id)
-    ElMessage.success('已停用')
+    ElMessage.success('优惠券已删除')
     loadData()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '操作失败')

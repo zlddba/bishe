@@ -25,6 +25,7 @@ import team.wd.atnestapp.data.api.ClaimableCouponDto
 import team.wd.atnestapp.data.api.UserCouponDto
 import team.wd.atnestapp.ui.AppPage
 import team.wd.atnestapp.ui.AppState
+import team.wd.atnestapp.ui.ModalKind
 import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.CouponCard
 import team.wd.atnestapp.ui.components.GhostButton
@@ -94,7 +95,7 @@ fun CouponsPage(app: AppState) {
                 val list: List<CouponRow> = when (tab) {
                     "可用" -> available.map { CouponRow(it.toCoupon(), null, it) }
                     "已使用" -> used.map { CouponRow(it.toCoupon(), null, null) }
-                    "已过期" -> expired.map { CouponRow(it.toCoupon(), null, null) }
+                    "已过期" -> expired.map { CouponRow(it.toCoupon(), null, it) }
                     else -> claimable.map { CouponRow(it.toCoupon(), it.couponId, null) }
                 }
                 if (list.isEmpty()) {
@@ -113,6 +114,13 @@ fun CouponsPage(app: AppState) {
                                     app.go(AppPage.Booking)
                                 }
                                 row.claimId != null -> app.scope.launch { app.claimCoupon(row.claimId) }
+                            }
+                        }, onDelete = row.userCoupon?.let { uc ->
+                            {
+                                app.modal = ModalKind.Confirm(
+                                    "删除优惠券",
+                                    "删除后无法恢复（领取活动发放的券如仍在有效期内可重新领取）。确定删除吗？",
+                                ) { app.scope.launch { app.deleteMyCoupon(uc.id) } }
                             }
                         })
                         Spacer(Modifier.height(12.dp))
@@ -134,6 +142,7 @@ private fun UserCouponDto.toCoupon(): Coupon = Coupon(
         "used" -> "已使用"
         else -> "已过期"
     },
+    issuer = if (sitterId != 0L) issuer else "",
 )
 
 private fun ClaimableCouponDto.toCoupon(): Coupon = Coupon(
@@ -143,6 +152,7 @@ private fun ClaimableCouponDto.toCoupon(): Coupon = Coupon(
     from = "",
     to = endsAt,
     state = "可领取",
+    issuer = if (sitterId != 0L) issuer else "",
 )
 
 private data class CouponRow(

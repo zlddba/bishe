@@ -16,7 +16,7 @@ func AdminCreateSitter(c *gin.Context) {
 	var req struct {
 		UserID       int64    `json:"user_id" binding:"required"`
 		Name         string   `json:"name" binding:"required,min=1,max=128"`
-		Type         string   `json:"type" binding:"required,oneof=home shop visit"`
+		Type         string   `json:"type" binding:"required,oneof=home shop visit other"`
 		Description  string   `json:"description"`
 		DailyPrice   float64  `json:"daily_price" binding:"min=0"`
 		VisitPrice   float64  `json:"visit_price" binding:"min=0"`
@@ -77,7 +77,7 @@ func AdminUpdateSitter(c *gin.Context) {
 
 	var req struct {
 		Name         *string   `json:"name"`
-		Type         *string   `json:"type" binding:"omitempty,oneof=home shop visit"`
+		Type         *string   `json:"type" binding:"omitempty,oneof=home shop visit other"`
 		Description  *string   `json:"description"`
 		DailyPrice   *float64  `json:"daily_price" binding:"omitempty,min=0"`
 		VisitPrice   *float64  `json:"visit_price" binding:"omitempty,min=0"`
@@ -224,26 +224,30 @@ func AdminGetSitterDetail(c *gin.Context) {
 	}
 
 	type SitterDetail struct {
-		ID           int64    `json:"id"`
-		UserID       int64    `json:"user_id"`
-		Username     string   `json:"username"`
-		Name         string   `json:"name"`
-		Type         string   `json:"type"`
-		Description  *string  `json:"description"`
-		DailyPrice   float64  `json:"daily_price"`
-		VisitPrice   float64  `json:"visit_price"`
-		PriceMode    string   `json:"price_mode"`
-		Capacity     int      `json:"capacity"`
-		Address      *string  `json:"address"`
-		Latitude     *float64 `json:"latitude"`
-		Longitude    *float64 `json:"longitude"`
-		AvgScore     float64  `json:"avg_score"`
-		ReviewCount  int      `json:"review_count"`
-		CoverPhoto   *string  `json:"cover_photo_url"`
-		DetailPhotos []string `json:"detail_photos"`
-		Status       string   `json:"status"`
-		BannedReason *string  `json:"banned_reason"`
-		CreatedAt    string   `json:"created_at"`
+		ID              int64    `json:"id"`
+		UserID          int64    `json:"user_id"`
+		Username        string   `json:"username"`
+		Name            string   `json:"name"`
+		Type            string   `json:"type"`
+		Description     *string  `json:"description"`
+		DailyPrice      float64  `json:"daily_price"`
+		VisitPrice      float64  `json:"visit_price"`
+		PriceMode       string   `json:"price_mode"`
+		Capacity        int      `json:"capacity"`
+		Address         *string  `json:"address"`
+		Latitude        *float64 `json:"latitude"`
+		Longitude       *float64 `json:"longitude"`
+		AvgScore        float64  `json:"avg_score"`
+		ReviewCount     int      `json:"review_count"`
+		CoverPhoto      *string  `json:"cover_photo_url"`
+		DetailPhotos    []string `json:"detail_photos"`
+		ContactPerson   *string  `json:"contact_person"`
+		LicensePhotoURL *string  `json:"license_photo_url"`
+		IDCardPhotoURL  *string  `json:"id_card_photo_url"`
+		ReviewNote      *string  `json:"review_note"`
+		Status          string   `json:"status"`
+		BannedReason    *string  `json:"banned_reason"`
+		CreatedAt       string   `json:"created_at"`
 	}
 
 	var s SitterDetail
@@ -251,7 +255,9 @@ func AdminGetSitterDetail(c *gin.Context) {
 		`SELECT s.id, s.user_id, u.username, s.name, s.type::text, s.description,
 		 s.daily_price, s.visit_price, s.price_mode::text, s.capacity,
 		 s.address, s.latitude, s.longitude, s.avg_score, s.review_count,
-		 s.cover_photo_url, s.detail_photos, s.status::text, s.banned_reason,
+		 s.cover_photo_url, s.detail_photos,
+		 s.contact_person, s.license_photo_url, s.id_card_photo_url, s.review_note,
+		 s.status::text, s.banned_reason,
 		 to_char(s.created_at, 'YYYY-MM-DD HH24:MI')
 		 FROM sitters s JOIN users u ON u.id = s.user_id
 		 WHERE s.id = $1 AND s.deleted_at IS NULL`,
@@ -259,7 +265,9 @@ func AdminGetSitterDetail(c *gin.Context) {
 	).Scan(&s.ID, &s.UserID, &s.Username, &s.Name, &s.Type, &s.Description,
 		&s.DailyPrice, &s.VisitPrice, &s.PriceMode, &s.Capacity,
 		&s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
-		&s.CoverPhoto, &s.DetailPhotos, &s.Status, &s.BannedReason,
+		&s.CoverPhoto, &s.DetailPhotos,
+		&s.ContactPerson, &s.LicensePhotoURL, &s.IDCardPhotoURL, &s.ReviewNote,
+		&s.Status, &s.BannedReason,
 		&s.CreatedAt)
 
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"patnestServer/internal/db"
 
@@ -168,11 +169,16 @@ func AdminUpdateSitterStatus(c *gin.Context) {
 	adminID := c.GetInt64("user_id")
 
 	var req struct {
-		Status string `json:"status" binding:"required,oneof=active inactive banned"`
+		Status string `json:"status" binding:"required,oneof=active inactive banned rejected"`
 		Reason string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "请求参数无效: "+err.Error())
+		return
+	}
+
+	if req.Status == "rejected" && strings.TrimSpace(req.Reason) == "" {
+		BadRequest(c, "请填写驳回原因")
 		return
 	}
 
@@ -186,9 +192,36 @@ func AdminUpdateSitterStatus(c *gin.Context) {
 			return
 		}
 		rowsAffected = tag.RowsAffected()
-	} else {
+	} else if req.Status == "rejected" {
 		tag, execErr := db.Pool.Exec(context.Background(),
-			"UPDATE sitters SET status = $1::sitter_status, banned_at = NULL, banned_reason = NULL WHERE id = $2 AND deleted_at IS NULL",
+			"UPDATE sitters SET status = 'rejected', review_note = $1, banned_at = NULL, banned_reason = NULL WHERE id = $2 AND deleted_at IS NULL",
+			strings.TrimSpace(req.Reason), sitterID)
+		if execErr != nil {
+			InternalError(c, "更新状态失败")
+			return
+		}
+		rowsAffected = tag.RowsAffected()
+	} else {
+		// 重新上架前必须有可用价格，否则主人下单金额恒为 0，走不到支付。
+		// 首次审核通过（pending -> active）不拦：申请阶段还没有机构端，价格只能审核通过后补。
+		if req.Status == "active" {
+			var curStatus, priceMode string
+			var dailyPrice, visitPrice float64
+			if err := db.Pool.QueryRow(context.Background(),
+				`SELECT status::text, price_mode::text, daily_price, visit_price FROM sitters
+				 WHERE id = $1 AND deleted_at IS NULL`, sitterID).
+				Scan(&curStatus, &priceMode, &dailyPrice, &visitPrice); err != nil {
+				NotFound(c, "机构不存在")
+				return
+			}
+			if curStatus != "pending" &&
+				((priceMode == "per_day" && dailyPrice <= 0) || (priceMode == "per_visit" && visitPrice <= 0)) {
+				BadRequest(c, "该机构未设置有效价格，请先在机构详情填写日单价或上门价再上架")
+				return
+			}
+		}
+		tag, execErr := db.Pool.Exec(context.Background(),
+			"UPDATE sitters SET status = $1::sitter_status, banned_at = NULL, banned_reason = NULL, review_note = NULL WHERE id = $2 AND deleted_at IS NULL",
 			req.Status, sitterID)
 		if execErr != nil {
 			InternalError(c, "更新状态失败")
@@ -200,6 +233,20 @@ func AdminUpdateSitterStatus(c *gin.Context) {
 	if rowsAffected == 0 {
 		NotFound(c, "机构不存在")
 		return
+	}
+
+	// 按审核结果同步账号角色：通过升级为 sitter，驳回退回 owner
+	var sitterUserID int64
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID); err == nil {
+		switch req.Status {
+		case "active":
+			_, _ = db.Pool.Exec(context.Background(),
+				"UPDATE users SET role = 'sitter', updated_at = now() WHERE id = $1 AND role = 'owner'", sitterUserID)
+		case "rejected":
+			_, _ = db.Pool.Exec(context.Background(),
+				"UPDATE users SET role = 'owner', updated_at = now() WHERE id = $1 AND role = 'sitter'", sitterUserID)
+		}
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),

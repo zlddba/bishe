@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +40,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.data.api.ApiClient
+import team.wd.atnestapp.data.api.ApplySitterPayload
 import team.wd.atnestapp.data.api.AuthResponseDto
 import team.wd.atnestapp.data.api.CreateOrderPayload
 import team.wd.atnestapp.data.api.CreateOrderPetPayload
@@ -50,6 +52,8 @@ import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.ReceivedOrderDto
 import team.wd.atnestapp.data.api.SitterDto
 import team.wd.atnestapp.data.api.SitterReviewDto
+import team.wd.atnestapp.data.api.SitterCouponDto
+import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.data.api.UpdateShopPayload
 import team.wd.atnestapp.data.api.PublicReviewDto
 import team.wd.atnestapp.data.api.SettlementDto
@@ -109,6 +113,7 @@ enum class AppPage(val title: String) {
     SbReviews("评价管理"),
     SbIncome("收益结算"),
     SbProfile("机构资料"),
+    SbCoupons("优惠券"),
 }
 
 private enum class Screen { Launch, Main }
@@ -126,6 +131,10 @@ sealed interface ModalKind {
     data object ChangePassword : ModalKind
     data object ApplySitter : ModalKind
     data object PriceRule : ModalKind
+    /** 机构优惠券表单：coupon 为 null 时新建，否则编辑 */
+    data class CouponForm(val coupon: SitterCouponDto? = null) : ModalKind
+    /** 机构调整指定日期（YYYY-MM-DD）的接待容量 */
+    data class AdjustCapacity(val date: String) : ModalKind
 }
 
 class AppState {
@@ -223,6 +232,9 @@ class AppState {
 
     var priceRules by mutableStateOf<List<PriceRuleDto>>(emptyList())
     var priceRulesLoading by mutableStateOf(false)
+
+    var sitterCoupons by mutableStateOf<List<SitterCouponDto>>(emptyList())
+    var sitterCouponsLoading by mutableStateOf(false)
 
     var selectedCouponId by mutableStateOf(0L)
     var selectedCouponTitle by mutableStateOf("")
@@ -328,11 +340,14 @@ class AppState {
         toast("已退出登录")
     }
 
-    /** 申请注销：account=整个账户，sitter=仅注销机构；提交成功后立即退出登录，冷静期 3 天内重新登录自动撤销。 */
+    /**
+     * 申请注销：account=整个账户，sitter=仅注销机构。
+     * 提交成功后立即退出登录（服务端同时吊销全部刷新令牌），冷静期 3 天内重新登录自动撤销注销申请。
+     */
     suspend fun requestAccountCancel(mode: String) {
         try {
             api.requestAccountCancel(mode)
-            // 直接退出登录：吊销刷新令牌并清空本地会话（冷静期内重新登录会自动撤销注销）
+            // 直接退出登录：清空本地会话并 best-effort 调用登出接口
             val currentToken = api.token
             if (!currentToken.isNullOrBlank()) {
                 runCatching { api.logout(currentToken) }
@@ -340,24 +355,13 @@ class AppState {
             clearSession()
             toast(
                 if (mode == "sitter") {
-                    "机构注销申请已提交，3 天内登录可撤销"
+                    "机构注销申请已提交，已退出登录；3 天内重新登录可撤销"
                 } else {
-                    "注销申请已提交，3 天内登录可撤销"
+                    "注销申请已提交，已退出登录；3 天内重新登录可撤销"
                 },
             )
         } catch (e: Exception) {
             toast(e.message ?: "提交注销申请失败")
-        }
-    }
-
-    /** 撤销注销申请。 */
-    suspend fun withdrawAccountCancel() {
-        try {
-            api.withdrawAccountCancel()
-            toast("已撤销注销申请")
-            loadProfile()
-        } catch (e: Exception) {
-            toast(e.message ?: "撤销失败")
         }
     }
 
@@ -441,6 +445,8 @@ class AppState {
         sitterStatsLoading = false
         priceRules = emptyList()
         priceRulesLoading = false
+        sitterCoupons = emptyList()
+        sitterCouponsLoading = false
 
         // 视图状态
         sitterIndex = 0
@@ -688,42 +694,37 @@ class AppState {
         }
     }
 
+    /** 机构入驻申请：提交营业执照 / 身份证等资质材料；审核期间账号保持主人角色，审核通过后升级为机构。 */
     suspend fun applySitter(
         name: String,
         typeLabel: String,
+        contactPerson: String,
         address: String,
-        capacity: Int,
-        dailyPrice: Double,
-        visitPrice: Double,
+        licensePhotoUrl: String,
+        idCardPhotoUrl: String,
         description: String,
     ) {
         val type = when (typeLabel) {
             "家庭寄养" -> "home"
             "门店寄养" -> "shop"
-            else -> "visit"
+            "上门喂养" -> "visit"
+            else -> "other"
         }
         try {
-            val auth = api.applySitter(
-                UpdateShopPayload(
+            api.applySitter(
+                ApplySitterPayload(
                     name = name.trim(),
                     type = type,
-                    description = description.trim(),
-                    dailyPrice = dailyPrice,
-                    visitPrice = visitPrice,
-                    priceMode = if (type == "visit") "per_visit" else "per_day",
-                    capacity = capacity,
+                    contactPerson = contactPerson.trim(),
+                    licensePhotoUrl = licensePhotoUrl,
+                    idCardPhotoUrl = idCardPhotoUrl,
                     address = address.trim(),
+                    description = description.trim(),
                 ),
             )
-            api.token = auth.accessToken
-            account = auth.user.username.ifBlank { account }
-            nickname = auth.user.nickname?.takeIf { it.isNotBlank() } ?: nickname
-            accountRole = "sitter"
-            isSitterAccount = true
-            role = AppRole.Owner
             modal = null
             toast("机构申请已提交，等待平台审核")
-            loadMyShop(force = true)
+            loadProfile()
         } catch (e: Exception) {
             toast(e.message ?: "申请失败")
         }
@@ -751,6 +752,63 @@ class AppState {
         }
     }
 
+    /* ---------- 机构优惠券管理 ---------- */
+
+    suspend fun loadSitterCoupons(force: Boolean = false) {
+        if (!loggedIn || sitterCouponsLoading) return
+        if (!force && sitterCoupons.isNotEmpty()) return
+        sitterCouponsLoading = true
+        try {
+            sitterCoupons = api.listSitterCoupons().items
+        } catch (e: Exception) {
+            toast(e.message ?: "加载优惠券失败")
+        } finally {
+            sitterCouponsLoading = false
+        }
+    }
+
+    /** 新建或编辑机构优惠券（coupon 为 null 时新建），成功后刷新列表并关闭弹窗。 */
+    suspend fun saveSitterCoupon(coupon: SitterCouponDto?, payload: SitterCouponPayload) {
+        try {
+            if (coupon == null) api.createSitterCoupon(payload) else api.updateSitterCoupon(coupon.id, payload)
+            modal = null
+            toast(if (coupon == null) "优惠券已发布" else "优惠券已保存")
+            loadSitterCoupons(force = true)
+        } catch (e: Exception) {
+            toast(e.message ?: "保存失败")
+        }
+    }
+
+    suspend fun toggleSitterCoupon(coupon: SitterCouponDto) {
+        val payload = SitterCouponPayload(
+            title = coupon.title,
+            type = coupon.type,
+            value = coupon.value,
+            minAmount = coupon.minAmount,
+            totalQty = coupon.totalQty,
+            perUser = coupon.perUser,
+            enabled = !coupon.enabled,
+            startsAt = coupon.startsAt,
+            endsAt = coupon.endsAt,
+        )
+        try {
+            api.updateSitterCoupon(coupon.id, payload)
+            toast(if (coupon.enabled) "已停用该优惠券" else "已启用该优惠券")
+            loadSitterCoupons(force = true)
+        } catch (e: Exception) {
+            toast(e.message ?: "操作失败")
+        }
+    }
+
+    suspend fun deleteSitterCoupon(coupon: SitterCouponDto) {
+        try {
+            api.deleteSitterCoupon(coupon.id)
+            toast("优惠券已删除")
+            loadSitterCoupons(force = true)
+        } catch (e: Exception) {
+            toast(e.message ?: "删除失败")
+        }
+    }
     suspend fun uploadImage(fileName: String, bytes: ByteArray): String? = try {
         api.uploadImage(bytes, fileName)
     } catch (e: Exception) {
@@ -817,6 +875,16 @@ class AppState {
         }
     }
 
+    /** 删除券包中的优惠券（已使用的由服务端拒绝）。 */
+    suspend fun deleteMyCoupon(userCouponId: Long) {
+        try {
+            api.deleteMyCoupon(userCouponId)
+            toast("优惠券已删除")
+            loadCoupons(force = true)
+        } catch (e: Exception) {
+            toast(e.message ?: "删除优惠券失败")
+        }
+    }
     suspend fun loadMyShop(force: Boolean = false) {
         if (!loggedIn || shopLoading) return
         if (!force && myShop != null) return
@@ -915,6 +983,17 @@ class AppState {
         }
     }
 
+    /** 机构调整指定日期的接待容量（按日覆盖店铺默认容量）。 */
+    suspend fun setCapacity(date: String, capacity: Int) {
+        try {
+            api.setMyCapacity(date, capacity)
+            modal = null
+            toast("已更新 $date 的接待容量")
+            loadCapacity(force = true)
+        } catch (e: Exception) {
+            toast(e.message ?: "容量调整失败")
+        }
+    }
     suspend fun loadEarnings(force: Boolean = false) {
         if (!loggedIn || earningsLoading) return
         if (!force && earnings != null) return
@@ -1107,7 +1186,7 @@ class AppState {
         /** 只有机构账号才能进入的页面。 */
         private val sitterPages = setOf(
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
-            AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile,
+            AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile, AppPage.SbCoupons,
         )
     }
 }
@@ -1407,8 +1486,10 @@ private fun BoxScope.ModalOverlay(app: AppState) {
                     is ModalKind.Confirm -> modal.title
                     ModalKind.Publish -> "发布寄养动态"
                     ModalKind.ChangePassword -> "修改密码"
-                    ModalKind.ApplySitter -> "申请成为机构账号"
+                    ModalKind.ApplySitter -> "机构入驻申请"
                     ModalKind.PriceRule -> "节假日定价"
+                    is ModalKind.CouponForm -> if (modal.coupon == null) "发布优惠券" else "编辑优惠券"
+                    is ModalKind.AdjustCapacity -> "调整容量 · ${modal.date}"
                 },
                 color = PatNestColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             )
@@ -1418,7 +1499,13 @@ private fun BoxScope.ModalOverlay(app: AppState) {
             }
         }
         ThinDivider()
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        ) {
             ModalBody(app, modal)
         }
         if (modal is ModalKind.Confirm) {
@@ -1565,10 +1652,12 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
             var name by remember { mutableStateOf("") }
             var type by remember { mutableStateOf("家庭寄养") }
             var address by remember { mutableStateOf("") }
-            var capacityText by remember { mutableStateOf("3") }
-            var dailyPriceText by remember { mutableStateOf("130") }
-            var visitPriceText by remember { mutableStateOf("60") }
             var description by remember { mutableStateOf("") }
+            var contactPerson by remember { mutableStateOf("") }
+            var licenseUrl by remember { mutableStateOf("") }
+            var idCardUrl by remember { mutableStateOf("") }
+            var uploadingLicense by remember { mutableStateOf(false) }
+            var uploadingIdCard by remember { mutableStateOf(false) }
             FieldLabel("机构名称")
             SoftTextField(
                 value = name,
@@ -1578,42 +1667,76 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
             )
             Spacer(Modifier.height(10.dp))
             FieldLabel("机构类型")
-            ChipRow(listOf("家庭寄养", "门店寄养", "上门喂养"), type) { type = it }
-            Spacer(Modifier.height(10.dp))
-            FieldLabel("所在地址")
-            SoftTextField(
-                value = address,
-                onValueChange = { address = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = "如：呼和浩特 · 赛罕区",
-            )
+            ChipRow(listOf("家庭寄养", "门店寄养", "上门喂养", "其他"), type) { type = it }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
-                    FieldLabel("可接待容量")
-                    SoftTextField(capacityText, { capacityText = it }, Modifier.fillMaxWidth())
+                    FieldLabel("联系人姓名")
+                    SoftTextField(contactPerson, { contactPerson = it }, Modifier.fillMaxWidth(), placeholder = "如：张三")
                 }
                 Column(Modifier.weight(1f)) {
-                    FieldLabel("日单价（元）")
-                    SoftTextField(dailyPriceText, { dailyPriceText = it }, Modifier.fillMaxWidth())
+                    FieldLabel("所在地址")
+                    SoftTextField(address, { address = it }, Modifier.fillMaxWidth(), placeholder = "如：呼和浩特 · 赛罕区")
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(Modifier.weight(1f)) {
-                    FieldLabel("上门单价（元）")
-                    SoftTextField(visitPriceText, { visitPriceText = it }, Modifier.fillMaxWidth())
+            FieldLabel("营业执照照片")
+            DashedUploadBox(
+                if (licenseUrl.isBlank()) "点击上传营业执照" else "营业执照已上传，点击可更换",
+                if (uploadingLicense) "正在上传…" else "支持 JPG / PNG，≤ 5MB",
+                Modifier.fillMaxWidth().height(104.dp),
+            ) {
+                if (uploadingLicense) return@DashedUploadBox
+                val file = team.wd.atnestapp.ui.util.chooseImageFile() ?: return@DashedUploadBox
+                app.scope.launch {
+                    uploadingLicense = true
+                    try {
+                        val url = app.uploadImage(file.name, file.readBytes())
+                        if (url != null) {
+                            licenseUrl = url
+                            app.toast("营业执照已上传")
+                        }
+                    } finally {
+                        uploadingLicense = false
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
-            FieldLabel("机构简介")
+            FieldLabel("联系人身份证照片（选填）")
+            DashedUploadBox(
+                if (idCardUrl.isBlank()) "点击上传身份证照片" else "身份证已上传，点击可更换",
+                if (uploadingIdCard) "正在上传…" else "支持 JPG / PNG，≤ 5MB",
+                Modifier.fillMaxWidth().height(104.dp),
+            ) {
+                if (uploadingIdCard) return@DashedUploadBox
+                val file = team.wd.atnestapp.ui.util.chooseImageFile() ?: return@DashedUploadBox
+                app.scope.launch {
+                    uploadingIdCard = true
+                    try {
+                        val url = app.uploadImage(file.name, file.readBytes())
+                        if (url != null) {
+                            idCardUrl = url
+                            app.toast("身份证照片已上传")
+                        }
+                    } finally {
+                        uploadingIdCard = false
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            FieldLabel("机构简介（选填）")
             SoftTextField(
                 value = description,
                 onValueChange = { description = it },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = "介绍寄养环境、照料方式等",
                 singleLine = false,
-                minHeight = 72.dp,
+                minHeight = 60.dp,
+            )
+            Text(
+                "价格与接待容量在审核通过后于机构端设置",
+                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                modifier = Modifier.padding(top = 10.dp),
             )
             Row(
                 Modifier.fillMaxWidth().padding(top = 14.dp),
@@ -1623,15 +1746,16 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
                 PrimaryButton("提交申请", {
                     when {
                         name.isBlank() -> app.toast("请输入机构名称")
-                        (capacityText.filter { it.isDigit() }.toIntOrNull() ?: 0) < 1 -> app.toast("请填写正确的接待容量")
+                        contactPerson.isBlank() -> app.toast("请输入联系人姓名")
+                        licenseUrl.isBlank() -> app.toast("请上传营业执照照片")
                         else -> app.scope.launch {
                             app.applySitter(
                                 name = name,
                                 typeLabel = type,
+                                contactPerson = contactPerson,
                                 address = address,
-                                capacity = capacityText.filter { it.isDigit() }.toIntOrNull() ?: 1,
-                                dailyPrice = dailyPriceText.toDoubleOrNull() ?: 0.0,
-                                visitPrice = visitPriceText.toDoubleOrNull() ?: 0.0,
+                                licensePhotoUrl = licenseUrl,
+                                idCardPhotoUrl = idCardUrl,
                                 description = description,
                             )
                         }
@@ -1681,6 +1805,130 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
                                 app.createPriceRule(name, startDate, endDate, multiplier)
                             }
                         }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
+        is ModalKind.CouponForm -> {
+            val editing = modal.coupon
+            var title by remember { mutableStateOf(editing?.title.orEmpty()) }
+            var typeLabel by remember {
+                mutableStateOf(
+                    when (editing?.type) {
+                        "percent" -> "折扣券"
+                        null -> "满减券"
+                        else -> "满减券"
+                    },
+                )
+            }
+            var valueText by remember { mutableStateOf(editing?.value?.toString().orEmpty().ifBlank { "10" }) }
+            var minAmountText by remember { mutableStateOf(editing?.minAmount?.toInt()?.toString() ?: "0") }
+            var totalQtyText by remember { mutableStateOf(editing?.totalQty?.toString() ?: "100") }
+            var perUserText by remember { mutableStateOf(editing?.perUser?.toString() ?: "1") }
+            var startDate by remember { mutableStateOf(editing?.startsAt.orEmpty().ifBlank { java.time.LocalDate.now().toString() }) }
+            var endDate by remember { mutableStateOf(editing?.endsAt.orEmpty()) }
+
+            FieldLabel("券名称")
+            SoftTextField(title, { title = it }, Modifier.fillMaxWidth(), placeholder = "如：本店寄养立减 20")
+            Spacer(Modifier.height(10.dp))
+            FieldLabel("券类型")
+            ChipRow(listOf("满减券", "折扣券"), typeLabel) { typeLabel = it }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    FieldLabel(if (typeLabel == "满减券") "立减金额（元）" else "折扣比例（%）")
+                    SoftTextField(valueText, { valueText = it }, Modifier.fillMaxWidth())
+                }
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("使用门槛（元）")
+                    SoftTextField(minAmountText, { minAmountText = it }, Modifier.fillMaxWidth())
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("发放总量（0 不限）")
+                    SoftTextField(totalQtyText, { totalQtyText = it }, Modifier.fillMaxWidth())
+                }
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("每人限领")
+                    SoftTextField(perUserText, { perUserText = it }, Modifier.fillMaxWidth())
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("开始日期")
+                    SoftTextField(startDate, { startDate = it }, Modifier.fillMaxWidth())
+                }
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("截止日期（空=长期）")
+                    SoftTextField(endDate, { endDate = it }, Modifier.fillMaxWidth())
+                }
+            }
+            Text(
+                "机构优惠券仅限主人领取后在本机构下单时抵扣",
+                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton(if (editing == null) "发布" else "保存", {
+                    val value = valueText.toDoubleOrNull()
+                    val minAmount = minAmountText.toDoubleOrNull() ?: 0.0
+                    val totalQty = totalQtyText.toIntOrNull() ?: 0
+                    val perUser = perUserText.toIntOrNull() ?: 1
+                    val type = if (typeLabel == "折扣券") "percent" else "fixed"
+                    when {
+                        title.isBlank() -> app.toast("请输入券名称")
+                        value == null || value <= 0 -> app.toast("面值需大于 0")
+                        type == "percent" && value > 100 -> app.toast("折扣券面值应为 1-100 的百分比")
+                        minAmount < 0 || totalQty < 0 || perUser < 1 -> app.toast("门槛/数量/限领不能为负")
+                        endDate.isNotBlank() && endDate < startDate -> app.toast("截止日期不能早于开始日期")
+                        else -> app.scope.launch {
+                            app.saveSitterCoupon(
+                                coupon = editing,
+                                payload = SitterCouponPayload(
+                                    title = title.trim(),
+                                    type = type,
+                                    value = value,
+                                    minAmount = minAmount,
+                                    totalQty = totalQty,
+                                    perUser = perUser,
+                                    enabled = editing?.enabled ?: true,
+                                    startsAt = startDate.trim(),
+                                    endsAt = endDate.trim(),
+                                ),
+                            )
+                        }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
+        is ModalKind.AdjustCapacity -> {
+            val item = app.capacityItems.firstOrNull { it.date == modal.date }
+            var capacityText by remember(modal.date) { mutableStateOf((item?.capacity ?: 1).toString()) }
+            FieldLabel("当日接待容量（只）")
+            SoftTextField(capacityText, { capacityText = it }, Modifier.fillMaxWidth())
+            Text(
+                "当日已在住 ${item?.used ?: 0} 只，调整后容量不能低于该数；未单独设置的日期沿用机构资料里的默认容量。",
+                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("保存", {
+                    val n = capacityText.filter { it.isDigit() }.toIntOrNull()
+                    when {
+                        n == null || n < 1 -> app.toast("容量至少为 1")
+                        item != null && n < item.used -> app.toast("不能低于已在住的 ${item.used} 只")
+                        else -> app.scope.launch { app.setCapacity(modal.date, n) }
                     }
                 }, Modifier.weight(1f))
             }

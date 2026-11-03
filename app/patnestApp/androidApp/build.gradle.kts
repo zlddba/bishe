@@ -20,6 +20,22 @@ dependencies {
 }
 
 android {
+    signingConfigs {
+        getByName("debug") {
+            storeFile =
+                file("D:\\schoollearn\\biyezuopin\\app\\patnestApp\\buildkeys\\patnestapp_debug.jks")
+            storePassword = "patnestapp_debug"
+            keyPassword = "patnestapp_debug"
+            keyAlias = "key0"
+        }
+        create("release") {
+            storeFile =
+                file("D:\\schoollearn\\biyezuopin\\app\\patnestApp\\buildkeys\\patnestapp_release.jks")
+            storePassword = "patnestapp_release"
+            keyPassword = "patnestapp_release"
+            keyAlias = "key0"
+        }
+    }
     namespace = "team.wd.atnestapp"
     compileSdk {
         version = release(libs.versions.android.compileSdk.get().toInt()) {
@@ -41,6 +57,8 @@ android {
     }
     buildTypes {
         release {
+            // 不指定 signingConfig 时 assembleRelease 产出的是未签名 APK
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

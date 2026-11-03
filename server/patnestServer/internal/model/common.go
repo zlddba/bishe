@@ -38,6 +38,17 @@ type Review struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
+// Payment 订单支付/退款流水（主人可见自己的记录）
+type Payment struct {
+	ID            int64   `json:"id"`
+	Amount        float64 `json:"amount"`
+	Method        string  `json:"method"`
+	Status        string  `json:"status"`
+	TransactionID string  `json:"transaction_id"`
+	CreatedAt     string  `json:"created_at"`
+	PaidAt        string  `json:"paid_at"`
+	RefundedAt    string  `json:"refunded_at"`
+}
 type CreateReviewRequest struct {
 	OverallScore     int16    `json:"overall_score" binding:"required,min=1,max=5"`
 	ServiceScore     int16    `json:"service_score" binding:"required,min=1,max=5"`

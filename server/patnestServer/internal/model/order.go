@@ -70,6 +70,7 @@ type OrderDetailResponse struct {
 	Pets     []OrderPet `json:"pets"`
 	Dynamics []Dynamic  `json:"dynamics,omitempty"`
 	Review   *Review    `json:"review,omitempty"`
+	Payments []Payment  `json:"payments,omitempty"`
 }
 
 type CancelOrderRequest struct {

@@ -109,10 +109,10 @@ func SitterStats(c *gin.Context) {
 		  AND completed_at::date = current_date`, sitterID).Scan(&todayRevenue)
 
 	OK(c, gin.H{
-		"sitter_id":    sitterID,
-		"trend":        trend,
-		"pending":      pending,
-		"active":       active,
+		"sitter_id":     sitterID,
+		"trend":         trend,
+		"pending":       pending,
+		"active":        active,
 		"today_revenue": todayRevenue,
 	})
 }
@@ -135,10 +135,10 @@ func ContactSitter(c *gin.Context) {
 	var sitterUserID int64
 	var sitterName string
 	err = db.Pool.QueryRow(context.Background(),
-		"SELECT user_id, name FROM sitters WHERE id = $1 AND deleted_at IS NULL",
+		"SELECT user_id, name FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL",
 		sitterID).Scan(&sitterUserID, &sitterName)
 	if err != nil {
-		NotFound(c, "机构不存在")
+		NotFound(c, "机构不存在或已下架，暂时无法联系")
 		return
 	}
 

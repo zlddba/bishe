@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SittersPage(app: AppState) {
     var tab by remember { mutableStateOf("全部") }
-    val tabs = listOf("全部", "家庭寄养", "门店寄养", "上门喂养")
+    val tabs = listOf("全部", "家庭寄养", "门店寄养", "上门喂养", "其他")
     val sortOptions = listOf("综合排序", "评分优先", "价格从低到高", "价格从高到低")
     val priceOptions = listOf("全部价格", "¥100 以下", "¥100-200", "¥200 以上")
     var sortIndex by remember { mutableStateOf(0) }
@@ -54,7 +54,7 @@ fun SittersPage(app: AppState) {
             .verticalScroll(rememberScrollState())
             .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 40.dp),
     ) {
-        PageHeader("找机构", "家庭寄养 / 门店寄养 / 上门喂养") {
+        PageHeader("找机构", "家庭寄养 / 门店寄养 / 上门喂养 / 其他") {
             Tag("✦ 智能推荐", TagKind.Brand, onClick = {
                 sortIndex = 1
                 app.toast("已按评分优先为你排序")

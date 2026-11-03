@@ -33,12 +33,12 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE sitter_type AS ENUM ('home','shop','visit');
+    CREATE TYPE sitter_type AS ENUM ('home','shop','visit','other');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE sitter_status AS ENUM ('pending','active','inactive','banned');
+    CREATE TYPE sitter_status AS ENUM ('pending','active','inactive','banned','rejected');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -134,6 +134,10 @@ CREATE TABLE IF NOT EXISTS sitters (
     review_count    INT             NOT NULL DEFAULT 0,
     cover_photo_url TEXT,
     detail_photos   TEXT[]          DEFAULT '{}',
+    contact_person  VARCHAR(64),
+    license_photo_url TEXT,
+    id_card_photo_url TEXT,
+    review_note     VARCHAR(255),
     status          sitter_status   NOT NULL DEFAULT 'pending',
     banned_at       TIMESTAMPTZ,
     banned_reason   VARCHAR(255),
@@ -245,7 +249,7 @@ COMMENT ON TABLE reviews IS 'One review per completed order';
 CREATE TABLE IF NOT EXISTS payments (
     id              BIGSERIAL       PRIMARY KEY,
     order_id        BIGINT          NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
-    amount          NUMERIC(12,2)   NOT NULL CHECK (amount > 0),
+    amount          NUMERIC(12,2)   NOT NULL CHECK (amount >= 0), -- 允许 0：全额抵扣/免费订单
     method          pay_method      NOT NULL DEFAULT 'mock',
     transaction_id  VARCHAR(128),
     status          VARCHAR(20)     NOT NULL DEFAULT 'created' CHECK (status IN ('created','paid','failed','refunded')),

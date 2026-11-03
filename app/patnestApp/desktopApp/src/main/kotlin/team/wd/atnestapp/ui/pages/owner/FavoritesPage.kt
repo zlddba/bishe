@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,6 +87,13 @@ fun FavoritesPage(app: AppState) {
                                 },
                             )
                             Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                                if (iv.value.status != "active") {
+                                    Tag(
+                                        if (iv.value.status == "banned") "已被平台封禁" else "已下架",
+                                        if (iv.value.status == "banned") TagKind.Danger else TagKind.Warn,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                }
                                 Spacer(Modifier.weight(1f))
                                 LinkText("取消收藏", color = PatNestColors.Ink3) {
                                     app.scope.launch { app.removeFavorite(iv.value.id) }

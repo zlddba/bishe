@@ -269,6 +269,9 @@ class ApiClient(rawBaseUrl: String) {
 
     suspend fun listCoupons(): CouponListDto = getData("/pet-owner/coupons")
 
+    /** 删除券包中的优惠券（id 为券包记录 id；已使用的券服务端会拒绝删除）。 */
+    suspend fun deleteMyCoupon(userCouponId: Long) = deleteNoContent("/pet-owner/coupons/mine/$userCouponId")
+
     suspend fun claimCoupon(couponId: Long) {
         postNoBody<ClaimResult>("/pet-owner/coupons/$couponId/claim")
     }
@@ -280,9 +283,22 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun updateMyShop(payload: UpdateShopPayload): SitterDto =
         putData("/sitter/shop/me", payload)
 
-    /** 主人申请成为机构账号，成功后返回升级后的新令牌。 */
-    suspend fun applySitter(payload: UpdateShopPayload): AuthResponseDto =
+    /** 机构入驻申请：提交资质材料，平台审核通过后账号才升级为机构。 */
+    suspend fun applySitter(payload: ApplySitterPayload): ApplySitterResult =
         postData("/pet-owner/apply-sitter", payload)
+
+    /* ---------- 机构优惠券管理 ---------- */
+
+    suspend fun listSitterCoupons(): SitterCouponPageDto = getData("/sitter/coupons")
+
+    suspend fun createSitterCoupon(payload: SitterCouponPayload): ClaimResult =
+        postData("/sitter/coupons", payload)
+
+    suspend fun updateSitterCoupon(couponId: Long, payload: SitterCouponPayload): ClaimResult =
+        putData("/sitter/coupons/$couponId", payload)
+
+    /** 删除本机构优惠券；已被订单核销的券服务端会拒绝删除。 */
+    suspend fun deleteSitterCoupon(couponId: Long) = deleteNoContent("/sitter/coupons/$couponId")
 
     suspend fun listReceivedOrders(): List<ReceivedOrderDto> {
         val page: ReceivedOrderPageDto = getData("/sitter/orders/manage", mapOf("page" to "1", "per_page" to "50"))
@@ -304,6 +320,9 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun myCapacity(from: String, to: String): CapacityDto =
         getData("/sitter/capacity", mapOf("from" to from, "to" to to))
 
+    /** 调整指定日期的接待容量（1-200，且不低于当日已在住数量）。 */
+    suspend fun setMyCapacity(date: String, capacity: Int): StatusResult =
+        putData("/sitter/capacity", CapacitySetPayload(date, capacity))
     suspend fun sitterEarnings(from: String, to: String): EarningsDto =
         getData("/sitter/earnings", mapOf("from" to from, "to" to to))
 

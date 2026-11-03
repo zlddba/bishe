@@ -13,7 +13,8 @@ fun SitterDto.toUi(): Sitter {
         type = when (type) {
             "home" -> "家庭寄养"
             "shop" -> "门店寄养"
-            else -> "上门喂养"
+            "visit" -> "上门喂养"
+            else -> "其他"
         },
         price = (if (perVisit) visitPrice else dailyPrice).roundToInt(),
         unit = if (perVisit) "次" else "天",
@@ -73,7 +74,8 @@ fun FavoriteDto.toUi(): Sitter = Sitter(
     type = when (type) {
         "home" -> "家庭寄养"
         "shop" -> "门店寄养"
-        else -> "上门喂养"
+        "visit" -> "上门喂养"
+        else -> "其他"
     },
     price = dailyPrice.roundToInt(),
     unit = "天",
