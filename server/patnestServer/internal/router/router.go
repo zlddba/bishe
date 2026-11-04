@@ -111,6 +111,13 @@ func Setup() *gin.Engine {
 			// --- 注销账户（冷静期3天，期间登录自动撤销）---
 			owner.POST("/account/cancel-request", handler.RequestAccountCancel)
 			owner.POST("/account/cancel-withdraw", handler.WithdrawAccountCancel)
+
+			// --- 个人消息（主人视角，scope=personal）---
+			// 机构账号也能切到主人视角，所以这里沿用 owner/sitter 双角色；
+			// 具体数据仍按 user_id + scope 过滤，不会串号。
+			owner.GET("/notifications", handler.ListPersonalNotifications)
+			owner.PUT("/notifications/:id/read", handler.MarkPersonalNotificationRead)
+			owner.PUT("/notifications/read-all", handler.MarkAllPersonalNotificationsRead)
 		}
 
 		// --- Public sitter browsing (any authenticated user) ---
@@ -124,7 +131,8 @@ func Setup() *gin.Engine {
 			browse.GET("/sitters/:id/estimate", handler.EstimateOrder)
 		}
 
-		// --- Notifications (any authenticated user) ---
+		// --- 旧版统一通知接口（兼容保留：返回全部、不做视角过滤）---
+		// 新端请用 /pet-owner/notifications（个人）或 /sitter/notifications（商家）。
 		protected.GET("/notifications", handler.ListNotifications)
 		protected.PUT("/notifications/:id/read", handler.MarkNotificationRead)
 		protected.PUT("/notifications/read-all", handler.MarkAllNotificationsRead)
@@ -171,6 +179,11 @@ func Setup() *gin.Engine {
 			sitter.POST("/coupons", handler.CreateSitterCoupon)
 			sitter.PUT("/coupons/:id", handler.UpdateSitterCoupon)
 			sitter.DELETE("/coupons/:id", handler.DeleteSitterCoupon)
+
+			// --- 商家消息（机构视角，scope=business，仅 sitter 可访问）---
+			sitter.GET("/notifications", handler.ListBusinessNotifications)
+			sitter.PUT("/notifications/:id/read", handler.MarkBusinessNotificationRead)
+			sitter.PUT("/notifications/read-all", handler.MarkAllBusinessNotificationsRead)
 		}
 
 		// --- Admin namespace ---

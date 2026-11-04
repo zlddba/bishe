@@ -35,6 +35,11 @@ func AdminListNotifications(c *gin.Context) {
 		args = append(args, typ)
 		idx++
 	}
+	if scope := c.Query("scope"); scope == "personal" || scope == "business" {
+		where += fmt.Sprintf(" AND n.scope::text = $%d", idx)
+		args = append(args, scope)
+		idx++
+	}
 	if q := c.Query("q"); q != "" {
 		where += fmt.Sprintf(" AND (n.title ILIKE $%d OR n.body ILIKE $%d)", idx, idx)
 		args = append(args, "%"+q+"%")
@@ -48,7 +53,7 @@ func AdminListNotifications(c *gin.Context) {
 		return
 	}
 
-	query := fmt.Sprintf(`SELECT n.id, n.user_id, u.username, n.type::text, n.title, n.body,
+	query := fmt.Sprintf(`SELECT n.id, n.user_id, u.username, n.type::text, n.scope::text, n.title, n.body,
 		COALESCE(n.extra::text, ''), n.is_read, to_char(n.created_at, 'YYYY-MM-DD HH24:MI')
 		FROM notifications n JOIN users u ON u.id = n.user_id
 		%s ORDER BY n.created_at DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
@@ -66,6 +71,7 @@ func AdminListNotifications(c *gin.Context) {
 		UserID    int64  `json:"user_id"`
 		Username  string `json:"username"`
 		Type      string `json:"type"`
+		Scope     string `json:"scope"`
 		Title     string `json:"title"`
 		Body      string `json:"body"`
 		Extra     string `json:"extra"`
@@ -76,7 +82,7 @@ func AdminListNotifications(c *gin.Context) {
 	items := make([]adminNotification, 0)
 	for rows.Next() {
 		var n adminNotification
-		if err := rows.Scan(&n.ID, &n.UserID, &n.Username, &n.Type, &n.Title,
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Username, &n.Type, &n.Scope, &n.Title,
 			&n.Body, &n.Extra, &n.IsRead, &n.CreatedAt); err != nil {
 			continue
 		}
@@ -101,8 +107,10 @@ func AdminBroadcastNotification(c *gin.Context) {
 	target := req.Target
 	if target == "" || target == "all" {
 		tag, err := db.Pool.Exec(context.Background(),
-			`INSERT INTO notifications (user_id, type, title, body)
-			 SELECT id, 'system_announcement', $1, $2 FROM users
+			`INSERT INTO notifications (user_id, type, title, body, scope)
+			 SELECT id, 'system_announcement', $1, $2,
+			        CASE WHEN role::text = 'sitter' THEN 'business' ELSE 'personal' END::notification_scope
+			 FROM users
 			 WHERE deleted_at IS NULL AND status = 1`, req.Title, req.Body)
 		if err != nil {
 			InternalError(c, "推送公告失败: "+err.Error())
@@ -117,8 +125,10 @@ func AdminBroadcastNotification(c *gin.Context) {
 	}
 
 	tag, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO notifications (user_id, type, title, body)
-		 SELECT id, 'system_announcement', $1, $2 FROM users
+		`INSERT INTO notifications (user_id, type, title, body, scope)
+		 SELECT id, 'system_announcement', $1, $2,
+		        CASE WHEN $3 = 'sitter' THEN 'business' ELSE 'personal' END::notification_scope
+		 FROM users
 		 WHERE deleted_at IS NULL AND status = 1 AND role::text = $3`, req.Title, req.Body, target)
 	if err != nil {
 		InternalError(c, "推送公告失败: "+err.Error())

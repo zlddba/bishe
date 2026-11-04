@@ -240,6 +240,7 @@ data class UpdateProfilePayload(
 data class NotificationDto(
     val id: Long = 0,
     val type: String = "",
+    val scope: String = "personal",
     val title: String = "",
     val body: String = "",
     @SerialName("is_read") val isRead: Boolean = false,

@@ -99,7 +99,7 @@ func CreateOrder(c *gin.Context) {
 		"SELECT fn_reserve_capacity($1, $2, $3, $4)",
 		req.SitterID, startDate, endDate, petCount)
 	if err != nil {
-		Conflict(c, "capacity exceeded for selected dates")
+		Conflict(c, capacityConflictMsg(err))
 		return
 	}
 
@@ -191,10 +191,10 @@ func CreateOrder(c *gin.Context) {
 	var sitterUserID int64
 	_ = tx.QueryRow(context.Background(), "SELECT user_id FROM sitters WHERE id = $1", req.SitterID).Scan(&sitterUserID)
 	_, _ = tx.Exec(context.Background(),
-		"SELECT fn_notify($1, 'order_created', $2, $3, $4)",
+		"SELECT fn_notify($1, 'order_created', $2, $3, $4, $5)",
 		sitterUserID, "收到新订单",
 		fmt.Sprintf("订单 %s：%d 只宠物，%s 至 %s", orderNo, petCount, req.StartDate, req.EndDate),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "business")
 
 	// Commit
 	if err := tx.Commit(context.Background()); err != nil {
@@ -576,6 +576,20 @@ func GetOrderDetail(c *gin.Context) {
 	OK(c, model.OrderDetailResponse{Order: o, Pets: pets, Dynamics: dynamics, Review: review, Payments: payments})
 }
 
+// capacityConflictMsg 把 fn_reserve_capacity 抛出的英文异常翻译成主人看得懂的提示，
+// 并带上是哪一天满了：换个日期就能自己解决，不该只看到一句英文。
+func capacityConflictMsg(err error) string {
+	const key = "Capacity exceeded on "
+	msg := err.Error()
+	if i := strings.Index(msg, key); i >= 0 {
+		rest := msg[i+len(key):]
+		if j := strings.IndexByte(rest, ':'); j > 0 {
+			return fmt.Sprintf("%s 当天容量已满，请换个日期或选择其他机构", rest[:j])
+		}
+	}
+	return "所选日期容量已满，请换个日期或选择其他机构"
+}
+
 // PayOrder handles PUT /api/v1/pet-owner/orders/:id/pay
 func PayOrder(c *gin.Context) {
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -644,9 +658,9 @@ func PayOrder(c *gin.Context) {
 	_ = tx.QueryRow(context.Background(),
 		"SELECT user_id FROM sitters WHERE id = (SELECT sitter_id FROM orders WHERE id = $1)", orderID).Scan(&sitterUserID)
 	_, _ = tx.Exec(context.Background(),
-		"SELECT fn_notify($1, 'order_accepted', $2, $3, $4)",
+		"SELECT fn_notify($1, 'order_accepted', $2, $3, $4, $5)",
 		sitterUserID, "订单已支付", fmt.Sprintf("订单 %d 已支付，金额 %.2f 元", orderID, totalAmount),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "business")
 
 	if err := tx.Commit(context.Background()); err != nil {
 		log.Printf("[PayOrder] commit error: %v", err)
@@ -711,9 +725,9 @@ func AcceptOrder(c *gin.Context) {
 	var ownerID int64
 	_ = db.Pool.QueryRow(context.Background(), "SELECT owner_id FROM orders WHERE id = $1", orderID).Scan(&ownerID)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'order_accepted', '订单已接单', $2, $3)",
+		"SELECT fn_notify($1, 'order_accepted', '订单已接单', $2, $3, $4)",
 		ownerID, fmt.Sprintf("您的订单 #%d 已被机构接单。", orderID),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 
 	OK(c, gin.H{"status": "accepted"})
 }
@@ -750,9 +764,9 @@ func RejectOrder(c *gin.Context) {
 	var ownerID int64
 	_ = db.Pool.QueryRow(context.Background(), "SELECT owner_id FROM orders WHERE id = $1", orderID).Scan(&ownerID)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'order_rejected', '订单已被拒绝', $2, $3)",
+		"SELECT fn_notify($1, 'order_rejected', '订单已被拒绝', $2, $3, $4)",
 		ownerID, fmt.Sprintf("您的订单 #%d 被拒绝：%s", orderID, req.Reason),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 
 	OK(c, gin.H{"status": "rejected"})
 }
@@ -783,9 +797,9 @@ func CompleteOrder(c *gin.Context) {
 	var ownerID int64
 	_ = db.Pool.QueryRow(context.Background(), "SELECT owner_id FROM orders WHERE id = $1", orderID).Scan(&ownerID)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'order_completed', '寄养已完成', $2, $3)",
+		"SELECT fn_notify($1, 'order_completed', '寄养已完成', $2, $3, $4)",
 		ownerID, fmt.Sprintf("订单 #%d 已完成，请接回宠物并留下评价。", orderID),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 
 	OK(c, gin.H{"status": "completed"})
 }

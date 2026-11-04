@@ -232,6 +232,13 @@ class AppState {
     var notificationsLoading by mutableStateOf(false)
     var notificationsError by mutableStateOf<String?>(null)
 
+    // 消息页按归属视角分开拉取；notifications（全部）只用于未读角标与新消息提示
+    var notificationScope by mutableStateOf("personal")
+    var personalNotifications by mutableStateOf<List<NotificationDto>>(emptyList())
+    var businessNotifications by mutableStateOf<List<NotificationDto>>(emptyList())
+    var scopedNotificationsLoading by mutableStateOf(false)
+    var scopedNotificationsError by mutableStateOf<String?>(null)
+
     var profile by mutableStateOf<UserDto?>(null)
 
     var ownerDynamics by mutableStateOf<List<DynamicDto>>(emptyList())
@@ -487,6 +494,11 @@ class AppState {
         notifications = emptyList()
         notificationsLoading = false
         notificationsError = null
+        personalNotifications = emptyList()
+        businessNotifications = emptyList()
+        scopedNotificationsLoading = false
+        scopedNotificationsError = null
+        notificationScope = "personal"
         profile = null
         ownerDynamics = emptyList()
         dynamicsLoading = false
@@ -952,6 +964,60 @@ class AppState {
         } else {
             toast("没有未读消息")
         }
+    }
+
+    /** 消息页：一次拉取两个视角；商家消息只有机构账号才有 */
+    suspend fun loadScopedNotifications(force: Boolean = false) {
+        if (!loggedIn || scopedNotificationsLoading) return
+        if (!force && (personalNotifications.isNotEmpty() || businessNotifications.isNotEmpty())) return
+        scopedNotificationsLoading = true
+        scopedNotificationsError = null
+        try {
+            personalNotifications = api.listPersonalNotifications()
+            businessNotifications = if (role == AppRole.Sitter) api.listBusinessNotifications() else emptyList()
+        } catch (e: Exception) {
+            scopedNotificationsError = e.message ?: "加载消息失败"
+        } finally {
+            scopedNotificationsLoading = false
+        }
+    }
+
+    /** 消息页当前展示的列表 */
+    fun visibleNotifications(): List<NotificationDto> =
+        if (notificationScope == "business") businessNotifications else personalNotifications
+
+    suspend fun markScopedNotificationRead(id: Long) {
+        runCatching {
+            if (notificationScope == "business") api.markBusinessNotificationRead(id)
+            else api.markPersonalNotificationRead(id)
+        }
+        if (notificationScope == "business") {
+            businessNotifications = businessNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
+        } else {
+            personalNotifications = personalNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
+        }
+        notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
+    }
+
+    /** 一键已读只清当前视角，另一类消息的未读数不受影响 */
+    suspend fun markAllScopedNotificationsRead() {
+        val current = visibleNotifications()
+        if (current.none { !it.isRead }) {
+            toast("没有未读消息")
+            return
+        }
+        runCatching {
+            if (notificationScope == "business") api.markAllBusinessNotificationsRead()
+            else api.markAllPersonalNotificationsRead()
+        }
+        val ids = current.map { it.id }.toSet()
+        if (notificationScope == "business") {
+            businessNotifications = businessNotifications.map { it.copy(isRead = true) }
+        } else {
+            personalNotifications = personalNotifications.map { it.copy(isRead = true) }
+        }
+        notifications = notifications.map { if (it.id in ids) it.copy(isRead = true) else it }
+        toast("已全部标为已读")
     }
 
     suspend fun loadFavorites(force: Boolean = false) {

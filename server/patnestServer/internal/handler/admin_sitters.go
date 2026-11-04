@@ -159,6 +159,17 @@ func AdminUpdateSitter(c *gin.Context) {
 		idx++
 	}
 
+	if req.Capacity != nil {
+		msg, err := capacityShrinkProblem(context.Background(), sitterID, *req.Capacity)
+		if err != nil {
+			InternalError(c, "校验容量失败: "+err.Error())
+			return
+		}
+		if msg != "" {
+			BadRequest(c, msg)
+			return
+		}
+	}
 	if updates == "" {
 		BadRequest(c, "没有需要更新的字段")
 		return

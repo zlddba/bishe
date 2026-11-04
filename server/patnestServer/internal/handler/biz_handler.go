@@ -117,9 +117,9 @@ func PublishDynamic(c *gin.Context) {
 	var ownerID int64
 	_ = db.Pool.QueryRow(context.Background(), "SELECT owner_id FROM orders WHERE id = $1", orderID).Scan(&ownerID)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'dynamics_published', '新的寄养动态', $2, $3)",
+		"SELECT fn_notify($1, 'dynamics_published', '新的寄养动态', $2, $3, $4)",
 		ownerID, fmt.Sprintf("您宠物的寄养动态 #%d 已发布。", dynamic.ID),
-		fmt.Sprintf(`{"order_id": %d, "dynamic_id": %d}`, orderID, dynamic.ID))
+		fmt.Sprintf(`{"order_id": %d, "dynamic_id": %d}`, orderID, dynamic.ID), "personal")
 
 	Created(c, "dynamic published", dynamic)
 }
@@ -270,9 +270,9 @@ func SubmitReview(c *gin.Context) {
 	var sitterUserID int64
 	_ = db.Pool.QueryRow(context.Background(), "SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'review_received', '收到新评价', $2, $3)",
+		"SELECT fn_notify($1, 'review_received', '收到新评价', $2, $3, $4)",
 		sitterUserID, fmt.Sprintf("您收到 %d 星评价（订单 #%d）。", req.OverallScore, orderID),
-		fmt.Sprintf(`{"order_id": %d, "review_id": %d}`, orderID, r.ID))
+		fmt.Sprintf(`{"order_id": %d, "review_id": %d}`, orderID, r.ID), "business")
 
 	Created(c, "review submitted", r)
 }
@@ -308,8 +308,30 @@ func ReplyReview(c *gin.Context) {
 	OK(c, gin.H{"message": "reply posted"})
 }
 
+// 通知归属视角：personal=主人视角（/pet-owner/notifications），
+// business=机构视角（/sitter/notifications）；空串表示旧接口，不做过滤。
+const (
+	notificationScopePersonal = "personal"
+	notificationScopeBusiness = "business"
+)
+
 // ListNotifications handles GET /api/v1/notifications
-func ListNotifications(c *gin.Context) {
+// 兼容旧客户端：返回当前用户的全部通知，不做视角过滤。
+func ListNotifications(c *gin.Context) { listNotifications(c, "") }
+
+// ListPersonalNotifications handles GET /api/v1/pet-owner/notifications
+func ListPersonalNotifications(c *gin.Context) {
+	listNotifications(c, notificationScopePersonal)
+}
+
+// ListBusinessNotifications handles GET /api/v1/sitter/notifications
+func ListBusinessNotifications(c *gin.Context) {
+	listNotifications(c, notificationScopeBusiness)
+}
+
+// listNotifications 是三套列表接口的唯一实现。scope 由入口函数固定，
+// 不接受客户端传参，避免通过 query 绕过视角隔离。
+func listNotifications(c *gin.Context, scope string) {
 	userID := c.GetInt64("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
@@ -324,6 +346,11 @@ func ListNotifications(c *gin.Context) {
 	where := "WHERE user_id = $1"
 	args := []interface{}{userID}
 	idx := 2
+	if scope != "" {
+		where += fmt.Sprintf(" AND scope::text = $%d", idx)
+		args = append(args, scope)
+		idx++
+	}
 
 	if isRead := c.Query("is_read"); isRead != "" {
 		where += fmt.Sprintf(" AND is_read = $%d", idx)
@@ -334,7 +361,7 @@ func ListNotifications(c *gin.Context) {
 	var total int
 	_ = db.Pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM notifications "+where, args...).Scan(&total)
 
-	query := fmt.Sprintf("SELECT id, user_id, type, title, body, extra::text, is_read, created_at FROM notifications %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", where, idx, idx+1)
+	query := fmt.Sprintf("SELECT id, user_id, type, scope::text, title, body, extra::text, is_read, created_at FROM notifications %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", where, idx, idx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := db.Pool.Query(context.Background(), query, args...)
@@ -347,17 +374,33 @@ func ListNotifications(c *gin.Context) {
 	items := make([]model.Notification, 0)
 	for rows.Next() {
 		var n model.Notification
-		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Body, &n.Extra, &n.IsRead, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Scope, &n.Title, &n.Body, &n.Extra, &n.IsRead, &n.CreatedAt); err != nil {
 			continue
 		}
 		items = append(items, n)
 	}
 
-	OK(c, gin.H{"items": items, "total": total, "page": page, "per_page": perPage})
+	resp := gin.H{"items": items, "total": total, "page": page, "per_page": perPage}
+	if scope != "" {
+		resp["scope"] = scope
+	}
+	OK(c, resp)
 }
 
 // MarkNotificationRead handles PUT /api/v1/notifications/:id/read
-func MarkNotificationRead(c *gin.Context) {
+func MarkNotificationRead(c *gin.Context) { markNotificationRead(c, "") }
+
+// MarkPersonalNotificationRead handles PUT /api/v1/pet-owner/notifications/:id/read
+func MarkPersonalNotificationRead(c *gin.Context) {
+	markNotificationRead(c, notificationScopePersonal)
+}
+
+// MarkBusinessNotificationRead handles PUT /api/v1/sitter/notifications/:id/read
+func MarkBusinessNotificationRead(c *gin.Context) {
+	markNotificationRead(c, notificationScopeBusiness)
+}
+
+func markNotificationRead(c *gin.Context, scope string) {
 	userID := c.GetInt64("user_id")
 	nid, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -365,8 +408,10 @@ func MarkNotificationRead(c *gin.Context) {
 		return
 	}
 
+	// scope 为空表示旧接口；否则必须命中同一视角，个人接口不能把商家消息标为已读。
 	tag, _ := db.Pool.Exec(context.Background(),
-		"UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2", nid, userID)
+		"UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2 AND ($3 = '' OR scope::text = $3)",
+		nid, userID, scope)
 	if tag.RowsAffected() == 0 {
 		NotFound(c, "notification not found")
 		return
@@ -375,10 +420,24 @@ func MarkNotificationRead(c *gin.Context) {
 }
 
 // MarkAllNotificationsRead handles PUT /api/v1/notifications/read-all
-func MarkAllNotificationsRead(c *gin.Context) {
+func MarkAllNotificationsRead(c *gin.Context) { markAllNotificationsRead(c, "") }
+
+// MarkAllPersonalNotificationsRead handles PUT /api/v1/pet-owner/notifications/read-all
+func MarkAllPersonalNotificationsRead(c *gin.Context) {
+	markAllNotificationsRead(c, notificationScopePersonal)
+}
+
+// MarkAllBusinessNotificationsRead handles PUT /api/v1/sitter/notifications/read-all
+func MarkAllBusinessNotificationsRead(c *gin.Context) {
+	markAllNotificationsRead(c, notificationScopeBusiness)
+}
+
+func markAllNotificationsRead(c *gin.Context, scope string) {
 	userID := c.GetInt64("user_id")
+	// 一键已读只清同一视角，两类消息的未读数互不影响。
 	tag, _ := db.Pool.Exec(context.Background(),
-		"UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE", userID)
+		"UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE AND ($2 = '' OR scope::text = $2)",
+		userID, scope)
 	OK(c, gin.H{"updated": tag.RowsAffected()})
 }
 

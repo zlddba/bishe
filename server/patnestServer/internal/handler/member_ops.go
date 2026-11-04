@@ -506,9 +506,10 @@ func SetSitterCapacity(c *gin.Context) {
 		return
 	}
 	_, err = db.Pool.Exec(context.Background(), `
-		INSERT INTO sitter_daily_capacity (sitter_id, cap_date, capacity)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (sitter_id, cap_date) DO UPDATE SET capacity = EXCLUDED.capacity, updated_at = now()`,
+		INSERT INTO sitter_daily_capacity (sitter_id, cap_date, capacity, is_override)
+		VALUES ($1, $2, $3, TRUE)
+		ON CONFLICT (sitter_id, cap_date)
+		DO UPDATE SET capacity = EXCLUDED.capacity, is_override = TRUE, updated_at = now()`,
 		sitterID, date, in.Capacity)
 	if err != nil {
 		InternalError(c, "设置容量失败: "+err.Error())

@@ -216,8 +216,10 @@ func deliverPushTask(id int64) (int64, error) {
 func sendPushContent(title, body, target, channel string) (int64, error) {
 	if channel == "in_app" {
 		tag, err := db.Pool.Exec(context.Background(), `
-			INSERT INTO notifications (user_id, type, title, body)
-			SELECT id, 'system_announcement', $1, $2 FROM users
+			INSERT INTO notifications (user_id, type, title, body, scope)
+			SELECT id, 'system_announcement', $1, $2,
+			       CASE WHEN role::text = 'sitter' THEN 'business' ELSE 'personal' END::notification_scope
+			FROM users
 			WHERE deleted_at IS NULL AND status = 1 AND ($3 = 'all' OR role::text = $3)`,
 			title, body, target)
 		if err != nil {

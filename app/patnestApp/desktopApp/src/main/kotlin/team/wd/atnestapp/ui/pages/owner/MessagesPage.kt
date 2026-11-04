@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.ui.AppState
 import team.wd.atnestapp.ui.components.AppIcon
+import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.GhostButton
 import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
@@ -41,12 +42,12 @@ import team.wd.atnestapp.ui.theme.patCard
 @Composable
 fun MessagesPage(app: AppState) {
     LaunchedEffect(app.loggedIn) {
-        if (app.loggedIn && app.notifications.isEmpty() && !app.notificationsLoading) {
-            app.loadNotifications()
-        }
+        if (app.loggedIn) app.loadScopedNotifications()
     }
 
-    val unread = app.notifications.count { !it.isRead }
+    val scopeLabel = if (app.notificationScope == "business") "商家消息" else "个人消息"
+    val items = app.visibleNotifications()
+    val unread = items.count { !it.isRead }
 
     Column(
         Modifier
@@ -56,37 +57,47 @@ fun MessagesPage(app: AppState) {
     ) {
         PageHeader(
             "消息通知",
-            if (unread > 0) "订单、动态与系统消息 · ${unread} 条未读" else "订单、动态与系统消息",
+            "$scopeLabel · ${if (unread > 0) "$unread 条未读" else "全部已读"}",
             trailing = {
                 GhostButton("全部已读", {
-                    app.scope.launch { app.markAllNotificationsRead() }
+                    app.scope.launch { app.markAllScopedNotificationsRead() }
                 }, height = 32.dp)
                 PrimaryButton("刷新", {
-                    app.scope.launch { app.loadNotifications(force = true) }
+                    app.scope.launch { app.loadScopedNotifications(force = true) }
                 }, height = 32.dp)
             },
         )
 
+        ChipRow(
+            options = listOf("个人消息", "商家消息"),
+            selected = scopeLabel,
+            onSelect = { label ->
+                app.notificationScope = if (label == "商家消息") "business" else "personal"
+            },
+            modifier = Modifier.padding(bottom = 16.dp),
+        )
+
         when {
-            app.notificationsLoading && app.notifications.isEmpty() -> {
+            app.scopedNotificationsLoading && items.isEmpty() -> {
                 Text("正在加载消息…", color = PatNestColors.Ink3, fontSize = 12.5.sp)
             }
-            app.notifications.isEmpty() -> {
+            items.isEmpty() -> {
                 Panel {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            app.notificationsError ?: "暂时没有新消息",
+                            app.scopedNotificationsError
+                                ?: if (scopeLabel == "商家消息") "当前账号没有商家消息" else "暂时没有新消息",
                             color = PatNestColors.Ink2, fontSize = 13.sp,
                             modifier = Modifier.weight(1f),
                         )
                         PrimaryButton("刷新", {
-                            app.scope.launch { app.loadNotifications(force = true) }
+                            app.scope.launch { app.loadScopedNotifications(force = true) }
                         }, height = 32.dp)
                     }
                 }
             }
             else -> {
-                app.notifications.forEach { message ->
+                items.forEach { message ->
                     val isOrder = message.type.startsWith("order_") || message.type == "refund_request"
                     val (bg, fg) = when {
                         isOrder -> PatNestColors.OkSoft to PatNestColors.Ok
@@ -98,7 +109,7 @@ fun MessagesPage(app: AppState) {
                             .fillMaxWidth()
                             .patCard(PatNestShape.Md, 8.dp)
                             .clickable {
-                                app.scope.launch { app.markNotificationRead(message.id) }
+                                app.scope.launch { app.markScopedNotificationRead(message.id) }
                             }
                             .padding(horizontal = 16.dp, vertical = 15.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),

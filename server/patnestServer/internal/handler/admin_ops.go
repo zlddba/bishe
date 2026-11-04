@@ -554,9 +554,9 @@ func AdminHandleRefundRequest(c *gin.Context) {
 			return
 		}
 		_, _ = db.Pool.Exec(context.Background(),
-			"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+			"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 			ownerID, "退款申请被驳回", "您的退款申请未通过："+in.Note,
-			fmt.Sprintf(`{"refund_request_id": %d}`, id))
+			fmt.Sprintf(`{"refund_request_id": %d}`, id), "personal")
 		writeAudit(c, "REJECT_REFUND_REQUEST", "refund_request", id, "{}")
 		OK(c, gin.H{"id": id, "status": "rejected"})
 		return
@@ -678,8 +678,8 @@ func AdminReplyTicket(c *gin.Context) {
 		UPDATE support_tickets SET status = CASE WHEN status = 'open' THEN 'processing' ELSE status END,
 		       assigned_admin_id = $1, updated_at = now() WHERE id = $2`, adminID, id)
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
-		userID, "客服回复了您的工单", in.Content, fmt.Sprintf(`{"ticket_id": %d}`, id))
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
+		userID, "客服回复了您的工单", in.Content, fmt.Sprintf(`{"ticket_id": %d}`, id), "personal")
 	writeAudit(c, "REPLY_TICKET", "ticket", id, "{}")
 	Created(c, "已回复", gin.H{"id": id})
 }
@@ -788,8 +788,8 @@ func AdminPaySettlement(c *gin.Context) {
 		body = "您的结算单 #" + strconv.FormatInt(id, 10) + " 被驳回：" + in.Note
 	}
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
-		sitterUserID, title, body, fmt.Sprintf(`{"settlement_id": %d}`, id))
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
+		sitterUserID, title, body, fmt.Sprintf(`{"settlement_id": %d}`, id), "business")
 	writeAudit(c, "SETTLE_SITTER", "settlement", id, fmt.Sprintf(`{"status": %q}`, newStatus))
 	OK(c, gin.H{"id": id, "status": newStatus})
 }

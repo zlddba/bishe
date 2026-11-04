@@ -143,17 +143,17 @@ func RescheduleOrder(c *gin.Context) {
 		return
 	}
 	_, _ = tx.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		ownerID, "订单已改期",
 		fmt.Sprintf("订单 %s 已改期至 %s 至 %s", orderNo, in.StartDate, in.EndDate),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 	var sitterUserID int64
 	_ = tx.QueryRow(context.Background(), "SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID)
 	_, _ = tx.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		sitterUserID, "订单改期提醒",
 		fmt.Sprintf("订单 %s 改期至 %s 至 %s", orderNo, in.StartDate, in.EndDate),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "business")
 
 	if err := tx.Commit(context.Background()); err != nil {
 		InternalError(c, "改期失败")
@@ -254,9 +254,9 @@ func RenewOrder(c *gin.Context) {
 	var sitterUserID int64
 	_ = tx.QueryRow(context.Background(), "SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID)
 	_, _ = tx.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		sitterUserID, "订单续费", fmt.Sprintf("订单 %s 续费至 %s，补收差价 %.2f 元", orderNo, in.EndDate, charge),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "business")
 	if err := tx.Commit(context.Background()); err != nil {
 		InternalError(c, "续费失败")
 		return
@@ -336,10 +336,10 @@ func expireOneOrder(ctx context.Context, orderID int64) error {
 	}
 	// 容量不在这里手动释放：pending_pay -> cancelled 命中 trg_order_cancel_release，
 	// 触发器已经退回一次。再调一遍会把同一天其他在住订单占的床位也算成空位，造成超卖。
-	_, _ = tx.Exec(ctx, "SELECT fn_notify($1, 'order_cancelled', $2, $3, $4)",
+	_, _ = tx.Exec(ctx, "SELECT fn_notify($1, 'order_cancelled', $2, $3, $4, $5)",
 		ownerID, "订单已超时取消",
 		fmt.Sprintf("订单 %s 超过支付时限，已自动取消并释放床位", orderNo),
-		fmt.Sprintf(`{"order_id": %d}`, orderID))
+		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 	return tx.Commit(ctx)
 }
 

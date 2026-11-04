@@ -143,9 +143,9 @@ func ContactSitter(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		sitterUserID, "收到新的联系请求", in.Message,
-		`{"type": "contact_request"}`)
+		`{"type": "contact_request"}`, "business")
 
 	OK(c, gin.H{"sitter_id": sitterID, "sent": true})
 }

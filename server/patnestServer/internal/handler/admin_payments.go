@@ -133,10 +133,10 @@ func performRefund(ctx context.Context, orderID int64, amount *float64, reason s
 	}
 
 	_, _ = tx.Exec(ctx,
-		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
+		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		ownerID, "订单已退款",
 		fmt.Sprintf("订单 %s 已完成退款，金额 %.2f 元，原因：%s", orderNo, refundAmount, reason),
-		fmt.Sprintf(`{"order_id": %d, "refund_amount": %.2f}`, orderID, refundAmount))
+		fmt.Sprintf(`{"order_id": %d, "refund_amount": %.2f}`, orderID, refundAmount), "personal")
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("提交事务失败: %w", err)

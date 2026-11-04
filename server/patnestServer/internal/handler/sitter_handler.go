@@ -322,6 +322,19 @@ func UpdateMyShop(c *gin.Context) {
 		idx++
 	}
 
+	if req.Capacity != nil {
+		if sid, err := mySitterID(userID); err == nil {
+			msg, cerr := capacityShrinkProblem(context.Background(), sid, *req.Capacity)
+			if cerr != nil {
+				InternalError(c, "校验容量失败: "+cerr.Error())
+				return
+			}
+			if msg != "" {
+				BadRequest(c, msg)
+				return
+			}
+		}
+	}
 	if updates == "" {
 		BadRequest(c, "no fields to update")
 		return

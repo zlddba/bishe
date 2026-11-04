@@ -66,6 +66,7 @@ type Notification struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
 	Type      string    `json:"type"`
+	Scope     string    `json:"scope"`
 	Title     string    `json:"title"`
 	Body      string    `json:"body"`
 	Extra     string    `json:"extra"`

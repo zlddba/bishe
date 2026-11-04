@@ -55,7 +55,7 @@ cd app/patnestApp
 ./gradlew :shared:jvmTest             # 共享层测试
 ```
 
-`shared` 放网络层、数据模型和业务状态，Android 与 Desktop 各自只负责 UI；两端服务地址读各自的 `.env`。工程目标 JVM 21，本机 JDK 不一致时装一个 JDK 21 或在 Gradle 工具链里指过去。桌面端已接登录、下单、机构经营、地图选点等主链路；iOS target 已移除。
+`shared` 放网络层、数据模型和业务状态，Android 与 Desktop 各自只负责 UI；桌面端服务地址读 `.env`，Android 端在登录页填写并存 `SharedPreferences`（真机联调时把地址改成局域网内后端 IP:9200）。工程目标 JVM 21，本机 JDK 不一致时装一个 JDK 21 或在 Gradle 工具链里指过去。桌面端已接登录、下单、机构经营、地图选点等主链路；Android 端主人侧与机构侧两套工作台已完成，iOS target 已移除。
 
 ### 微信小程序 uniapp
 
@@ -92,7 +92,7 @@ bash build.sh --version 1.0.39 --arch amd64
 |---|---|
 | server | 主链路完成：账号、机构资质、商品、订单、优惠券、支付流水、评价、后台管理，含鉴权分层、限流、审计、地理编码 |
 | webadmin | 可用：登录、机构与用户管理、订单、内容、优惠券、地图选点、数据看板 |
-| app | Desktop 端持续迭代，Android 可构建，`shared` 层有测试覆盖 |
+| app | Desktop 端持续迭代；Android 端主人 + 机构两套工作台界面与交互完成（未在本机跑过 Gradle 构建）；`shared` 层有测试覆盖 |
 | uniapp | HBuilderX 默认模板，等待按接口清单接入 |
 | docs | 见 `docs/README.md` 索引 |
 

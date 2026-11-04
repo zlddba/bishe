@@ -246,7 +246,7 @@ class ApiClient(rawBaseUrl: String) {
         ensureSuccess(response.bodyAsText(), response.status)
     }
 
-    internal inline fun ensureSuccess(text: String, status: HttpStatusCode) {
+    internal fun ensureSuccess(text: String, status: HttpStatusCode) {
         val envelope = runCatching { json.decodeFromString<ApiStatus>(text) }.getOrNull()
         if (status.value !in 200..299) {
             throw ApiException(
@@ -282,7 +282,7 @@ class ApiClient(rawBaseUrl: String) {
 
     /** 退出登录：显式携带令牌，避免本地状态清空后请求头丢失。 */
     suspend fun logout(token: String) {
-        val response = http.post(apiBase + "/auth/logout") {
+        val response = http.post("$apiBase/auth/logout") {
             header(HttpHeaders.Authorization, "Bearer $token")
         }
         ensureSuccess(response.bodyAsText(), response.status)
@@ -413,8 +413,21 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun changePassword(oldPassword: String, newPassword: String): UpdatedResult =
         putData("/auth/password", ChangePasswordPayload(oldPassword, newPassword))
 
+    /** 兼容旧版统一接口：返回全部消息，仅用于未读角标等聚合场景 */
     suspend fun listNotifications(): List<NotificationDto> {
         val page: NotificationPageDto = getData("/notifications", mapOf("page" to "1", "per_page" to "50"))
+        return page.items
+    }
+
+    /** 个人消息：主人视角，scope=personal */
+    suspend fun listPersonalNotifications(): List<NotificationDto> {
+        val page: NotificationPageDto = getData("/pet-owner/notifications", mapOf("page" to "1", "per_page" to "50"))
+        return page.items
+    }
+
+    /** 商家消息：机构视角，scope=business，仅 sitter 账号可调用 */
+    suspend fun listBusinessNotifications(): List<NotificationDto> {
+        val page: NotificationPageDto = getData("/sitter/notifications", mapOf("page" to "1", "per_page" to "50"))
         return page.items
     }
 
@@ -422,8 +435,22 @@ class ApiClient(rawBaseUrl: String) {
         putNoContent("/notifications/$id/read")
     }
 
+    suspend fun markPersonalNotificationRead(id: Long) {
+        putNoContent("/pet-owner/notifications/$id/read")
+    }
+
+    suspend fun markBusinessNotificationRead(id: Long) {
+        putNoContent("/sitter/notifications/$id/read")
+    }
+
     /** 一键全部已读，返回被标记的条数 */
     suspend fun markAllNotificationsRead(): CountResult = putEmpty("/notifications/read-all")
+
+    /** 只清个人消息，商家消息未读数不受影响 */
+    suspend fun markAllPersonalNotificationsRead(): CountResult = putEmpty("/pet-owner/notifications/read-all")
+
+    /** 只清商家消息，个人消息未读数不受影响 */
+    suspend fun markAllBusinessNotificationsRead(): CountResult = putEmpty("/sitter/notifications/read-all")
 
     suspend fun listFavorites(): List<Sitter> {
         val data: FavoriteListDto = getData("/pet-owner/favorites")

@@ -63,6 +63,11 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
+    CREATE TYPE notification_scope AS ENUM ('personal','business');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
     CREATE TYPE price_mode AS ENUM ('per_day','per_visit');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -156,6 +161,7 @@ CREATE TABLE IF NOT EXISTS sitter_daily_capacity (
     cap_date        DATE            NOT NULL,
     used            INT             NOT NULL DEFAULT 0 CHECK (used >= 0),
     capacity        INT             NOT NULL DEFAULT 1 CHECK (capacity >= 1),
+    is_override     BOOLEAN         NOT NULL DEFAULT FALSE, -- TRUE=机构显式设置的该日容量，FALSE=跟随机构默认容量
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     CONSTRAINT uq_sitter_date UNIQUE (sitter_id, cap_date)
@@ -264,12 +270,18 @@ CREATE TABLE IF NOT EXISTS notifications (
     id              BIGSERIAL       PRIMARY KEY,
     user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type            notification_type NOT NULL,
+    scope           notification_scope NOT NULL DEFAULT 'personal',
     title           VARCHAR(128)    DEFAULT '',
     body            TEXT            NOT NULL,
     extra           JSONB           DEFAULT '{}',
     is_read         BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
+
+COMMENT ON COLUMN notifications.scope IS
+    'personal=主人视角消息（pet-owner 接口）；business=机构视角消息（sitter 接口）';
+CREATE INDEX IF NOT EXISTS idx_notifications_user_scope_time
+    ON notifications (user_id, scope, created_at DESC);
 
 -- 3.11 audit_logs
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -472,18 +484,23 @@ BEGIN
 
     v_date := p_start_date;
     WHILE v_date < p_end_date LOOP
-        INSERT INTO sitter_daily_capacity (sitter_id, cap_date, used, capacity)
-        VALUES (p_sitter_id, v_date, p_pet_count, v_max_cap)
-        ON CONFLICT (sitter_id, cap_date)
-        DO UPDATE SET used = sitter_daily_capacity.used + p_pet_count;
-
-        SELECT used, capacity INTO v_used, v_capacity
-        FROM sitter_daily_capacity
-        WHERE sitter_id = p_sitter_id AND cap_date = v_date
-        FOR UPDATE;
+        -- 机构默认容量已变化时，未被按日覆盖的行跟着回到新默认值。
+    -- 建行时记下当前默认容量；已有行只有在"未被机构覆盖"时才跟着刷新。
+        -- ON CONFLICT DO UPDATE 会拿到该行的写锁，天然串行化同一天的并发占用。
+        INSERT INTO sitter_daily_capacity (sitter_id, cap_date, used, capacity, is_override)
+        VALUES (p_sitter_id, v_date, p_pet_count, v_max_cap, FALSE)
+        ON CONFLICT (sitter_id, cap_date) DO UPDATE
+           SET used     = sitter_daily_capacity.used + p_pet_count,
+               capacity = CASE WHEN sitter_daily_capacity.is_override
+                               THEN sitter_daily_capacity.capacity
+                               ELSE v_max_cap END,
+               updated_at = now()
+        RETURNING sitter_daily_capacity.capacity, sitter_daily_capacity.used
+           INTO v_capacity, v_used;
 
         IF v_used > v_capacity THEN
-            RAISE EXCEPTION 'Capacity exceeded on %: used=%, max=%', v_date, v_used, v_capacity;
+            RAISE EXCEPTION 'Capacity exceeded on %: used=%, max=%',
+                to_char(v_date, 'YYYY-MM-DD'), v_used, v_capacity;
         END IF;
 
         v_date := v_date + INTERVAL '1 day';
@@ -543,15 +560,17 @@ CREATE OR REPLACE FUNCTION fn_notify(
     p_type    notification_type,
     p_title   VARCHAR,
     p_body    TEXT,
-    p_extra   JSONB DEFAULT '{}'
+    p_extra   JSONB DEFAULT '{}',
+    p_scope   VARCHAR DEFAULT 'personal'
 ) RETURNS BIGINT
 LANGUAGE plpgsql
 AS $fn$
 DECLARE
     v_id BIGINT;
 BEGIN
-    INSERT INTO notifications (user_id, type, title, body, extra)
-    VALUES (p_user_id, p_type, p_title, p_body, p_extra)
+    INSERT INTO notifications (user_id, type, title, body, extra, scope)
+    VALUES (p_user_id, p_type, p_title, p_body, p_extra,
+            COALESCE(NULLIF(p_scope, ''), 'personal')::notification_scope)
     RETURNING id INTO v_id;
     RETURN v_id;
 END;
@@ -598,7 +617,13 @@ CREATE TRIGGER trg_dynamics_updated  BEFORE UPDATE ON dynamics  FOR EACH ROW EXE
 CREATE TRIGGER trg_reviews_updated   BEFORE UPDATE ON reviews   FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 CREATE TRIGGER trg_capacity_updated  BEFORE UPDATE ON sitter_daily_capacity FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
--- 6.2 Review score aggregation triggers
+-- 6.2 机构默认容量变化时同步未覆盖的日容量行
+CREATE TRIGGER trg_sitter_capacity_sync
+    AFTER UPDATE OF capacity ON sitters
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_sync_capacity_rows();
+
+-- 6.3 Review score aggregation triggers
 CREATE TRIGGER trg_review_score_insert
     AFTER INSERT ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
@@ -611,7 +636,7 @@ CREATE TRIGGER trg_review_score_delete
     AFTER DELETE ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
 
--- 6.3 Auto-release capacity and restore coupon/points when an order is abandoned
+-- 6.4 Auto-release capacity and restore coupon/points when an order is abandoned
 -- 权益退回单独成函数：取消、拒单、后台退款、超时自动取消等多个入口都会走到这里，
 -- 集中在触发器里处理才不会漏。函数按行状态与流水判重，重复调用安全。
 CREATE OR REPLACE FUNCTION fn_restore_order_benefits(p_order_id BIGINT)
@@ -651,8 +676,7 @@ BEGIN
 END;
 $fn$;
 
--- staying 也纳入权益退回，但容量仍只在前三态释放：
--- staying 的容量由后台退款逻辑按已住天数显式处理，重复释放会把已消耗的天数退成空位。
+-- 5.11 Order status / soft-delete side effects (0015: 完成与软删都要归还夜间)
 CREATE OR REPLACE FUNCTION fn_order_status_changed()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -664,10 +688,37 @@ BEGIN
             PERFORM fn_release_capacity(NEW.sitter_id, NEW.start_date, NEW.end_date, NEW.pet_count);
         END IF;
         PERFORM fn_restore_order_benefits(NEW.id);
+    ELSIF OLD.status IN ('pending_pay','confirmed','accepted','staying')
+          AND NEW.status IN ('completed','evaluated') THEN
+        -- 服务已结束，把还没住的未来夜间还给机构；过去的夜间不影响新订单，保持原样。
+        IF NEW.end_date > CURRENT_DATE THEN
+            PERFORM fn_release_capacity(NEW.sitter_id, CURRENT_DATE, NEW.end_date, NEW.pet_count);
+        END IF;
     END IF;
     RETURN NEW;
 END;
 $fn$;
+
+CREATE OR REPLACE FUNCTION fn_order_deleted()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+    -- 后台删单是数据纠偏：资金与券仍按退款流程处理，但占用的夜间必须释放，
+    -- 否则这笔订单从所有重算口径里消失，used 就成了谁也说不清的残留数。
+    IF NEW.status IN ('pending_pay','confirmed','accepted','staying') THEN
+        PERFORM fn_release_capacity(NEW.sitter_id, NEW.start_date, NEW.end_date, NEW.pet_count);
+    END IF;
+    RETURN NEW;
+END;
+$fn$;
+
+DROP TRIGGER IF EXISTS trg_order_deleted_release ON orders;
+CREATE TRIGGER trg_order_deleted_release
+    AFTER UPDATE OF deleted_at ON orders
+    FOR EACH ROW
+    WHEN (OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL)
+    EXECUTE FUNCTION fn_order_deleted();
 
 CREATE TRIGGER trg_order_cancel_release
     AFTER UPDATE OF status ON orders
@@ -815,8 +866,8 @@ INSERT INTO sitter_daily_capacity (sitter_id, cap_date, used, capacity) VALUES
 (1, '2026-11-03', 1, 5);
 
 -- 8.8 Demo notification
-INSERT INTO notifications (user_id, type, title, body, extra) VALUES
-(3, 'order_created', 'New Order Received', 'Order PATN-20261029-000001 from Zhang San, 1 pet, Nov 1-4.', '{"order_id": 1}');
+INSERT INTO notifications (user_id, type, scope, title, body, extra) VALUES
+(3, 'order_created', 'business', 'New Order Received', 'Order PATN-20261029-000001 from Zhang San, 1 pet, Nov 1-4.', '{"order_id": 1}');
 
 -- ==================================================================
 -- 9. Permissions (uncomment and adjust for your app DB user)
