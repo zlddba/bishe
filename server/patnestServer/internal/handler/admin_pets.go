@@ -69,8 +69,8 @@ func AdminCreatePet(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_PET', 'pet', $2, $3)",
-		adminID, id, fmt.Sprintf(`{"name": "%s", "owner_id": %d}`, req.Name, req.OwnerID))
+		"SELECT fn_audit($1, 'CREATE_PET', 'pet', $2, $3, NULLIF($4, '')::inet)",
+		adminID, id, fmt.Sprintf(`{"name": "%s", "owner_id": %d}`, req.Name, req.OwnerID), auditClientIP(c))
 
 	Created(c, "宠物档案已创建", gin.H{"id": id})
 }
@@ -171,7 +171,7 @@ func AdminUpdatePet(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_PET', 'pet', $2, '{}')", adminID, petID)
+		"SELECT fn_audit($1, 'UPDATE_PET', 'pet', $2, '{}', NULLIF($3, '')::inet)", adminID, petID, auditClientIP(c))
 
 	OK(c, gin.H{"id": petID})
 }
@@ -207,7 +207,7 @@ func AdminDeletePet(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_PET', 'pet', $2, '{}')", adminID, petID)
+		"SELECT fn_audit($1, 'DELETE_PET', 'pet', $2, '{}', NULLIF($3, '')::inet)", adminID, petID, auditClientIP(c))
 
 	OK(c, gin.H{"id": petID})
 }

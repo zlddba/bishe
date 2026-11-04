@@ -17,6 +17,10 @@ data class Sitter(
     val desc: String,
     val id: Long = 0,
     val status: String = "active",
+    val coverPhoto: String = "",
+    val photos: List<String> = emptyList(),
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 data class Pet(
@@ -27,9 +31,11 @@ data class Pet(
     val age: String,
     val vaccine: String,
     val cert: String,
-    val orders: Int,
     val note: String,
     val id: Long = 0,
+    val photos: List<String> = emptyList(),
+    val vaccinePhotos: List<String> = emptyList(),
+    val vaccineNote: String = "",
 )
 
 data class Order(
@@ -43,4 +49,10 @@ data class Order(
     val status: String,
     val made: String,
     val id: Long = 0,
+    // 后端原始状态与完整日期：中文标签给人看，按钮该不该出现要看原始值
+    val rawStatus: String = "",
+    val startDate: String = "",
+    val endDate: String = "",
+    // 续住和退款都要求已支付，按钮显隐要用它判断
+    val paid: Boolean = false,
 )

@@ -75,8 +75,8 @@ func ApplySitter(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'APPLY_SITTER', 'sitter', $2, $3)",
-		userID, sitterID, fmt.Sprintf(`{"type": "%s"}`, req.Type))
+		"SELECT fn_audit($1, 'APPLY_SITTER', 'sitter', $2, $3, NULLIF($4, '')::inet)",
+		userID, sitterID, fmt.Sprintf(`{"type": "%s"}`, req.Type), auditClientIP(c))
 
 	OK(c, gin.H{"sitter_id": sitterID, "status": "pending"})
 }

@@ -1,5 +1,7 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +33,7 @@ import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PetCard
 import team.wd.atnestapp.ui.components.PrimaryButton
+import team.wd.atnestapp.ui.components.RemoteImage
 import team.wd.atnestapp.ui.components.TCell
 import team.wd.atnestapp.ui.components.Tag
 import team.wd.atnestapp.ui.components.TagKind
@@ -104,7 +108,7 @@ fun PetsPage(app: AppState) {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 HCell("宠物", 1.2f)
                 HCell("疫苗情况", 1f)
-                HCell("证明", 1f)
+                HCell("免疫证明", 1f)
                 HCell("状态", 1f)
                 HCell("操作", 1f)
             }
@@ -116,19 +120,47 @@ fun PetsPage(app: AppState) {
                 ) {
                     TCell(pet.name, 1.2f)
                     TCell(pet.vaccine, 1f)
-                    TCell(pet.cert, 1f, dim = true)
+                    if (pet.vaccinePhotos.isEmpty()) {
+                        TCell("未上传", 1f, dim = true)
+                    } else {
+                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            pet.vaccinePhotos.take(2).forEach { url ->
+                                RemoteImage(
+                                    url = url,
+                                    modifier = Modifier
+                                        .size(44.dp, 32.dp)
+                                        .clickable { app.modal = ModalKind.Photo(url, "${pet.name} 免疫证明") },
+                                    contentDescription = "${pet.name} 免疫证明",
+                                )
+                            }
+                            if (pet.vaccinePhotos.size > 2) {
+                                Text("+${pet.vaccinePhotos.size - 2}", color = PatNestColors.Ink3, fontSize = 11.sp)
+                            }
+                        }
+                    }
                     Row(Modifier.weight(1f)) {
                         Tag(
                             pet.cert,
-                            if (pet.cert == "已核验") TagKind.Ok else TagKind.Warn,
+                            when (pet.cert) {
+                                "已核验" -> TagKind.Ok
+                                "未通过" -> TagKind.Danger
+                                else -> TagKind.Warn
+                            },
                         )
                     }
                     Row(Modifier.weight(1f)) {
-                        LinkText("上传证明") {
-                            val file = chooseImageFile() ?: return@LinkText
-                            app.scope.launch {
-                                val url = app.uploadImage(file.name, file.readBytes()) ?: return@launch
-                                app.updatePetVaccine(pet.id, listOf(url))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LinkText("编辑") {
+                                app.editingPetId = pet.id
+                                app.go(AppPage.PetEdit)
+                            }
+                            LinkText("上传证明") {
+                                val file = chooseImageFile() ?: return@LinkText
+                                app.scope.launch {
+                                    val url = app.uploadImage(file.name, file.readBytes()) ?: return@launch
+                                    // 追加而不是覆盖：之前上传的接种证不能被一次上传冲掉
+                                    app.updatePetVaccine(pet.id, pet.vaccinePhotos + url)
+                                }
                             }
                         }
                     }

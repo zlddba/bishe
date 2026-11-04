@@ -110,8 +110,8 @@ func AdminBroadcastNotification(c *gin.Context) {
 		}
 		adminID := c.GetInt64("user_id")
 		_, _ = db.Pool.Exec(context.Background(),
-			"SELECT fn_audit($1, 'BROADCAST_NOTIFICATION', 'notification', NULL, $2)",
-			adminID, fmt.Sprintf(`{"title": %q, "target": "all", "count": %d}`, req.Title, tag.RowsAffected()))
+			"SELECT fn_audit($1, 'BROADCAST_NOTIFICATION', 'notification', NULL, $2, NULLIF($3, '')::inet)",
+			adminID, fmt.Sprintf(`{"title": %q, "target": "all", "count": %d}`, req.Title, tag.RowsAffected()), auditClientIP(c))
 		Created(c, fmt.Sprintf("已推送给 %d 位用户", tag.RowsAffected()), gin.H{"sent": tag.RowsAffected()})
 		return
 	}
@@ -127,8 +127,8 @@ func AdminBroadcastNotification(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'BROADCAST_NOTIFICATION', 'notification', NULL, $2)",
-		adminID, fmt.Sprintf(`{"title": %q, "target": %q, "count": %d}`, req.Title, target, tag.RowsAffected()))
+		"SELECT fn_audit($1, 'BROADCAST_NOTIFICATION', 'notification', NULL, $2, NULLIF($3, '')::inet)",
+		adminID, fmt.Sprintf(`{"title": %q, "target": %q, "count": %d}`, req.Title, target, tag.RowsAffected()), auditClientIP(c))
 
 	Created(c, fmt.Sprintf("已推送给 %d 位用户", tag.RowsAffected()), gin.H{"sent": tag.RowsAffected()})
 }
@@ -154,7 +154,7 @@ func AdminDeleteNotification(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_NOTIFICATION', 'notification', $2, '{}')", adminID, id)
+		"SELECT fn_audit($1, 'DELETE_NOTIFICATION', 'notification', $2, '{}', NULLIF($3, '')::inet)", adminID, id, auditClientIP(c))
 
 	OK(c, gin.H{"id": id})
 }

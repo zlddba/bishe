@@ -61,8 +61,8 @@ func AdminCreateSitter(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_SITTER', 'sitter', $2, $3)",
-		adminID, id, fmt.Sprintf(`{"name": "%s"}`, req.Name))
+		"SELECT fn_audit($1, 'CREATE_SITTER', 'sitter', $2, $3, NULLIF($4, '')::inet)",
+		adminID, id, fmt.Sprintf(`{"name": "%s"}`, req.Name), auditClientIP(c))
 
 	Created(c, "机构创建成功", gin.H{"id": id, "name": req.Name})
 }
@@ -181,8 +181,8 @@ func AdminUpdateSitter(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_SITTER', 'sitter', $2, '{}')",
-		adminID, sitterID)
+		"SELECT fn_audit($1, 'UPDATE_SITTER', 'sitter', $2, '{}', NULLIF($3, '')::inet)",
+		adminID, sitterID, auditClientIP(c))
 
 	OK(c, gin.H{"id": sitterID})
 }
@@ -209,8 +209,8 @@ func AdminDeleteSitter(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_SITTER', 'sitter', $2, '{}')",
-		adminID, sitterID)
+		"SELECT fn_audit($1, 'DELETE_SITTER', 'sitter', $2, '{}', NULLIF($3, '')::inet)",
+		adminID, sitterID, auditClientIP(c))
 
 	OK(c, gin.H{"id": sitterID})
 }

@@ -16,13 +16,14 @@ import (
 var startedAt = time.Now()
 
 // Version 返回当前 API 实例的版本信息，供发布校验与管理面板提示更新。
+// 未鉴权可达，所以只给发布门禁真正要比对的四项；Go 运行时版本放给登录后的
+// /admin/system/info，避免公开指纹信息。
 func Version(c *gin.Context) {
 	info := version.Current()
 	OK(c, gin.H{
 		"version":          info.Version,
 		"commit":           info.Commit,
 		"build_time":       info.BuildTime,
-		"go_version":       info.GoVersion,
 		"slot":             info.Slot,
 		"uptime_seconds":   int64(time.Since(startedAt).Seconds()),
 		"started_at":       startedAt.Format(time.RFC3339),

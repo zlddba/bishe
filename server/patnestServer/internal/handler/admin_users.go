@@ -71,8 +71,8 @@ func AdminCreateUser(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_USER', 'user', $2, $3)",
-		adminID, id, fmt.Sprintf(`{"username": "%s", "role": "%s"}`, req.Username, req.Role))
+		"SELECT fn_audit($1, 'CREATE_USER', 'user', $2, $3, NULLIF($4, '')::inet)",
+		adminID, id, fmt.Sprintf(`{"username": "%s", "role": "%s"}`, req.Username, req.Role), auditClientIP(c))
 
 	Created(c, "用户创建成功", gin.H{
 		"id":       id,
@@ -112,6 +112,17 @@ func AdminUpdateUser(c *gin.Context) {
 	if req.Role != nil && userID == adminID {
 		BadRequest(c, "不能变更自己的角色")
 		return
+	}
+
+	// 涉及角色或启用状态时，先过管理员账号保护
+	if req.Role != nil || req.Status != nil {
+		target, ok := loadAdminTarget(c, userID)
+		if !ok {
+			return
+		}
+		if !guardPrivilegedWrite(c, userID, target, true) {
+			return
+		}
 	}
 
 	updates := ""
@@ -169,9 +180,14 @@ func AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
+	// 被禁用或被降级的账号，既有会话（刷新令牌和已签发的访问令牌）立刻作废
+	if req.Status != nil && *req.Status == 0 {
+		revokeAllSessions(userID)
+	}
+
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_USER', 'user', $2, $3)",
-		adminID, userID, fmt.Sprintf(`{"updates": "%s"}`, updates))
+		"SELECT fn_audit($1, 'UPDATE_USER', 'user', $2, $3, NULLIF($4, '')::inet)",
+		adminID, userID, fmt.Sprintf(`{"updates": "%s"}`, updates), auditClientIP(c))
 
 	OK(c, gin.H{"id": userID})
 }
@@ -192,17 +208,16 @@ func AdminDeleteUser(c *gin.Context) {
 		return
 	}
 
-	// Cannot delete system admin (username='admin')
-	var targetUsername string
-	err = db.Pool.QueryRow(context.Background(),
-		"SELECT username FROM users WHERE id = $1 AND deleted_at IS NULL", userID,
-	).Scan(&targetUsername)
-	if err != nil {
-		NotFound(c, "用户不存在")
+	// 内置超级管理员不可删除；其它管理员账号也只有内置管理员能动
+	target, ok := loadAdminTarget(c, userID)
+	if !ok {
 		return
 	}
-	if targetUsername == "admin" {
+	if target.username == superAdminUsername {
 		BadRequest(c, "系统管理员账号不可删除")
+		return
+	}
+	if !guardPrivilegedWrite(c, userID, target, true) {
 		return
 	}
 
@@ -218,9 +233,12 @@ func AdminDeleteUser(c *gin.Context) {
 		return
 	}
 
+	// 账号已停用，既有会话一并作废
+	revokeAllSessions(userID)
+
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_USER', 'user', $2, $3)",
-		adminID, userID, fmt.Sprintf(`{"deleted_username": "%s"}`, targetUsername))
+		"SELECT fn_audit($1, 'DELETE_USER', 'user', $2, $3, NULLIF($4, '')::inet)",
+		adminID, userID, fmt.Sprintf(`{"deleted_username": "%s"}`, target.username), auditClientIP(c))
 
 	OK(c, gin.H{"id": userID})
 }
@@ -240,16 +258,21 @@ func AdminPurgeUser(c *gin.Context) {
 	}
 
 	// 只允许彻底删除已进入"已注销"（软删除）状态的用户
-	var targetUsername string
+	var targetUsername, targetRole string
 	err = db.Pool.QueryRow(context.Background(),
-		"SELECT username FROM users WHERE id = $1 AND deleted_at IS NOT NULL", userID,
-	).Scan(&targetUsername)
+		"SELECT username, role::text FROM users WHERE id = $1 AND deleted_at IS NOT NULL", userID,
+	).Scan(&targetUsername, &targetRole)
 	if err != nil {
 		NotFound(c, "用户不存在或尚未删除（仅已删除的用户可彻底删除）")
 		return
 	}
-	if targetUsername == "admin" {
+	if targetUsername == superAdminUsername {
 		BadRequest(c, "系统管理员账号不可删除")
+		return
+	}
+	// 管理员角色账号（非内置）也只有内置管理员能彻底删除，避免同级互相清除痕迹
+	if targetRole == "admin" && !isSuperAdmin(c) {
+		Forbidden(c, "只有系统管理员可以彻底删除管理员账号")
 		return
 	}
 
@@ -259,8 +282,8 @@ func AdminPurgeUser(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'PURGE_USER', 'user', $2, $3)",
-		adminID, userID, fmt.Sprintf(`{"purged_username": "%s"}`, targetUsername))
+		"SELECT fn_audit($1, 'PURGE_USER', 'user', $2, $3, NULLIF($4, '')::inet)",
+		adminID, userID, fmt.Sprintf(`{"purged_username": "%s"}`, targetUsername), auditClientIP(c))
 
 	OK(c, gin.H{"id": userID, "purged": true})
 }
@@ -278,6 +301,15 @@ func AdminResetPassword(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "密码至少8位: "+err.Error())
+		return
+	}
+
+	// 重置密码等于接管账号，管理员口令不能被"用户管理"权限改掉
+	target, ok := loadAdminTarget(c, userID)
+	if !ok {
+		return
+	}
+	if !guardPasswordReset(c, target) {
 		return
 	}
 
@@ -299,10 +331,13 @@ func AdminResetPassword(c *gin.Context) {
 		return
 	}
 
+	// 重置密码等于接管账号，旧会话必须全部失效
+	revokeAllSessions(userID)
+
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'RESET_PASSWORD', 'user', $2, '{}')",
-		adminID, userID)
+		"SELECT fn_audit($1, 'RESET_PASSWORD', 'user', $2, '{}', NULLIF($3, '')::inet)",
+		adminID, userID, auditClientIP(c))
 
 	OK(c, gin.H{"id": userID})
 }

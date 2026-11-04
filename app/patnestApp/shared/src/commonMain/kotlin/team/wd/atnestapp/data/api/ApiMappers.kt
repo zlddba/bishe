@@ -26,6 +26,10 @@ fun SitterDto.toUi(): Sitter {
         desc = description?.takeIf { it.isNotBlank() } ?: "机构暂未填写简介。",
         id = id,
         status = status,
+        coverPhoto = coverPhotoUrl.orEmpty(),
+        photos = detailPhotos,
+        latitude = latitude,
+        longitude = longitude,
     )
 }
 
@@ -49,10 +53,18 @@ fun PetDto.toUi(): Pet = Pet(
         if (months >= 12) "${months / 12} 岁" else "${months} 个月"
     } ?: "—",
     vaccine = if (vaccinated) "已接种" else "待接种",
-    cert = "—",
-    orders = 0,
+    // 免疫核验状态来自后端 vaccine_status，之前这里写死 "—"，列表永远显示未核验
+    cert = when (vaccineStatus) {
+        "verified" -> "已核验"
+        "pending" -> "待核验"
+        "rejected" -> "未通过"
+        else -> "缺证明"
+    },
     note = notes?.takeIf { it.isNotBlank() } ?: "暂无健康备注",
     id = id,
+    photos = (listOfNotNull(avatarUrl) + photoUrls).filter { it.isNotBlank() }.distinct(),
+    vaccinePhotos = vaccineUrls.filter { it.isNotBlank() },
+    vaccineNote = vaccineNote.orEmpty(),
 )
 
 fun OrderDto.toUi(): Order = Order(
@@ -66,6 +78,10 @@ fun OrderDto.toUi(): Order = Order(
     status = orderStatusLabel(status),
     made = formatDateTime(createdAt),
     id = id,
+    rawStatus = status,
+    startDate = startDate,
+    endDate = endDate,
+    paid = paymentStatus == "paid",
 )
 
 fun FavoriteDto.toUi(): Sitter = Sitter(

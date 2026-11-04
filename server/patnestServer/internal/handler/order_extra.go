@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"time"
 
@@ -93,13 +94,13 @@ func RescheduleOrder(c *gin.Context) {
 		sitterID                       int64
 		oldStart, oldEnd               time.Time
 		petCount                       int
-		oldTotal                       float64
+		oldTotal, oldEstimated         float64
 	)
 	err = tx.QueryRow(context.Background(), `
 		SELECT order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
-		       pet_count, total_amount
+		       pet_count, total_amount, estimated_amount
 		FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &oldStart, &oldEnd, &petCount, &oldTotal)
+		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &oldStart, &oldEnd, &petCount, &oldTotal, &oldEstimated)
 	if err != nil {
 		NotFound(c, "订单不存在")
 		return
@@ -117,8 +118,8 @@ func RescheduleOrder(c *gin.Context) {
 		InternalError(c, err.Error())
 		return
 	}
-	newTotal := newBase
-	if paymentStatus == "paid" && newTotal > oldTotal {
+	newEstimated, newTotal, charge := rescheduleAmounts(oldEstimated, oldTotal, newBase)
+	if paymentStatus == "paid" && charge > 0 {
 		BadRequest(c, "改期后金额高于原订单，请先联系平台补差价")
 		return
 	}
@@ -136,7 +137,7 @@ func RescheduleOrder(c *gin.Context) {
 		UPDATE orders SET start_date = $1, end_date = $2, total_days = $3,
 		       estimated_amount = $4, total_amount = $5, rescheduled_count = rescheduled_count + 1,
 		       updated_at = now()
-		WHERE id = $6`, start, end, totalDays, newBase, newTotal, orderID)
+		WHERE id = $6`, start, end, totalDays, newEstimated, newTotal, orderID)
 	if err != nil {
 		InternalError(c, "改期失败")
 		return
@@ -191,13 +192,13 @@ func RenewOrder(c *gin.Context) {
 		sitterID                       int64
 		start, oldEnd                  time.Time
 		petCount                       int
-		oldTotal                       float64
+		oldTotal, oldEstimated         float64
 	)
 	err = tx.QueryRow(context.Background(), `
 		SELECT order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
-		       pet_count, total_amount
+		       pet_count, total_amount, estimated_amount
 		FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &start, &oldEnd, &petCount, &oldTotal)
+		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &start, &oldEnd, &petCount, &oldTotal, &oldEstimated)
 	if err != nil {
 		NotFound(c, "订单不存在")
 		return
@@ -214,45 +215,55 @@ func RenewOrder(c *gin.Context) {
 		BadRequest(c, "续费日期必须晚于原结束日期")
 		return
 	}
-	delta := int(newEnd.Sub(oldEnd).Hours() / 24)
+	// 续住只对新增的那一段服务计费：按天机构逐日叠加新增夜间的价格（含节假日上浮），
+	// 按次机构相当于再买一次服务。原单的加购、优惠券、积分抵扣保持不动。
 	if _, err := tx.Exec(context.Background(), "SELECT fn_reserve_capacity($1, $2, $3, $4)",
 		sitterID, oldEnd, newEnd, petCount); err != nil {
 		Conflict(c, "续费日期容量不足")
 		return
 	}
-	newBase, err := computeStayAmount(context.Background(), tx, sitterID, start, newEnd, petCount)
+	addedStay, err := computeStayAmount(context.Background(), tx, sitterID, oldEnd, newEnd, petCount)
 	if err != nil {
 		InternalError(c, err.Error())
 		return
 	}
+	newEstimated, newTotal, charge := renewAmounts(oldEstimated, oldTotal, addedStay)
+	delta := int(newEnd.Sub(oldEnd).Hours() / 24)
 	totalDays := int(newEnd.Sub(start).Hours() / 24)
-	_, err = tx.Exec(context.Background(), `
-		UPDATE orders SET end_date = $1, total_days = $2, estimated_amount = $3, total_amount = $3,
-		       updated_at = now() WHERE id = $4`,
-		newEnd, totalDays, newBase, orderID)
-	if err != nil {
+	if _, err = tx.Exec(context.Background(), `
+		UPDATE orders SET end_date = $1, total_days = $2, estimated_amount = $3, total_amount = $4,
+		       updated_at = now() WHERE id = $5
+	`,
+		newEnd, totalDays, newEstimated, newTotal, orderID); err != nil {
 		InternalError(c, "续费失败")
 		return
 	}
-	// 续费产生的增量以一条待支付流水记录，方便后台对账
-	if delta > 0 && newBase > oldTotal {
-		_, _ = tx.Exec(context.Background(),
-			`INSERT INTO payments (order_id, amount, method, transaction_id, status, raw_response)
-			 VALUES ($1, $2, 'mock', $3, 'created', '{"type":"renew_addon"}')`,
-			orderID, newBase-oldTotal, fmt.Sprintf("RENEW-%s-%d", time.Now().Format("20060102"), orderID))
+	// 差价按一条已支付流水立即入账，与 PayOrder 同口径。这样 orders.total_amount 始终等于
+	// 该单收到的支付流水之和，后台退款的金额上限才不会算错。
+	renewTxn := ""
+	if charge > 0 {
+		renewTxn = fmt.Sprintf("RENEW-%s-%d", time.Now().Format("20060102"), orderID)
+		if _, err = tx.Exec(context.Background(),
+			`INSERT INTO payments (order_id, amount, method, transaction_id, status, raw_response, paid_at)
+			 VALUES ($1, $2, 'mock', $3, 'paid', '{"type":"renew_diff"}', now())`,
+			orderID, charge, renewTxn); err != nil {
+			InternalError(c, "写入续费流水失败")
+			return
+		}
 	}
 	var sitterUserID int64
 	_ = tx.QueryRow(context.Background(), "SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID)
 	_, _ = tx.Exec(context.Background(),
 		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4)",
-		sitterUserID, "订单续费", fmt.Sprintf("订单 %s 续费至 %s", orderNo, in.EndDate),
+		sitterUserID, "订单续费", fmt.Sprintf("订单 %s 续费至 %s，补收差价 %.2f 元", orderNo, in.EndDate, charge),
 		fmt.Sprintf(`{"order_id": %d}`, orderID))
 	if err := tx.Commit(context.Background()); err != nil {
 		InternalError(c, "续费失败")
 		return
 	}
 	OK(c, gin.H{"order_id": orderID, "end_date": in.EndDate, "total_days": totalDays,
-		"total_amount": newBase, "extra_days": delta})
+		"total_amount": newTotal, "extra_days": delta, "extra_amount": charge,
+		"transaction_id": renewTxn})
 }
 
 // StartOrderExpiryWorker 定时取消超时未支付的订单并释放容量。
@@ -306,15 +317,13 @@ func expireOneOrder(ctx context.Context, orderID int64) error {
 
 	var (
 		ownerID         int64
-		sitterID        int64
-		start, end      time.Time
-		petCount        int
 		orderNo, status string
 	)
+	// 行锁保留：状态判断和下面的 UPDATE 之间不能被并发插队。
 	if err := tx.QueryRow(ctx, `
-		SELECT order_no, status::text, owner_id, sitter_id, start_date, end_date, pet_count
+		SELECT order_no, status::text, owner_id
 		FROM orders WHERE id = $1 FOR UPDATE`, orderID,
-	).Scan(&orderNo, &status, &ownerID, &sitterID, &start, &end, &petCount); err != nil {
+	).Scan(&orderNo, &status, &ownerID); err != nil {
 		return err
 	}
 	if status != "pending_pay" {
@@ -325,13 +334,44 @@ func expireOneOrder(ctx context.Context, orderID int64) error {
 		       cancel_time = now(), updated_at = now() WHERE id = $1`, orderID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "SELECT fn_release_capacity($1, $2, $3, $4)",
-		sitterID, start, end, petCount); err != nil {
-		return err
-	}
+	// 容量不在这里手动释放：pending_pay -> cancelled 命中 trg_order_cancel_release，
+	// 触发器已经退回一次。再调一遍会把同一天其他在住订单占的床位也算成空位，造成超卖。
 	_, _ = tx.Exec(ctx, "SELECT fn_notify($1, 'order_cancelled', $2, $3, $4)",
 		ownerID, "订单已超时取消",
 		fmt.Sprintf("订单 %s 超过支付时限，已自动取消并释放床位", orderNo),
 		fmt.Sprintf(`{"order_id": %d}`, orderID))
 	return tx.Commit(ctx)
+}
+
+// roundMoney 把金额收敛到两位小数，避免逐日累加的浮点尾差进入支付流水。
+func roundMoney(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+// renewAmounts 计算续住后的订单金额。charge 只叠加一次，绝不把 total_amount 覆盖成
+// 整段住宿基础价（那样会吃掉加购、优惠券和积分抵扣，退款上限也会跟着错）。
+func renewAmounts(oldEstimated, oldTotal, addedStay float64) (estimated, total, charge float64) {
+	charge = roundMoney(addedStay)
+	if charge < 0 {
+		charge = 0
+	}
+	estimated = roundMoney(oldEstimated + charge)
+	total = roundMoney(oldTotal + charge)
+	if total < 0 {
+		total = 0
+	}
+	return estimated, total, charge
+}
+
+// rescheduleAmounts 计算改期后的订单金额：只有住宿基础价的变化进入订单金额，
+// 加购服务费、优惠券与积分抵扣随原单保持不变。charge 为正表示需要补差价，
+// 为负表示改成了更便宜的档期（已支付订单在应用层直接拦下补差价的情况）。
+func rescheduleAmounts(oldEstimated, oldTotal, newStay float64) (estimated, total, charge float64) {
+	charge = roundMoney(newStay - oldEstimated)
+	estimated = roundMoney(newStay)
+	total = roundMoney(oldTotal + charge)
+	if total < 0 {
+		total = 0
+	}
+	return estimated, total, charge
 }

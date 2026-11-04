@@ -37,7 +37,8 @@ func main() {
 		cfg.AppPort, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.MinIOEndpoint)
 
 	// Initialize JWT
-	middleware.InitJWT(cfg.JWTSecret)
+	middleware.InitJWT(cfg.JWTSecret, time.Duration(cfg.JWTAccessTTLMinutes)*time.Minute)
+	log.Printf("[Auth] access token TTL = %d minutes", cfg.JWTAccessTTLMinutes)
 
 	// 高德 Web 服务：地址转坐标（桌面端等无系统定位的客户端用），Key 只在后端
 	amap.Init(cfg.AMapKey, cfg.AMapBaseURL)
@@ -109,6 +110,8 @@ func main() {
 	log.Println("[Worker] Push task worker started (1m scan).")
 	handler.StartAccountCancelWorker(workerCtx, time.Minute)
 	log.Println("[Worker] Account cancel worker started (1m scan, 72h cooling).")
+	handler.StartAuditCleanupWorker(workerCtx, 24*time.Hour)
+	log.Println("[Worker] Audit log cleanup worker started (daily, 180d retention).")
 
 	// --- Start HTTP Server ---
 	addr := fmt.Sprintf(":%d", cfg.AppPort)

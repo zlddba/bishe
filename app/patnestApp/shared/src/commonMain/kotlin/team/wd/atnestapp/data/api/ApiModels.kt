@@ -63,6 +63,18 @@ data class AuthResponseDto(
     @SerialName("cancel_withdrawn") val cancelWithdrawn: Boolean = false,
 )
 
+/** 用刷新令牌换一张新的访问令牌 */
+@Serializable
+data class RefreshPayload(@SerialName("refresh_token") val refreshToken: String)
+
+@Serializable
+data class RefreshResult(
+    @SerialName("access_token") val accessToken: String = "",
+    @SerialName("expires_in") val expiresIn: Long = 0,
+    /** 服务端做了刷新令牌轮换：每次刷新都会给一张新的，旧的当场作废 */
+    @SerialName("refresh_token") val refreshToken: String = "",
+)
+
 /** 申请注销：mode=account 整个账户 / sitter 仅注销机构。 */
 @Serializable
 data class CancelRequestPayload(val mode: String)
@@ -134,6 +146,9 @@ data class PetDto(
     val sterilized: Boolean = false,
     @SerialName("photo_urls") val photoUrls: List<String> = emptyList(),
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("vaccine_urls") val vaccineUrls: List<String> = emptyList(),
+    @SerialName("vaccine_status") val vaccineStatus: String = "missing",
+    @SerialName("vaccine_note") val vaccineNote: String? = null,
     val notes: String? = null,
 )
 
@@ -263,6 +278,10 @@ data class FavoriteResult(@SerialName("sitter_id") val sitterId: Long = 0)
 @Serializable
 data class UpdatedResult(val updated: Boolean = false)
 
+/** 后端用 {"updated": 条数} 回值的接口（如通知全部已读） */
+@Serializable
+data class CountResult(val updated: Int = 0)
+
 /** 无 data 字段时的响应信封（仅用于读取 code / message）。 */
 @Serializable
 data class ApiStatus(val code: Int = 0, val message: String = "")
@@ -361,6 +380,59 @@ data class SitterCouponPayload(
 )
 @Serializable
 data class ClaimResult(val id: Long = 0)
+
+/** 取消订单：后端只回一句说明 */
+@Serializable
+data class CancelResult(val message: String = "")
+
+@Serializable
+data class RescheduleResult(
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("start_date") val startDate: String = "",
+    @SerialName("end_date") val endDate: String = "",
+    @SerialName("total_days") val totalDays: Int = 0,
+    @SerialName("total_amount") val totalAmount: Double = 0.0,
+)
+
+@Serializable
+data class RenewResult(
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("end_date") val endDate: String = "",
+    @SerialName("total_days") val totalDays: Int = 0,
+    @SerialName("total_amount") val totalAmount: Double = 0.0,
+    @SerialName("extra_days") val extraDays: Int = 0,
+    @SerialName("extra_amount") val extraAmount: Double = 0.0,
+    @SerialName("transaction_id") val transactionId: String = "",
+)
+
+/** 宠物历史寄养记录（后端把 DATE 都转成了字符串） */
+@Serializable
+data class PetStayDto(
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("order_no") val orderNo: String = "",
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    @SerialName("sitter_name") val sitterName: String = "",
+    val status: String = "",
+    @SerialName("start_date") val startDate: String = "",
+    @SerialName("end_date") val endDate: String = "",
+    @SerialName("total_days") val totalDays: Int = 0,
+    @SerialName("stay_date") val stayDate: String = "",
+    @SerialName("total_amount") val totalAmount: Double = 0.0,
+)
+
+@Serializable
+data class PetStayListDto(
+    @SerialName("pet_id") val petId: Long = 0,
+    val total: Int = 0,
+    val items: List<PetStayDto> = emptyList(),
+)
+
+/** 动态点赞结果 */
+@Serializable
+data class LikeResult(
+    @SerialName("dynamic_id") val dynamicId: Long = 0,
+    val liked: Boolean = false,
+)
 
 @Serializable
 data class UpdateShopPayload(
@@ -582,6 +654,24 @@ data class AddonDto(
     val name: String = "",
     val price: Double = 0.0,
     val unit: String = "次",
+    val enabled: Boolean = true,
+)
+
+/** 新增加购服务：price 后端要求必填且大于 0 */
+@Serializable
+data class AddonPayload(
+    val name: String,
+    val price: Double,
+    val unit: String = "per_order",
+)
+
+/** 改加购服务：null 表示这一项不动 */
+@Serializable
+data class AddonUpdatePayload(
+    val name: String? = null,
+    val price: Double? = null,
+    val unit: String? = null,
+    val enabled: Boolean? = null,
 )
 
 @Serializable
@@ -599,6 +689,115 @@ data class CreatePetPayload(
     val notes: String = "",
     @SerialName("avatar_url") val avatarUrl: String = "",
     @SerialName("photo_urls") val photoUrls: List<String> = emptyList(),
+)
+
+/** 编辑宠物档案：可空字段，后端按指针只更新传了的那几项 */
+@Serializable
+data class UpdatePetPayload(
+    val name: String? = null,
+    val species: String? = null,
+    val breed: String? = null,
+    @SerialName("body_size") val bodySize: String? = null,
+    @SerialName("age_month") val ageMonth: Int? = null,
+    val vaccinated: Boolean? = null,
+    val sterilized: Boolean? = null,
+    @SerialName("photo_urls") val photoUrls: List<String>? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val notes: String? = null,
+)
+
+/** 只需要一个原因字段的接口（取消订单等） */
+@Serializable
+data class ReasonPayload(val reason: String = "")
+
+@Serializable
+data class ReschedulePayload(
+    @SerialName("start_date") val startDate: String,
+    @SerialName("end_date") val endDate: String,
+)
+
+@Serializable
+data class RenewPayload(@SerialName("end_date") val endDate: String)
+
+@Serializable
+data class RefundPayload(val reason: String, val amount: Double? = null)
+
+@Serializable
+data class TicketPayload(
+    val category: String = "other",
+    val title: String,
+    val content: String,
+)
+
+@Serializable
+data class TicketDto(
+    val id: Long = 0,
+    @SerialName("ticket_no") val ticketNo: String = "",
+    val category: String = "",
+    val title: String = "",
+    val status: String = "open",
+    val priority: String = "normal",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class TicketListDto(val items: List<TicketDto> = emptyList())
+
+@Serializable
+data class RefundDto(
+    val id: Long = 0,
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("order_no") val orderNo: String = "",
+    val amount: Double = 0.0,
+    val reason: String = "",
+    val status: String = "pending",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class RefundListDto(val items: List<RefundDto> = emptyList())
+
+@Serializable
+data class PointsEntryDto(
+    val change: Int = 0,
+    val balance: Int = 0,
+    val reason: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class PointsDto(
+    val balance: Int = 0,
+    val rate: Int = 0,
+    val items: List<PointsEntryDto> = emptyList(),
+)
+
+/** 下单前估价的明细行：type 为 base / addon / discount / points */
+@Serializable
+data class EstimateLineDto(
+    val type: String = "",
+    val label: String = "",
+    val amount: Double = 0.0,
+    val price: Double? = null,
+    val qty: Int? = null,
+    @SerialName("points_used") val pointsUsed: Int? = null,
+)
+
+/** 与下单同一套计费口径，页面用它显示"钱是怎么算出来的" */
+@Serializable
+data class EstimateDto(
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    @SerialName("sitter_name") val sitterName: String = "",
+    @SerialName("total_days") val totalDays: Int = 0,
+    @SerialName("pet_count") val petCount: Int = 0,
+    @SerialName("estimated_amount") val estimatedAmount: Double = 0.0,
+    @SerialName("addon_amount") val addonAmount: Double = 0.0,
+    val subtotal: Double = 0.0,
+    @SerialName("discount_amount") val discountAmount: Double = 0.0,
+    @SerialName("points_used") val pointsUsed: Int = 0,
+    @SerialName("points_discount") val pointsDiscount: Double = 0.0,
+    @SerialName("total_amount") val totalAmount: Double = 0.0,
+    val breakdown: List<EstimateLineDto> = emptyList(),
 )
 
 @Serializable

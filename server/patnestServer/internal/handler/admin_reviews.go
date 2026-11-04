@@ -75,8 +75,8 @@ func AdminCreateReview(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_REVIEW', 'review', $2, $3)",
-		adminID, id, fmt.Sprintf(`{"order_id": %d}`, req.OrderID))
+		"SELECT fn_audit($1, 'CREATE_REVIEW', 'review', $2, $3, NULLIF($4, '')::inet)",
+		adminID, id, fmt.Sprintf(`{"order_id": %d}`, req.OrderID), auditClientIP(c))
 
 	Created(c, "评价已创建", gin.H{"id": id})
 }
@@ -158,7 +158,7 @@ func AdminUpdateReview(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_REVIEW', 'review', $2, '{}')", adminID, reviewID)
+		"SELECT fn_audit($1, 'UPDATE_REVIEW', 'review', $2, '{}', NULLIF($3, '')::inet)", adminID, reviewID, auditClientIP(c))
 
 	OK(c, gin.H{"id": reviewID})
 }
@@ -184,7 +184,7 @@ func AdminDeleteReview(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_REVIEW', 'review', $2, '{}')", adminID, reviewID)
+		"SELECT fn_audit($1, 'DELETE_REVIEW', 'review', $2, '{}', NULLIF($3, '')::inet)", adminID, reviewID, auditClientIP(c))
 
 	OK(c, gin.H{"id": reviewID})
 }

@@ -2,6 +2,7 @@ package team.wd.atnestapp.ui.pages.owner
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +31,13 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.ui.AppState
 import team.wd.atnestapp.ui.DrawerKind
+import team.wd.atnestapp.ui.ModalKind
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.components.LinkText
 import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
+import team.wd.atnestapp.ui.components.RemoteImage
 import team.wd.atnestapp.ui.components.Tag
 import team.wd.atnestapp.ui.components.TagKind
 import team.wd.atnestapp.ui.theme.PatNestColors
@@ -56,7 +59,8 @@ fun DynamicsPage(app: AppState) {
             .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 40.dp),
     ) {
         PageHeader("寄养动态", "全部寄养订单的动态更新") {
-            Tag("已订阅动态提醒", TagKind.Warn, onClick = { app.toast("已开启订阅消息") })
+            // 订阅消息依赖小程序资质，桌面端做不到；这里只说明站内消息这条真实存在的通道
+            Tag("新动态会进消息通知", TagKind.Warn)
         }
 
         when {
@@ -86,15 +90,27 @@ fun DynamicsPage(app: AppState) {
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(15.dp),
                     ) {
-                        Box(
-                            Modifier
-                                .width(100.dp)
-                                .height(90.dp)
-                                .clip(PatNestShape.Md)
-                                .background(Brush.linearGradient(listOf(PatNestColors.Brand50, PatNestColors.BrandSoft))),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(AppIcon.Image, Modifier.size(32.dp), PatNestColors.BrandInk)
+                        val cover = dynamic.photos.firstOrNull().orEmpty()
+                        if (cover.isNotBlank()) {
+                            RemoteImage(
+                                url = cover,
+                                modifier = Modifier
+                                    .width(100.dp)
+                                    .height(90.dp)
+                                    .clickable { app.modal = ModalKind.Photo(cover, "寄养动态") },
+                                contentDescription = "动态配图",
+                            )
+                        } else {
+                            Box(
+                                Modifier
+                                    .width(100.dp)
+                                    .height(90.dp)
+                                    .clip(PatNestShape.Md)
+                                    .background(Brush.linearGradient(listOf(PatNestColors.Brand50, PatNestColors.BrandSoft))),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AppIcon(AppIcon.Image, Modifier.size(32.dp), PatNestColors.BrandInk)
+                            }
                         }
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -116,7 +132,11 @@ fun DynamicsPage(app: AppState) {
                             )
                             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 LinkText("查看详情") { app.drawer = DrawerKind.DynDetail(index) }
-                                LinkText("点赞") { app.toast("已点赞") }
+                                LinkText(
+                                    if (app.likedDynamics.contains(dynamic.id)) "已点赞" else "点赞",
+                                ) {
+                                    app.scope.launch { app.toggleDynamicLike(dynamic.id) }
+                                }
                             }
                         }
                     }

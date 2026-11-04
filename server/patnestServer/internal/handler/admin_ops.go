@@ -13,14 +13,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// writeAudit 统一写后台审计日志。
+// auditClientIP 取调用方 IP，交给 fn_audit 的 p_ip 参数。
+// 依赖 router.SetTrustedProxies 解析 X-Forwarded-For；拿不到时返回空串，SQL 侧转 NULL。
+func auditClientIP(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return c.ClientIP()
+}
+
+// writeAudit 统一写后台审计日志（含来源 IP）。
 func writeAudit(c *gin.Context, action, targetType string, targetID int64, detail string) {
 	if detail == "" {
 		detail = "{}"
 	}
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, $2, $3, NULLIF($4::bigint, 0::bigint), $5::jsonb)",
-		c.GetInt64("user_id"), action, targetType, targetID, detail)
+		"SELECT fn_audit($1, $2, $3, NULLIF($4::bigint, 0::bigint), $5::jsonb, NULLIF($6, '')::inet)",
+		c.GetInt64("user_id"), action, targetType, targetID, detail, auditClientIP(c))
 }
 
 func paging(c *gin.Context, maxPerPage int) (int, int, int) {

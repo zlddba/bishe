@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.ui.AppState
 import team.wd.atnestapp.ui.components.AppIcon
+import team.wd.atnestapp.ui.components.GhostButton
 import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
@@ -45,13 +46,26 @@ fun MessagesPage(app: AppState) {
         }
     }
 
+    val unread = app.notifications.count { !it.isRead }
+
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 40.dp),
     ) {
-        PageHeader("消息通知", "订单、动态与系统消息")
+        PageHeader(
+            "消息通知",
+            if (unread > 0) "订单、动态与系统消息 · ${unread} 条未读" else "订单、动态与系统消息",
+            trailing = {
+                GhostButton("全部已读", {
+                    app.scope.launch { app.markAllNotificationsRead() }
+                }, height = 32.dp)
+                PrimaryButton("刷新", {
+                    app.scope.launch { app.loadNotifications(force = true) }
+                }, height = 32.dp)
+            },
+        )
 
         when {
             app.notificationsLoading && app.notifications.isEmpty() -> {

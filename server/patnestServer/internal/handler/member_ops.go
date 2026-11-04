@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -128,9 +129,9 @@ func ChangeMyPassword(c *gin.Context) {
 		InternalError(c, "修改密码失败")
 		return
 	}
-	// 改密后其他设备上的刷新令牌全部失效
-	_, _ = db.Pool.Exec(context.Background(),
-		"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", userID)
+	// 改密后作废其它设备的会话（刷新令牌全部吊销），
+	// 但吊销点设在本次登录的签发时间，自己这台设备不会被踢下线
+	revokeSessionsBefore(userID, currentTokenIssuedAt(c))
 	OK(c, gin.H{"updated": true})
 }
 
@@ -513,6 +514,8 @@ func SetSitterCapacity(c *gin.Context) {
 		InternalError(c, "设置容量失败: "+err.Error())
 		return
 	}
+	writeAudit(c, "SITTER_SET_CAPACITY", "sitter", sitterID,
+		fmt.Sprintf(`{"sitter_id":%d,"date":%q,"capacity":%d}`, sitterID, in.Date, in.Capacity))
 	OK(c, gin.H{"date": in.Date, "capacity": in.Capacity})
 }
 
@@ -576,6 +579,8 @@ func CreatePriceRule(c *gin.Context) {
 		InternalError(c, "创建定价规则失败")
 		return
 	}
+	writeAudit(c, "SITTER_CREATE_PRICE_RULE", "price_rule", id,
+		fmt.Sprintf(`{"sitter_id":%d,"name":%q,"start":%q,"end":%q,"multiplier":%g}`, sitterID, in.Name, in.StartDate, in.EndDate, in.Multiplier))
 	Created(c, "已创建", gin.H{"id": id})
 }
 
@@ -596,12 +601,17 @@ func DeletePriceRule(c *gin.Context) {
 		NotFound(c, "规则不存在")
 		return
 	}
+	writeAudit(c, "SITTER_DELETE_PRICE_RULE", "price_rule", id,
+		fmt.Sprintf(`{"sitter_id":%d}`, sitterID))
 	OK(c, gin.H{"id": id})
 }
 
 func ListAddons(c *gin.Context) {
 	var sitterID int64
+	// 机构自己看自己：下架的服务项也要列出来，否则下架后就再也找不回来
+	ownView := true
 	if idStr := c.Param("id"); idStr != "" {
+		ownView = false
 		sitterID, _ = strconv.ParseInt(idStr, 10, 64)
 		// 主人浏览路径：封禁/下架机构的加购服务不对外展示
 		var isActive bool
@@ -621,7 +631,7 @@ func ListAddons(c *gin.Context) {
 	}
 	rows, err := db.Pool.Query(context.Background(), `
 		SELECT id, name, price, unit, enabled FROM sitter_addons
-		WHERE sitter_id = $1 AND enabled ORDER BY id`, sitterID)
+		WHERE sitter_id = $1 AND ($2::boolean OR enabled) ORDER BY id`, sitterID, ownView)
 	if err != nil {
 		InternalError(c, "查询加购服务失败")
 		return
@@ -633,9 +643,11 @@ func ListAddons(c *gin.Context) {
 		var name, unit string
 		var price float64
 		var enabled bool
-		if err := rows.Scan(&id, &name, &price, &unit, &enabled); err == nil {
-			items = append(items, gin.H{"id": id, "name": name, "price": price, "unit": unit, "enabled": enabled})
+		if err := rows.Scan(&id, &name, &price, &unit, &enabled); err != nil {
+			log.Printf("[ListAddons] scan error: %v", err)
+			continue
 		}
+		items = append(items, gin.H{"id": id, "name": name, "price": price, "unit": unit, "enabled": enabled})
 	}
 	OK(c, gin.H{"sitter_id": sitterID, "items": items})
 }
@@ -666,6 +678,8 @@ func CreateAddon(c *gin.Context) {
 		InternalError(c, "创建加购服务失败")
 		return
 	}
+	writeAudit(c, "SITTER_CREATE_ADDON", "addon", id,
+		fmt.Sprintf(`{"sitter_id":%d,"name":%q,"price":%g}`, sitterID, in.Name, in.Price))
 	Created(c, "已创建", gin.H{"id": id})
 }
 
@@ -699,6 +713,8 @@ func UpdateAddon(c *gin.Context) {
 		NotFound(c, "服务不存在")
 		return
 	}
+	writeAudit(c, "SITTER_UPDATE_ADDON", "addon", id,
+		fmt.Sprintf(`{"sitter_id":%d}`, sitterID))
 	OK(c, gin.H{"id": id})
 }
 
@@ -714,6 +730,8 @@ func DeleteAddon(c *gin.Context) {
 		InternalError(c, "删除失败")
 		return
 	}
+	writeAudit(c, "SITTER_DELETE_ADDON", "addon", id,
+		fmt.Sprintf(`{"sitter_id":%d}`, sitterID))
 	OK(c, gin.H{"id": id, "enabled": false})
 }
 
@@ -968,6 +986,9 @@ func ReplyMyTicket(c *gin.Context) {
 
 func LikeDynamic(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if !requireDynamicAccess(c, id) {
+		return
+	}
 	_, err := db.Pool.Exec(context.Background(),
 		"INSERT INTO dynamic_likes (dynamic_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
 		id, c.GetInt64("user_id"))
@@ -980,6 +1001,9 @@ func LikeDynamic(c *gin.Context) {
 
 func UnlikeDynamic(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if !requireDynamicAccess(c, id) {
+		return
+	}
 	_, _ = db.Pool.Exec(context.Background(),
 		"DELETE FROM dynamic_likes WHERE dynamic_id = $1 AND user_id = $2", id, c.GetInt64("user_id"))
 	OK(c, gin.H{"dynamic_id": id, "liked": false})
@@ -987,6 +1011,9 @@ func UnlikeDynamic(c *gin.Context) {
 
 func ListDynamicComments(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if !requireDynamicAccess(c, id) {
+		return
+	}
 	rows, err := db.Pool.Query(context.Background(), `
 		SELECT m.id, COALESCE(u.nickname, u.username), m.content, to_char(m.created_at, 'YYYY-MM-DD HH24:MI')
 		FROM dynamic_comments m JOIN users u ON u.id = m.user_id
@@ -1017,6 +1044,9 @@ func CreateDynamicComment(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		BadRequest(c, "请填写留言内容")
+		return
+	}
+	if !requireDynamicAccess(c, id) {
 		return
 	}
 	var mid int64

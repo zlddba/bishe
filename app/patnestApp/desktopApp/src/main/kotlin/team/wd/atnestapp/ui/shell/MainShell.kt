@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import team.wd.atnestapp.ui.AppPage
@@ -242,10 +243,11 @@ private fun RailNav(app: AppState) {
                     color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                 )
             }
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     displayName,
                     color = PatNestColors.Ink, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     when {
@@ -255,10 +257,12 @@ private fun RailNav(app: AppState) {
                     },
                     color = PatNestColors.Ink3, fontSize = 10.5.sp,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (app.loggedIn) {
-                Spacer(Modifier.weight(1f))
+                // 名称列已经占掉剩余宽度，这里只留一点间距，否则退出按钮会被挤出侧栏
+                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .size(26.dp)

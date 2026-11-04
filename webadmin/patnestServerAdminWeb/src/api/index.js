@@ -35,9 +35,41 @@ request.interceptors.request.use((config) => {
   return config
 })
 
-// 登录/登出接口自身的 401 不做全局登出处理，避免死循环和误伤新会话。
+// 登录/登出/刷新接口自身的 401 不做全局处理，避免死循环和误伤新会话。
 function isAuthEndpoint(url = '') {
-  return url.includes('/auth/login') || url.includes('/auth/logout')
+  return url.includes('/auth/login') || url.includes('/auth/logout') || url.includes('/auth/refresh')
+}
+
+// 同一时刻只发一次刷新请求，其它撞上 401 的请求共用这个 Promise。
+let refreshPromise = null
+
+function refreshSession() {
+  const auth = useAuthStore()
+  if (!auth.refreshToken) return Promise.resolve(false)
+  if (!refreshPromise) {
+    refreshPromise = request
+      .post('/auth/refresh', { refresh_token: auth.refreshToken })
+      .then((res) => {
+        auth.applyAccessToken(res.data?.access_token || '', res.data?.refresh_token || '')
+        return !!auth.token
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
+// 只有"发起该请求时的会话"仍是当前会话，才说明登录态真的失效了。
+// 否则是上一次会话的请求迟到返回，不能清掉刚登录成功的新令牌。
+function expireSession(config) {
+  const auth = useAuthStore()
+  if (!auth.token || config._pnSession !== auth.sessionSeq) return
+  auth.clearSession()
+  if (router.currentRoute.value.path !== '/login') {
+    router.replace('/login')
+  }
 }
 
 request.interceptors.response.use(
@@ -52,19 +84,17 @@ request.interceptors.response.use(
   },
   (err) => {
     if (err.response?.status === 401 && !isAuthEndpoint(err.config?.url)) {
-      const auth = useAuthStore()
-      // 只有“发起该请求时的会话”仍是当前会话，才说明登录态真的失效了。
-      // 否则是上一次会话的请求迟到返回，不能清掉刚登录成功的新令牌。
-      const sameSession =
-        !!auth.token &&
-        err.config?._pnToken === auth.token &&
-        err.config?._pnSession === auth.sessionSeq
-      if (sameSession) {
-        auth.clearSession()
-        if (router.currentRoute.value.path !== '/login') {
-          router.replace('/login')
-        }
+      // 访问令牌过期是常态：先静默换一张，原请求重放一次，管理员不会因此退回登录页。
+      const config = err.config || {}
+      if (!config._pnRetried && config._pnToken) {
+        config._pnRetried = true
+        return refreshSession().then((ok) => {
+          if (ok) return request(config)
+          expireSession(config)
+          return Promise.reject(err)
+        })
       }
+      expireSession(config)
     }
     return Promise.reject(err)
   }

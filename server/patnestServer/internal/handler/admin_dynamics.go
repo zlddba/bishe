@@ -59,8 +59,8 @@ func AdminCreateDynamic(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_DYNAMIC', 'dynamic', $2, $3)",
-		adminID, id, fmt.Sprintf(`{"order_id": %d}`, req.OrderID))
+		"SELECT fn_audit($1, 'CREATE_DYNAMIC', 'dynamic', $2, $3, NULLIF($4, '')::inet)",
+		adminID, id, fmt.Sprintf(`{"order_id": %d}`, req.OrderID), auditClientIP(c))
 
 	Created(c, "动态已发布", gin.H{"id": id})
 }
@@ -119,7 +119,7 @@ func AdminUpdateDynamic(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_DYNAMIC', 'dynamic', $2, '{}')", adminID, dynamicID)
+		"SELECT fn_audit($1, 'UPDATE_DYNAMIC', 'dynamic', $2, '{}', NULLIF($3, '')::inet)", adminID, dynamicID, auditClientIP(c))
 
 	OK(c, gin.H{"id": dynamicID})
 }
@@ -145,7 +145,7 @@ func AdminDeleteDynamic(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_DYNAMIC', 'dynamic', $2, '{}')", adminID, dynamicID)
+		"SELECT fn_audit($1, 'DELETE_DYNAMIC', 'dynamic', $2, '{}', NULLIF($3, '')::inet)", adminID, dynamicID, auditClientIP(c))
 
 	OK(c, gin.H{"id": dynamicID})
 }

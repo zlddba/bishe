@@ -152,12 +152,26 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 	if req.UserCouponID > 0 {
-		_, _ = tx.Exec(context.Background(),
-			`UPDATE user_coupons SET status = 'used', order_id = $1, used_at = now() WHERE id = $2`,
-			orderID, req.UserCouponID)
-		_, _ = tx.Exec(context.Background(),
+		// 金额里已经扣过这张券。核销失败却继续提交，就会留下"钱已减、券还能再用"的重复用券口子，
+		// 所以这里必须判错回滚；UPDATE 也带上校验过的状态条件，和退回逻辑一样按行状态天然幂等。
+		tag, err := tx.Exec(context.Background(),
+			`UPDATE user_coupons SET status = 'used', order_id = $1, used_at = now()
+			 WHERE id = $2 AND user_id = $3 AND status = 'unused'`,
+			orderID, req.UserCouponID, ownerID)
+		if err != nil {
+			InternalError(c, "核销优惠券失败: "+err.Error())
+			return
+		}
+		if tag.RowsAffected() != 1 {
+			Conflict(c, "优惠券已被使用，请重新选择")
+			return
+		}
+		if _, err = tx.Exec(context.Background(),
 			`UPDATE coupons SET used_qty = used_qty + 1
-			 WHERE id = (SELECT coupon_id FROM user_coupons WHERE id = $1)`, req.UserCouponID)
+			 WHERE id = (SELECT coupon_id FROM user_coupons WHERE id = $1)`, req.UserCouponID); err != nil {
+			InternalError(c, "更新优惠券用量失败: "+err.Error())
+			return
+		}
 	}
 	if req.PointsUsed > 0 {
 		var balance int

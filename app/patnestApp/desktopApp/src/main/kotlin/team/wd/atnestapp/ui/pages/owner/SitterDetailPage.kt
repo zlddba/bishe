@@ -1,6 +1,7 @@
 package team.wd.atnestapp.ui.pages.owner
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import team.wd.atnestapp.ui.AppPage
 import team.wd.atnestapp.ui.AppState
+import team.wd.atnestapp.ui.ModalKind
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.components.CalDayCard
 import team.wd.atnestapp.ui.components.GhostButton
@@ -41,17 +43,20 @@ import team.wd.atnestapp.ui.components.LinkText
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
 import team.wd.atnestapp.ui.components.ReviewItem
+import team.wd.atnestapp.ui.components.RemoteImage
 import team.wd.atnestapp.ui.components.ServiceRow
 import team.wd.atnestapp.ui.components.StarRating
 import team.wd.atnestapp.ui.components.Tag
 import team.wd.atnestapp.ui.components.TagKind
 import team.wd.atnestapp.ui.components.ThinDivider
 import team.wd.atnestapp.ui.components.sitterGradient
+import team.wd.atnestapp.ui.components.addonUnitLabel
 import team.wd.atnestapp.data.api.CapacityItemDto
 import team.wd.atnestapp.ui.data.CalDay
 import team.wd.atnestapp.ui.theme.PatNestColors
 import team.wd.atnestapp.ui.theme.PatNestShape
 import team.wd.atnestapp.ui.theme.patCard
+import team.wd.atnestapp.ui.util.openInAmapWeb
 import kotlinx.coroutines.launch
 
 @Composable
@@ -127,6 +132,16 @@ fun SitterDetailPage(app: AppState) {
                         .background(Color.White.copy(alpha = 0.08f)),
                 )
                 AppIcon(AppIcon.Image, Modifier.align(Alignment.Center).size(44.dp), Color.White.copy(alpha = 0.9f))
+                if (sitter.coverPhoto.isNotBlank()) {
+                    RemoteImage(
+                        url = sitter.coverPhoto,
+                        modifier = Modifier.matchParentSize().clickable {
+                            app.modal = ModalKind.Photo(sitter.coverPhoto, sitter.name)
+                        },
+                        contentDescription = "${sitter.name} 封面",
+                        shape = RoundedCornerShape(0.dp),
+                    )
+                }
                 Tag(
                     sitter.type,
                     TagKind.Glass,
@@ -164,17 +179,56 @@ fun SitterDetailPage(app: AppState) {
                     )
                 }
                 Text(
-                    "地址：${sitter.addr}　容量 ${sitter.cap}　负责人 ${sitter.owner}　${sitter.tel}",
+                    listOfNotNull(
+                        "地址：${sitter.addr}".takeIf { sitter.addr.isNotBlank() },
+                        "容量 ${sitter.cap}".takeIf { sitter.cap != "—" },
+                        "负责人 ${sitter.owner}".takeIf { sitter.owner != "—" },
+                        sitter.tel.takeIf { it.isNotBlank() && it != "—" },
+                    ).joinToString("　"),
                     color = PatNestColors.Ink2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp),
                 )
-                Text(
-                    "标签：${sitter.tags}",
-                    color = PatNestColors.Ink2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp),
-                )
+                if (sitter.tags.isNotBlank()) {
+                    Text(
+                        "标签：${sitter.tags}",
+                        color = PatNestColors.Ink2, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                // 有坐标才给导航入口，避免点出一个空位置
+                // shared 里的属性不能直接智能转换，先收到本地变量再判空
+                val sitterLat = sitter.latitude
+                val sitterLng = sitter.longitude
+                if (sitterLat != null && sitterLng != null) {
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LinkText("在高德地图查看位置") {
+                            if (!openInAmapWeb(sitterLng, sitterLat, sitter.name)) {
+                                app.toast("当前系统无法打开浏览器")
+                            }
+                        }
+                    }
+                }
             }
         }
 
         Spacer(Modifier.height(16.dp))
+
+        // 环境照片：机构没传图时整块不出现，不留空面板
+        val gallery = (listOf(sitter.coverPhoto) + sitter.photos).filter { it.isNotBlank() }.distinct()
+        if (gallery.isNotEmpty()) {
+            Panel(title = "环境照片", subtitle = "共 ${gallery.size} 张，点击放大") {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    gallery.take(6).forEach { url ->
+                        RemoteImage(
+                            url = url,
+                            modifier = Modifier
+                                .size(104.dp, 76.dp)
+                                .clickable { app.modal = ModalKind.Photo(url, sitter.name) },
+                            contentDescription = "${sitter.name} 环境照片",
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Panel(title = "寄养信息", modifier = Modifier.weight(1f)) {
@@ -191,7 +245,7 @@ fun SitterDetailPage(app: AppState) {
                 Text("服务项目", color = PatNestColors.Ink2, fontSize = 12.5.sp, modifier = Modifier.padding(bottom = 8.dp))
                 if (app.detailAddons.isNotEmpty()) {
                     app.detailAddons.forEachIndexed { i, addon ->
-                        ServiceRow(addon.name, "¥${addon.price.toInt()}/${addon.unit}")
+                        ServiceRow(addon.name, "¥${addon.price.toInt()}/${addonUnitLabel(addon.unit)}")
                         if (i < app.detailAddons.lastIndex) ThinDivider()
                     }
                 } else {

@@ -1,35 +1,34 @@
-This is a Kotlin Multiplatform project targeting Android, iOS, Desktop (JVM).
+# patnestApp
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+Kotlin Multiplatform + Compose Multiplatform 工程，交付 **Android** 与 **Desktop (JVM)** 两端。
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+> iOS 端已于 2026-11-04 移除：开发机是 Windows，Kotlin/Native 的 iOS target 需要 macOS + Xcode，
+> 出不了包，也没有验证手段。相关目录（`iosApp/`、`shared/src/iosMain/`、`shared/src/iosTest/`）
+> 与 Gradle 里的 iOS target、`ktor-client-darwin` 依赖都已删掉。以后有 macOS 环境再按 KMP 常规方式加回。
 
-### Running the apps
+## 模块
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+- `shared/` 三端共用的业务核心：API 客户端、数据模型、计费与订单状态纯函数、Compose 界面。
+  - `commonMain/` 跨端公共代码；`expect` 声明放这里。
+  - `androidMain/`、`jvmMain/` 分别放各自的 `actual` 实现（网络引擎、版本号读取、平台名）。
+- `androidApp/` Android 壳，入口只做 `Launch()`。
+- `desktopApp/` 桌面端，入口与主要界面在 `ui/AppRoot.kt`。
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- Desktop app:
-  - Hot reload: `./gradlew :desktopApp:hotRun --auto`
-  - Standard run: `./gradlew :desktopApp:run`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+## 运行
 
-### Running tests
+```powershell
+./gradlew :desktopApp:run             # 桌面端
+./gradlew :desktopApp:hotRun --auto   # 桌面端热重载
+./gradlew :androidApp:assembleDebug   # Android
+```
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+## 测试
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- Desktop tests: `./gradlew :shared:jvmTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
+```powershell
+./gradlew :shared:testAndroidHostTest   # Android
+./gradlew :shared:jvmTest               # Desktop
+```
 
----
+工程目标 JVM 21；本机若是更高版本的 JDK，Gradle 报工具链不匹配时补一个 JDK 21。
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+了解更多：[Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)

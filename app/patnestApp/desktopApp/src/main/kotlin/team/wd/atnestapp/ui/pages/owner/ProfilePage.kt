@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -36,6 +37,8 @@ import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
 import team.wd.atnestapp.ui.components.SoftTextField
 import team.wd.atnestapp.ui.components.StatCard
+import team.wd.atnestapp.ui.components.Tag
+import team.wd.atnestapp.ui.components.TagKind
 import team.wd.atnestapp.ui.components.ThinDivider
 import team.wd.atnestapp.ui.theme.PatNestColors
 import team.wd.atnestapp.utils.PhoneValidator
@@ -44,7 +47,8 @@ private data class StatItem(val label: String, val value: String, val unit: Stri
 
 @Composable
 fun ProfilePage(app: AppState) {
-    var nickname by remember { mutableStateOf(app.nickname.ifBlank { "陈雨" }) }
+    // 昵称空时退回账号名，写死的假名字在答辩时容易被追问
+    var nickname by remember { mutableStateOf(app.nickname.ifBlank { app.account }) }
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var contactName by remember { mutableStateOf("") }
@@ -202,8 +206,85 @@ fun ProfilePage(app: AppState) {
         }
 
         Spacer(Modifier.height(16.dp))
+        SupportPanel(app)
+
+        Spacer(Modifier.height(16.dp))
         AccountSecurityPanel(app)
     }
+}
+
+/** 帮助与权益：联系客服（真提工单）、积分余额与最近流水、我的工单进度 */
+@Composable
+private fun SupportPanel(app: AppState) {
+    LaunchedEffect(app.loggedIn) {
+        if (app.loggedIn) {
+            app.loadPoints()
+            app.loadTickets()
+        }
+    }
+
+    Panel(title = "帮助与权益", subtitle = "遇到问题直接提工单，平台会在这里回复") {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 11.dp).clickable {
+                app.modal = ModalKind.Ticket
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("联系客服", color = PatNestColors.Ink, fontSize = 13.5.sp)
+                Text("订单、支付、机构纠纷等问题提交工单", color = PatNestColors.Ink3, fontSize = 11.5.sp)
+            }
+            Text("›", color = PatNestColors.Ink3, fontSize = 15.sp)
+        }
+        ThinDivider()
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("可用积分", color = PatNestColors.Ink, fontSize = 13.5.sp)
+            Spacer(Modifier.weight(1f))
+            Text("${app.pointsBalance} 分", color = PatNestColors.BrandInk, fontSize = 13.sp)
+        }
+        if (app.pointsHistory.isNotEmpty()) {
+            ThinDivider()
+            app.pointsHistory.take(3).forEach { entry ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(entry.reason.ifBlank { "积分变动" }, color = PatNestColors.Ink2, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        (if (entry.change >= 0) "+" else "") + entry.change + " 分",
+                        color = if (entry.change >= 0) PatNestColors.Ok else PatNestColors.Danger,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        if (app.tickets.isNotEmpty()) {
+            ThinDivider()
+            Text("我的工单", color = PatNestColors.Ink2, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
+            app.tickets.take(3).forEach { t ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(t.title, color = PatNestColors.Ink, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(8.dp))
+                    Tag(ticketStatusLabel(t.status), if (t.status == "resolved") TagKind.Ok else TagKind.Warn)
+                }
+            }
+        }
+    }
+}
+
+private fun ticketStatusLabel(status: String) = when (status) {
+    "open" -> "待处理"
+    "processing" -> "处理中"
+    "resolved" -> "已解决"
+    "closed" -> "已关闭"
+    else -> status
 }
 
 /** 账户安全：注销账户 / 注销机构；申请提交成功后立即退出登录，3 天内重新登录自动撤销。 */

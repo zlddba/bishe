@@ -34,6 +34,11 @@ const (
 
 var versionRe = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$`)
 
+// jobIDRe 限定任务编号形如 20261104-093012-1f3a9c02。它同时是 JobDetail 的越界防护：
+// 编号会被拼进 status/log 的文件路径，放开格式就等于允许路径穿越。
+// 提到包级变量，避免每次查询任务状态都重新编译一遍正则。
+var jobIDRe = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$`)
+
 type ManifestFile struct {
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256"`
@@ -573,7 +578,7 @@ func (c Config) stage(pkgPath, id string) (*stagedPackage, error) {
 }
 
 func (c Config) readJob(id string) (Job, error) {
-	if !regexp.MustCompile(`^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$`).MatchString(id) {
+	if !jobIDRe.MatchString(id) {
 		return Job{}, errors.New("任务编号无效")
 	}
 	b, err := os.ReadFile(filepath.Join(c.StatusDir, id+".status"))

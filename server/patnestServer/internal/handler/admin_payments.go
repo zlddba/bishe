@@ -87,9 +87,11 @@ func performRefund(ctx context.Context, orderID int64, amount *float64, reason s
 		paidAmount float64
 		method     string
 	)
+	// 续住会追加第二条已支付流水，这里按整单求和：退款记录里的 paid_amount 才是该订单
+	// 真实收到过的总额，refund_of_payment_id 取最后一笔。
 	err = tx.QueryRow(ctx,
-		`SELECT id, amount, method::text FROM payments
-		 WHERE order_id = $1 AND status = 'paid' ORDER BY id DESC LIMIT 1`,
+		`SELECT COALESCE(MAX(id), 0), COALESCE(SUM(amount), 0), COALESCE(MAX(method::text), 'mock')
+		 FROM payments WHERE order_id = $1 AND status = 'paid'`,
 		orderID).Scan(&paymentID, &paidAmount, &method)
 	if err != nil {
 		paymentID, paidAmount, method = 0, 0, "mock"
@@ -175,8 +177,9 @@ func AdminRefundOrder(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'REFUND_ORDER', 'order', $2, $3)", c.GetInt64("user_id"), orderID,
-		fmt.Sprintf(`{"order_no": %q, "amount": %.2f, "reason": %q}`, res.OrderNo, res.RefundAmount, req.Reason))
+		"SELECT fn_audit($1, 'REFUND_ORDER', 'order', $2, $3, NULLIF($4, '')::inet)", c.GetInt64("user_id"), orderID,
+		fmt.Sprintf(`{"order_no": %q, "amount": %.2f, "reason": %q}`, res.OrderNo, res.RefundAmount, req.Reason),
+		auditClientIP(c))
 
 	OK(c, res)
 }

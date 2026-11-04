@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 
 // Register handles POST /api/v1/auth/register
 func Register(c *gin.Context) {
+	// 注册接口此前完全敞开，脚本可以无限建号
+	if !ipRateLimit(c, "register", envPositiveInt("REGISTER_RATE_LIMIT", 10), time.Hour) {
+		Fail(c, http.StatusTooManyRequests, 42901, "注册过于频繁，请稍后再试")
+		return
+	}
 	var req model.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "请求参数无效: "+err.Error())
@@ -109,7 +115,7 @@ func Register(c *gin.Context) {
 		},
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    7200,
+		ExpiresIn:    int64(middleware.AccessTokenTTLSeconds()),
 	})
 }
 
@@ -169,7 +175,7 @@ func Login(c *gin.Context) {
 	}
 
 	// 冷静期内登录即撤销注销申请（"在冷静期中还登录则不会删除账号"）
-	cancelWithdrawn := withdrawCancelOnLogin(context.Background(), user.ID)
+	cancelWithdrawn := withdrawCancelOnLogin(context.Background(), user.ID, c.ClientIP())
 
 	// 管理员单会话：每次登录轮换 session_key，并吊销该账号所有旧刷新令牌。
 	sessionKey := ""
@@ -177,8 +183,7 @@ func Login(c *gin.Context) {
 		sessionKey = uuid.NewString()
 		_, _ = db.Pool.Exec(context.Background(),
 			"UPDATE users SET session_key = $1, updated_at = now() WHERE id = $2", sessionKey, user.ID)
-		_, _ = db.Pool.Exec(context.Background(),
-			"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", user.ID)
+		revokeAllSessions(user.ID)
 	}
 
 	accessToken, err := middleware.GenerateAccessToken(user.ID, user.Username, user.Role, sessionKey)
@@ -208,7 +213,7 @@ func Login(c *gin.Context) {
 		},
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
-		ExpiresIn:       7200,
+		ExpiresIn:       int64(middleware.AccessTokenTTLSeconds()),
 		SingleSession:   user.Role == "admin",
 		CancelWithdrawn: cancelWithdrawn,
 	})
@@ -216,6 +221,13 @@ func Login(c *gin.Context) {
 
 // Refresh handles POST /api/v1/auth/refresh
 func Refresh(c *gin.Context) {
+	// 刷新接口被拿来暴力猜令牌，这里按 IP 限流
+	// 访问令牌有效期只有 30 分钟，每个客户端正常也要每小时刷 2 次；
+	// 阈值留到 60，避免同一出口 IP（校园网、公司 NAT）下多人共用时被误伤。
+	if !ipRateLimit(c, "refresh", envPositiveInt("REFRESH_RATE_LIMIT", 60), time.Hour) {
+		Fail(c, http.StatusTooManyRequests, 42901, "刷新过于频繁，请重新登录")
+		return
+	}
 	refreshToken := c.PostForm("refresh_token")
 	if refreshToken == "" {
 		refreshToken, _ = c.Cookie("refresh_token")
@@ -263,15 +275,37 @@ func Refresh(c *gin.Context) {
 		return
 	}
 
+	// 账号被禁用、被删除，或会话被吊销过，旧的刷新令牌同样不能再换出访问令牌
+	if !middleware.AccountUsable(claims.UserID, claims.IssuedAt.Time) {
+		Unauthorized(c, "登录状态已失效，请重新登录")
+		return
+	}
+
 	accessToken, err := middleware.GenerateAccessToken(claims.UserID, claims.Username, claims.Role, claims.SessionKey)
 	if err != nil {
 		InternalError(c, "生成访问令牌失败")
 		return
 	}
 
+	// 刷新令牌轮换：每换一次访问令牌就发一张新的刷新令牌，手里这张当场作废。
+	// 这样即使刷新令牌泄漏，它最多在被正常客户端下一次刷新之前有用，
+	// 之后无论真客户端还是攻击者再来用它，都会撞上上面的"令牌已被吊销"。
+	newRefresh, err := middleware.GenerateRefreshToken(claims.UserID, claims.Username, claims.Role, claims.SessionKey)
+	if err != nil {
+		InternalError(c, "生成刷新令牌失败")
+		return
+	}
+	storeRefreshToken(claims.UserID, newRefresh)
+	if _, err := db.Pool.Exec(context.Background(),
+		"UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL", tokenHash); err != nil {
+		// 旧的没吊销成功不能算刷新失败：新令牌已经发出去了，记日志即可
+		log.Printf("[Refresh] 轮换后吊销旧刷新令牌失败: %v", err)
+	}
+
 	OK(c, gin.H{
-		"access_token": accessToken,
-		"expires_in":   7200,
+		"access_token":  accessToken,
+		"refresh_token": newRefresh,
+		"expires_in":    middleware.AccessTokenTTLSeconds(),
 	})
 }
 
@@ -279,9 +313,8 @@ func Refresh(c *gin.Context) {
 func Logout(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
-	_, _ = db.Pool.Exec(context.Background(),
-		"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
-		userID)
+	// 退出登录不只清客户端本地令牌：服务端也吊销刷新令牌，并让这次签发的访问令牌作废
+	revokeAllSessions(userID)
 
 	if role, ok := c.Get("role"); ok && role == "admin" {
 		_, _ = db.Pool.Exec(context.Background(),

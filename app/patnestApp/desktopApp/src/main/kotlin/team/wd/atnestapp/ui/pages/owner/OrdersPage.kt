@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import team.wd.atnestapp.ui.AppState
 import team.wd.atnestapp.ui.DrawerKind
+import team.wd.atnestapp.ui.ModalKind
 import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.HCell
 import team.wd.atnestapp.ui.components.LinkText
@@ -65,7 +67,7 @@ fun OrdersPage(app: AppState) {
                 HCell("天数", 0.7f)
                 HCell("金额", 0.8f)
                 HCell("状态", 0.9f)
-                HCell("操作", 1.3f)
+                HCell("操作", 1.9f)
             }
             ThinDivider()
 
@@ -116,12 +118,38 @@ fun OrdersPage(app: AppState) {
                                 dot = order.status == "寄养中",
                             )
                         }
-                        Row(Modifier.weight(1.3f), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.weight(1.9f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             LinkText("详情") { app.drawer = DrawerKind.OrderDetail(iv.index) }
-                            Spacer(Modifier.width(8.dp))
-                            when (order.status) {
-                                "待支付" -> PrimaryButton("去支付", { app.openPay(iv.index) }, height = 30.dp)
-                                "已结束" -> PrimaryButton("去评价", { app.openReview(iv.index) }, height = 30.dp)
+                            // 按钮按后端原始状态出现，规则与服务端一致：
+                            // 改期 pending_pay/confirmed/accepted；续住已支付且未结束；退款需已支付
+                            when (order.rawStatus) {
+                                "pending_pay" -> {
+                                    PrimaryButton("去支付", { app.openPay(iv.index) }, height = 30.dp)
+                                    LinkText("取消") { app.modal = ModalKind.CancelOrder(order.id, order.no) }
+                                    LinkText("改期") {
+                                        app.modal = ModalKind.Reschedule(order.id, order.no, order.startDate, order.endDate)
+                                    }
+                                }
+                                "confirmed", "accepted" -> {
+                                    LinkText("改期") {
+                                        app.modal = ModalKind.Reschedule(order.id, order.no, order.startDate, order.endDate)
+                                    }
+                                    if (order.paid) {
+                                        LinkText("续住") { app.modal = ModalKind.Renew(order.id, order.no, order.endDate, order.amount) }
+                                        LinkText("退款") { app.modal = ModalKind.Refund(order.id, order.no, order.amount) }
+                                    }
+                                }
+                                "staying" -> {
+                                    if (order.paid) {
+                                        LinkText("续住") { app.modal = ModalKind.Renew(order.id, order.no, order.endDate, order.amount) }
+                                        LinkText("退款") { app.modal = ModalKind.Refund(order.id, order.no, order.amount) }
+                                    }
+                                }
+                                "completed" -> PrimaryButton("去评价", { app.openReview(iv.index) }, height = 30.dp)
                             }
                         }
                     }

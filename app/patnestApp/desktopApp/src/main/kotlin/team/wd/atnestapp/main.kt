@@ -3,6 +3,7 @@ package team.wd.atnestapp
 import androidx.compose.ui.graphics.decodeToImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -24,8 +25,18 @@ fun main() = application {
         state = windowState,
     ) {
         val frame: FrameWindowScope = this
+        // 页面大量使用左右两栏，窗口太窄会点不到东西。
+        // 这一版 Compose 的 Window 参数表里没有 minimumSize，只能回到 AWT 层设置。
+        LaunchedEffect(Unit) {
+            frame.window.minimumSize = java.awt.Dimension(1080, 700)
+        }
         PatNestTheme {
-            AppRoot(titleBar = { frame.DesktopTitleBar(::exitApplication) })
+            AppRoot(
+                titleBar = { frame.DesktopTitleBar(::exitApplication) },
+                // 最小化时暂停轮询。这里用 extendedState 而不是 isMinimized，
+                // 跟标题栏最小化按钮走的是同一个 API，确定能编过
+                isMinimized = { frame.window.extendedState == java.awt.Frame.ICONIFIED },
+            )
         }
     }
 }

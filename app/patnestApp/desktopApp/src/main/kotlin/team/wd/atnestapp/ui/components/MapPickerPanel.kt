@@ -228,8 +228,9 @@ fun MapPickerPanel(
                 Modifier.align(Alignment.TopEnd).padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                GhostButton("-", { zoom = (zoom - 1).coerceAtLeast(3) }, Modifier.width(40.dp), height = 30.dp)
-                GhostButton("+", { zoom = (zoom + 1).coerceAtMost(18) }, Modifier.width(40.dp), height = 30.dp)
+                // 按钮自带左右留白，宽度要给文字留出空间
+                GhostButton("-", { zoom = (zoom - 1).coerceAtLeast(3) }, Modifier.width(56.dp), height = 30.dp)
+                GhostButton("+", { zoom = (zoom + 1).coerceAtMost(18) }, Modifier.width(56.dp), height = 30.dp)
             }
             if (loadingCount > 0) {
                 Text(

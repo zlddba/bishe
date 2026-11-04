@@ -55,9 +55,10 @@ fun SittersPage(app: AppState) {
             .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 40.dp),
     ) {
         PageHeader("找机构", "家庭寄养 / 门店寄养 / 上门喂养 / 其他") {
-            Tag("✦ 智能推荐", TagKind.Brand, onClick = {
+            // 只是按评分优先排序，不叫"智能推荐"，避免答辩时被追问向量召回
+            Tag("评分优先", TagKind.Brand, onClick = {
                 sortIndex = 1
-                app.toast("已按评分优先为你排序")
+                app.toast("已切换为按评分优先排序")
             })
         }
 

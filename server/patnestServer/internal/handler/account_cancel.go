@@ -58,13 +58,11 @@ func RequestAccountCancel(c *gin.Context) {
 	}
 
 	// 申请注销后直接退出登录：吊销全部刷新令牌，与 Logout 的吊销逻辑一致
-	_, _ = db.Pool.Exec(context.Background(),
-		"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
-		userID)
+	revokeAllSessions(userID)
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'REQUEST_CANCEL', 'user', $2, $3)",
-		userID, userID, fmt.Sprintf(`{"mode": "%s"}`, req.Mode))
+		"SELECT fn_audit($1, 'REQUEST_CANCEL', 'user', $2, $3, NULLIF($4, '')::inet)",
+		userID, userID, fmt.Sprintf(`{"mode": "%s"}`, req.Mode), auditClientIP(c))
 
 	OK(c, gin.H{
 		"mode":     req.Mode,
@@ -92,13 +90,14 @@ func WithdrawAccountCancel(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'WITHDRAW_CANCEL', 'user', $2, '{}')", userID, userID)
+		"SELECT fn_audit($1, 'WITHDRAW_CANCEL', 'user', $2, '{}', NULLIF($3, '')::inet)", userID, userID, auditClientIP(c))
 
 	OK(c, gin.H{"withdrawn": true})
 }
 
 // withdrawCancelOnLogin 登录成功后自动撤销注销申请，返回是否发生了撤销。
-func withdrawCancelOnLogin(ctx context.Context, userID int64) bool {
+// ip 用于审计日志，登录流程里由调用方从 gin.Context 取。
+func withdrawCancelOnLogin(ctx context.Context, userID int64, ip string) bool {
 	tag, err := db.Pool.Exec(ctx,
 		`UPDATE users
 		 SET cancel_mode = NULL, cancel_requested_at = NULL, cancel_deadline = NULL, updated_at = now()
@@ -108,7 +107,8 @@ func withdrawCancelOnLogin(ctx context.Context, userID int64) bool {
 		return false
 	}
 	_, _ = db.Pool.Exec(ctx,
-		"SELECT fn_audit($1, 'WITHDRAW_CANCEL', 'user', $2, '{\"by\": \"login\"}')", userID, userID)
+		"SELECT fn_audit($1, 'WITHDRAW_CANCEL', 'user', $2, '{\"by\": \"login\"}', NULLIF($3, '')::inet)",
+		userID, userID, ip)
 	return true
 }
 

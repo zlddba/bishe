@@ -2,6 +2,7 @@ package team.wd.atnestapp.data.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -19,6 +20,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Headers
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -37,6 +40,89 @@ class ApiClient(rawBaseUrl: String) {
     val baseUrl: String = normalizeBaseUrl(rawBaseUrl)
 
     var token: String? = null
+
+    /**
+     * 刷新令牌。访问令牌过期时用它换一张新的，用户不用重新登录。
+     * 标 @PublishedApi 是因为下面的请求封装是 internal inline 函数，inline 不能访问 private 成员。
+     */
+    @PublishedApi internal var refreshToken: String? = null
+
+    /** 登录/注册成功后一次性写入会话，避免调用方只记住 access_token */
+    fun applyAuth(access: String, refresh: String?, expiresIn: Long) {
+        token = access
+        refreshToken = refresh?.takeIf { it.isNotBlank() }
+    }
+
+    /** 清空整个会话（登出、令牌彻底失效、被踢下线） */
+    fun clearAuth() {
+        token = null
+        refreshToken = null
+    }
+
+    /**
+     * 用刷新令牌换一张新的访问令牌。成功返回 true，调用方重放原请求。
+     * 失败时把刷新令牌丢掉，之后就是正常的"请重新登录"，不会反复重试。
+     */
+    @PublishedApi internal suspend fun refreshAccessToken(): Boolean {
+        val refresh = refreshToken ?: return false
+        return try {
+            val response = http.post(apiBase + "/auth/refresh") {
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(RefreshPayload(refresh)))
+            }
+            val result: RefreshResult = unwrap(response.bodyAsText(), response.status)
+            if (result.accessToken.isBlank()) {
+                refreshToken = null
+                return false
+            }
+            token = result.accessToken
+            // 服务端每次刷新都轮换刷新令牌，必须把新的收下；
+            // 万一后端是没带轮换的旧版本（字段为空），就继续沿用手里这张。
+            if (result.refreshToken.isNotBlank()) {
+                refreshToken = result.refreshToken
+            }
+            true
+        } catch (_: Exception) {
+            refreshToken = null
+            false
+        }
+    }
+
+    /**
+     * 发一次请求；如果撞上 401 且手里有刷新令牌，就换一张令牌再重放一次。
+     * 这样访问令牌可以设得很短（比如 30 分钟），用户却不会被中途踢下线。
+     *
+     * usedToken 是这次请求实际带出去的令牌。并发请求一起撞上 401 时，
+     * 只要有一个请求已经换到了新令牌，其余请求直接重放，不再重复调用刷新接口。
+     */
+    @PublishedApi internal suspend fun shouldRetryUnauthorized(
+        status: HttpStatusCode,
+        usedToken: String?,
+    ): Boolean {
+        if (status != HttpStatusCode.Unauthorized) return false
+        // 本来就没登录（登录、注册接口的 401），交给调用方按普通报错提示
+        if (usedToken == null) return false
+        val refreshed = if (refreshToken == null) {
+            false
+        } else {
+            refreshMutex.withLock {
+                if (token != usedToken) true else refreshToken != null && refreshAccessToken()
+            }
+        }
+        if (refreshed) return true
+        // 换不到新令牌说明这次会话真的结束了，让 UI 退出登录，别继续挂着一个假登录态
+        onAuthExpired?.invoke()
+        return false
+    }
+
+    /**
+     * 会话确认结束（刷新令牌过期、被吊销，或本地已经没有刷新令牌）时回调。
+     * 由 UI 层负责清空登录态并提示重新登录。
+     */
+    var onAuthExpired: (() -> Unit)? = null
+
+    /** 串行化刷新动作，保证同一时刻只有一个请求在换令牌。 */
+    @PublishedApi internal val refreshMutex = Mutex()
 
     /**
      * 服务端确认当前账号已不存在（如被后台删除）时回调，由 UI 层强制退出并清理会话。
@@ -71,65 +157,92 @@ class ApiClient(rawBaseUrl: String) {
         path: String,
         params: Map<String, String> = emptyMap(),
     ): T {
-        val response = http.get(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             params.forEach { (key, value) -> parameter(key, value) }
         }
+        var response = http.get(apiBase + path, config)
+        // 访问令牌过期：换一张，原请求重放一次
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.get(apiBase + path, config)
         return unwrap<T>(response.bodyAsText(), response.status)
     }
 
     internal suspend inline fun <reified Req, reified Res> postData(path: String, payload: Req): Res {
-        val response = http.post(apiBase + path) {
+        val body = json.encodeToString(payload)
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(payload))
+            setBody(body)
         }
+        var response = http.post(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.post(apiBase + path, config)
         return unwrap<Res>(response.bodyAsText(), response.status)
     }
 
     internal suspend inline fun <reified T> putEmpty(path: String): T {
-        val response = http.put(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         }
+        var response = http.put(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.put(apiBase + path, config)
         return unwrap<T>(response.bodyAsText(), response.status)
     }
 
     internal suspend inline fun <reified T> postNoBody(path: String): T {
-        val response = http.post(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         }
+        var response = http.post(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.post(apiBase + path, config)
         return unwrap<T>(response.bodyAsText(), response.status)
     }
 
     internal suspend inline fun <reified Req, reified Res> putData(path: String, payload: Req): Res {
-        val response = http.put(apiBase + path) {
+        val body = json.encodeToString(payload)
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(payload))
+            setBody(body)
         }
+        var response = http.put(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.put(apiBase + path, config)
         return unwrap<Res>(response.bodyAsText(), response.status)
     }
 
     internal suspend inline fun <reified T> deleteData(path: String): T {
-        val response = http.delete(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         }
+        var response = http.delete(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.delete(apiBase + path, config)
         return unwrap<T>(response.bodyAsText(), response.status)
     }
 
     /** 后端返回 data = null 的删除接口（只校验 code / HTTP 状态）。 */
     internal suspend inline fun deleteNoContent(path: String) {
-        val response = http.delete(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         }
+        var response = http.delete(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.delete(apiBase + path, config)
         ensureSuccess(response.bodyAsText(), response.status)
     }
 
     /** 后端返回 data = null 的接口（只校验 code / HTTP 状态）。 */
     internal suspend inline fun putNoContent(path: String) {
-        val response = http.put(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
         }
+        var response = http.put(apiBase + path, config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.put(apiBase + path, config)
         ensureSuccess(response.bodyAsText(), response.status)
     }
 
@@ -211,6 +324,16 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun createPet(payload: CreatePetPayload): PetDto =
         postData("/pet-owner/pets", payload)
 
+    /** 编辑宠物档案（只传要改的字段） */
+    suspend fun updatePet(petId: Long, payload: UpdatePetPayload): PetDto =
+        putData("/pet-owner/pets/$petId", payload)
+
+    /** 某只宠物的历史寄养记录 */
+    suspend fun listPetStays(petId: Long): List<PetStayDto> {
+        val data: PetStayListDto = getData("/pet-owner/pets/$petId/stays")
+        return data.items
+    }
+
     suspend fun deletePet(petId: Long) = deleteNoContent("/pet-owner/pets/$petId")
 
     suspend fun listOrders(): List<Order> {
@@ -223,6 +346,63 @@ class ApiClient(rawBaseUrl: String) {
 
     suspend fun payOrder(orderId: Long): PayResult =
         putEmpty<PayResult>("/pet-owner/orders/$orderId/pay")
+
+    /** 取消订单：后端会释放已占容量 */
+    suspend fun cancelOrder(orderId: Long, reason: String): CancelResult =
+        putData("/pet-owner/orders/$orderId/cancel", ReasonPayload(reason))
+
+    /** 改期（待支付/已确认状态下可用） */
+    suspend fun rescheduleOrder(orderId: Long, startDate: String, endDate: String): RescheduleResult =
+        putData("/pet-owner/orders/$orderId/reschedule", ReschedulePayload(startDate, endDate))
+
+    /** 续住：把结束日期往后推，费用按新周期重算 */
+    suspend fun renewOrder(orderId: Long, endDate: String): RenewResult =
+        putData("/pet-owner/orders/$orderId/renew", RenewPayload(endDate))
+
+    /** 申请退款（进入平台审核，不直接退款） */
+    suspend fun requestRefund(orderId: Long, reason: String, amount: Double? = null): ClaimResult =
+        postData("/pet-owner/orders/$orderId/refund-request", RefundPayload(reason, amount))
+
+    suspend fun listRefundRequests(): List<RefundDto> {
+        val data: RefundListDto = getData("/pet-owner/refunds")
+        return data.items
+    }
+
+    /**
+     * 下单前估价。参数与下单一致，后端用同一套计费口径，
+     * 所以页面显示的金额和真正下单的结果不会打架。
+     */
+    suspend fun estimateOrder(
+        sitterId: Long,
+        startDate: String,
+        endDate: String,
+        petIds: List<Long>,
+        userCouponId: Long = 0,
+        pointsUsed: Int = 0,
+        addons: List<String> = emptyList(),
+    ): EstimateDto = getData(
+        "/pet-owner/sitters/$sitterId/estimate",
+        mapOf(
+            "start_date" to startDate,
+            "end_date" to endDate,
+            "pet_ids" to petIds.joinToString(","),
+            "user_coupon_id" to userCouponId.toString(),
+            "points_used" to pointsUsed.toString(),
+            "addons" to addons.joinToString(","),
+        ),
+    )
+
+    /** 积分余额与流水 */
+    suspend fun myPoints(): PointsDto = getData("/pet-owner/points")
+
+    /** 提交售后工单（联系客服） */
+    suspend fun createTicket(category: String, title: String, content: String): ClaimResult =
+        postData("/support/tickets", TicketPayload(category, title, content))
+
+    suspend fun listTickets(): List<TicketDto> {
+        val data: TicketListDto = getData("/support/tickets")
+        return data.items
+    }
 
     suspend fun submitReview(orderId: Long, payload: ReviewPayload): ReviewResult =
         postData("/pet-owner/orders/$orderId/review", payload)
@@ -241,6 +421,9 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun markNotificationRead(id: Long) {
         putNoContent("/notifications/$id/read")
     }
+
+    /** 一键全部已读，返回被标记的条数 */
+    suspend fun markAllNotificationsRead(): CountResult = putEmpty("/notifications/read-all")
 
     suspend fun listFavorites(): List<Sitter> {
         val data: FavoriteListDto = getData("/pet-owner/favorites")
@@ -266,6 +449,15 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun listOwnerDynamics(): List<DynamicDto> {
         val data: DynamicListDto = getData("/pet-owner/dynamics")
         return data.items
+    }
+
+    /** 点赞动态（后端 ON CONFLICT DO NOTHING，重复调用安全） */
+    suspend fun likeDynamic(dynamicId: Long): LikeResult =
+        postNoBody("/pet-owner/dynamics/$dynamicId/like")
+
+    /** 取消点赞 */
+    suspend fun unlikeDynamic(dynamicId: Long) {
+        deleteNoContent("/pet-owner/dynamics/$dynamicId/like")
     }
 
     suspend fun listCoupons(): CouponListDto = getData("/pet-owner/coupons")
@@ -324,10 +516,14 @@ class ApiClient(rawBaseUrl: String) {
      * 光看 Content-Type 不可靠（代理或老版本可能不声明），因此同时认 PNG 魔数。
      */
     private suspend fun getImage(path: String, params: Map<String, String>): ByteArray {
-        val response = http.get(apiBase + path) {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             params.forEach { (key, value) -> parameter(key, value) }
         }
+        var response = http.get(apiBase + path, config)
+        // 地图瓦片也是一次次请求，令牌过期时同样先续期再重放
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.get(apiBase + path, config)
         val bytes = response.bodyAsBytes()
         val mimeType = response.contentType()?.contentType.orEmpty()
         if (mimeType.startsWith("image/") || isPngImage(bytes)) return bytes
@@ -436,6 +632,21 @@ class ApiClient(rawBaseUrl: String) {
         return data.items
     }
 
+    /** 机构自己看加购服务：包含已下架的，方便重新上架 */
+    suspend fun myAddons(): List<AddonDto> {
+        val data: AddonListDto = getData("/sitter/addons")
+        return data.items
+    }
+
+    suspend fun createAddon(payload: AddonPayload): ClaimResult = postData("/sitter/addons", payload)
+
+    suspend fun updateAddon(addonId: Long, payload: AddonUpdatePayload): UpdatedResult =
+        putData("/sitter/addons/$addonId", payload)
+
+    suspend fun deletePriceRule(ruleId: Long) {
+        deleteNoContent("/sitter/pricing-rules/$ruleId")
+    }
+
     suspend fun deleteSitterDynamic(dynamicId: Long) {
         deleteData<DeleteResult>("/sitter/dynamics/$dynamicId")
     }
@@ -456,7 +667,8 @@ class ApiClient(rawBaseUrl: String) {
 
     /** 上传图片到对象存储，返回可访问 URL。 */
     suspend fun uploadImage(bytes: ByteArray, fileName: String): String {
-        val response = http.post(apiBase + "/upload/image") {
+        val usedToken = token
+        val config: HttpRequestBuilder.() -> Unit = {
             token?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             setBody(MultiPartFormDataContent(formData {
                 append("file", bytes, Headers.build {
@@ -465,6 +677,8 @@ class ApiClient(rawBaseUrl: String) {
                 })
             }))
         }
+        var response = http.post(apiBase + "/upload/image", config)
+        if (shouldRetryUnauthorized(response.status, usedToken)) response = http.post(apiBase + "/upload/image", config)
         val result: UploadResult = unwrap(response.bodyAsText(), response.status)
         return result.url
     }

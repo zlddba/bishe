@@ -259,8 +259,8 @@ func AdminCreateOrder(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'CREATE_ORDER', 'order', $2, $3)",
-		adminID, orderID, fmt.Sprintf(`{"order_no": "%s"}`, orderNo))
+		"SELECT fn_audit($1, 'CREATE_ORDER', 'order', $2, $3, NULLIF($4, '')::inet)",
+		adminID, orderID, fmt.Sprintf(`{"order_no": "%s"}`, orderNo), auditClientIP(c))
 
 	Created(c, "订单已创建", gin.H{"id": orderID, "order_no": orderNo})
 }
@@ -637,8 +637,8 @@ func AdminUpdateOrder(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_ORDER', 'order', $2, $3)",
-		adminID, orderID, fmt.Sprintf(`{"status": "%s"}`, newStatus))
+		"SELECT fn_audit($1, 'UPDATE_ORDER', 'order', $2, $3, NULLIF($4, '')::inet)",
+		adminID, orderID, fmt.Sprintf(`{"status": "%s"}`, newStatus), auditClientIP(c))
 
 	OK(c, gin.H{"id": orderID})
 }
@@ -695,7 +695,7 @@ func AdminDeleteOrder(c *gin.Context) {
 
 	adminID := c.GetInt64("user_id")
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'DELETE_ORDER', 'order', $2, '{}')", adminID, orderID)
+		"SELECT fn_audit($1, 'DELETE_ORDER', 'order', $2, '{}', NULLIF($3, '')::inet)", adminID, orderID, auditClientIP(c))
 
 	OK(c, gin.H{"id": orderID})
 }

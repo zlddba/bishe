@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -130,6 +131,8 @@ fun PrimaryButton(
         contentAlignment = Alignment.Center,
     ) {
         Row(
+            // 没有左右留白时，文字会直接顶到胶囊边缘，白色字看起来像溢出到按钮外面
+            Modifier.padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -160,6 +163,7 @@ fun GhostButton(
         contentAlignment = Alignment.Center,
     ) {
         Row(
+            Modifier.padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -492,7 +496,7 @@ fun StatCard(
 /* ---------- 宠物头像 ---------- */
 
 @Composable
-fun PetAvatar(size: Dp = 38.dp, modifier: Modifier = Modifier) {
+fun PetAvatar(size: Dp = 38.dp, modifier: Modifier = Modifier, photoUrl: String = "") {
     Box(
         modifier
             .size(size)
@@ -500,11 +504,47 @@ fun PetAvatar(size: Dp = 38.dp, modifier: Modifier = Modifier) {
             .background(Brush.linearGradient(listOf(PatNestColors.BrandSoft, PatNestColors.Brand50))),
         contentAlignment = Alignment.Center,
     ) {
-        AppIcon(AppIcon.Paw, Modifier.size(size * 0.58f), PatNestColors.BrandInk)
+        if (photoUrl.isNotBlank()) {
+            RemoteImage(
+                url = photoUrl,
+                modifier = Modifier.fillMaxSize(),
+                contentDescription = "宠物照片",
+                shape = CircleShape,
+            )
+        } else {
+            AppIcon(AppIcon.Paw, Modifier.size(size * 0.58f), PatNestColors.BrandInk)
+        }
     }
 }
 
 /* ---------- 机构卡片 ---------- */
+
+/** 一排可点击的缩略图；点哪张就放大哪张，超过 max 的部分折叠成 +N */
+@Composable
+fun PhotoStrip(
+    urls: List<String>,
+    modifier: Modifier = Modifier,
+    max: Int = 6,
+    thumbWidth: Dp = 96.dp,
+    thumbHeight: Dp = 70.dp,
+    onClick: (String) -> Unit,
+) {
+    val shown = urls.take(max)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        shown.forEach { url ->
+            RemoteImage(
+                url = url,
+                modifier = Modifier.size(thumbWidth, thumbHeight).clickable { onClick(url) },
+                contentDescription = "照片缩略图",
+            )
+        }
+        if (urls.size > shown.size) {
+            Box(Modifier.size(thumbWidth, thumbHeight).clip(RoundedCornerShape(10.dp)).background(PatNestColors.Soft), contentAlignment = Alignment.Center) {
+                Text("+${urls.size - shown.size}", color = PatNestColors.Ink2, fontSize = 13.sp)
+            }
+        }
+    }
+}
 
 @Composable
 fun SitterCard(
@@ -526,11 +566,20 @@ fun SitterCard(
                 .height(120.dp)
                 .background(Brush.linearGradient(listOf(gradient.first, gradient.second))),
         ) {
-            AppIcon(
-                AppIcon.Image,
-                Modifier.align(Alignment.Center).size(34.dp),
-                Color.White.copy(alpha = 0.9f),
-            )
+            if (sitter.coverPhoto.isNotBlank()) {
+                RemoteImage(
+                    url = sitter.coverPhoto,
+                    modifier = Modifier.matchParentSize(),
+                    contentDescription = "${sitter.name} 封面",
+                    shape = RoundedCornerShape(0.dp),
+                )
+            } else {
+                AppIcon(
+                    AppIcon.Image,
+                    Modifier.align(Alignment.Center).size(34.dp),
+                    Color.White.copy(alpha = 0.9f),
+                )
+            }
             Tag(
                 sitter.type,
                 TagKind.Glass,
@@ -598,7 +647,7 @@ fun PetCard(
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PetAvatar()
+            PetAvatar(photoUrl = pet.photos.firstOrNull().orEmpty())
             Column {
                 Text(pet.name, color = PatNestColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(pet.breed, color = PatNestColors.Ink3, fontSize = 11.5.sp)
@@ -682,7 +731,7 @@ fun KeyValueRow(key: String, value: String, valueColor: Color = PatNestColors.In
 /* ---------- 日历卡片 ---------- */
 
 @Composable
-fun SlotTag(text: String, kind: String) {
+fun SlotTag(text: String, kind: String, fill: Boolean = true) {
     val (bg, fg) = when (kind) {
         "free" -> PatNestColors.OkSoft to PatNestColors.Ok
         "busy" -> PatNestColors.WarnSoft to PatNestColors.Warn
@@ -690,7 +739,8 @@ fun SlotTag(text: String, kind: String) {
     }
     Box(
         Modifier
-            .fillMaxWidth()
+            // 卡片里要铺满一行；放进横向 Row 时必须包内容，否则会把兄弟节点挤成一个字一行
+            .then(if (fill) Modifier.fillMaxWidth() else Modifier)
             .clip(PatNestShape.Pill)
             .background(bg)
             .padding(horizontal = 6.dp, vertical = 3.dp),
@@ -817,6 +867,16 @@ fun ServiceRow(name: String, price: String) {
         Spacer(Modifier.weight(1f))
         Text(price, color = PatNestColors.Ink, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
     }
+}
+
+/**
+ * 加购服务的计价单位：后端存的是 per_order / per_day 这类代码，
+ * 直接拼进界面会变成"¥30/per_order"，这里统一翻译成中文。
+ */
+fun addonUnitLabel(unit: String): String = when (unit) {
+    "per_order" -> "次"
+    "per_day" -> "天"
+    else -> unit.ifBlank { "次" }
 }
 
 /* ---------- 虚线上传框 ---------- */

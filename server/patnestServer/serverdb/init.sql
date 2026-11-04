@@ -611,15 +611,59 @@ CREATE TRIGGER trg_review_score_delete
     AFTER DELETE ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
 
--- 6.3 Auto-release capacity when order is cancelled or rejected
+-- 6.3 Auto-release capacity and restore coupon/points when an order is abandoned
+-- 权益退回单独成函数：取消、拒单、后台退款、超时自动取消等多个入口都会走到这里，
+-- 集中在触发器里处理才不会漏。函数按行状态与流水判重，重复调用安全。
+CREATE OR REPLACE FUNCTION fn_restore_order_benefits(p_order_id BIGINT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+    v_owner_id BIGINT;
+    v_points   INT;
+BEGIN
+    SELECT owner_id, points_used INTO v_owner_id, v_points
+      FROM orders
+     WHERE id = p_order_id;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    -- 先回退券模板已用量，再解绑 user_coupons（后者靠 order_id + status 定位这一单的券）
+    UPDATE coupons
+       SET used_qty = GREATEST(used_qty - 1, 0)
+     WHERE id IN (SELECT coupon_id FROM user_coupons
+                   WHERE order_id = p_order_id AND status = 'used');
+
+    UPDATE user_coupons
+       SET status = 'unused', order_id = NULL, used_at = NULL
+     WHERE order_id = p_order_id AND status = 'used';
+
+    IF COALESCE(v_points, 0) > 0 AND NOT EXISTS (
+        SELECT 1 FROM points_ledger
+         WHERE ref_type = 'order' AND ref_id = p_order_id AND change_amount > 0
+    ) THEN
+        UPDATE users SET points = points + v_points WHERE id = v_owner_id;
+        INSERT INTO points_ledger (user_id, change_amount, balance, reason, ref_type, ref_id)
+        SELECT v_owner_id, v_points, u.points, '订单作废退回', 'order', p_order_id
+          FROM users u WHERE u.id = v_owner_id;
+    END IF;
+END;
+$fn$;
+
+-- staying 也纳入权益退回，但容量仍只在前三态释放：
+-- staying 的容量由后台退款逻辑按已住天数显式处理，重复释放会把已消耗的天数退成空位。
 CREATE OR REPLACE FUNCTION fn_order_status_changed()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $fn$
 BEGIN
-    IF OLD.status IN ('pending_pay','confirmed','accepted')
+    IF OLD.status IN ('pending_pay','confirmed','accepted','staying')
        AND NEW.status IN ('cancelled','rejected') THEN
-        PERFORM fn_release_capacity(NEW.sitter_id, NEW.start_date, NEW.end_date, NEW.pet_count);
+        IF OLD.status IN ('pending_pay','confirmed','accepted') THEN
+            PERFORM fn_release_capacity(NEW.sitter_id, NEW.start_date, NEW.end_date, NEW.pet_count);
+        END IF;
+        PERFORM fn_restore_order_benefits(NEW.id);
     END IF;
     RETURN NEW;
 END;

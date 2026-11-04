@@ -1,23 +1,40 @@
 # PatNest 毕业设计
 
-一个仓库、按目录分模块的毕业设计工程。项目代号 **PatNest**，业务主题尚未最终确定（宠物 / 专利两种方向待确认）。
+宠物寄养服务预约系统，项目代号 **PatNest**（产品名"宠栖"）。一个仓库、按目录分模块，三条角色线：主人（下单预约寄养）、机构（开店、排期、定价、接单）、管理员（后台审核与运营）。
 
 ## 目录结构
 
 ```
 biyezuopin/
-├─ app/patnestApp/               Kotlin Multiplatform + Compose，Android / iOS / Desktop
-├─ server/patnestServer/         Go 后端（规划：Gin + SQLite），目前只有 go.mod
-├─ uniapp/patnestUniapp/         uni-app 用户端（只做微信小程序，不出 H5 / App）
-├─ webadmin/patnestServerAdminWeb/  Vue 3 + Vite 管理后台
-├─ docs/                         需求、数据库设计、接口文档、论文素材
-├─ .gitignore                    全仓库公共忽略规则
-└─ .gitattributes                换行与二进制文件规则
+├─ server/patnestServer/                Go 后端：Gin + PostgreSQL + Redis + MinIO
+├─ webadmin/patnestServerAdminWeb/      管理后台：Vue 3 + Vite + Element Plus
+├─ app/patnestApp/                      客户端：Kotlin Multiplatform + Compose（Android / Desktop）
+├─ uniapp/patnestUniapp/                uni-app 微信小程序端（HBuilderX 工程，业务尚未接入）
+├─ deploy/                              Docker / nginx / systemd / 发布与回滚脚本
+├─ release/                             一键构建产出的容器包
+├─ docs/                                需求、数据库、接口、部署、合规文档
+├─ build.ps1 / build.sh                 一键构建（前端 dist + Go 二进制 + 容器包 zip）
+├─ .gitignore                           全仓库公共忽略规则
+└─ .gitattributes                       换行与二进制文件规则
 ```
 
-采用**单仓库分目录**，没有使用 git submodule：四个模块共享一份提交历史，跨模块改动（比如接口字段调整）可以一次提交完成，拷贝和提交作业时也不会出现子模块拉不下来的问题。模块之间仍保持目录和依赖独立，后续如果确实需要拆库，再按目录迁移即可。
+采用**单仓库分目录**，没有使用 git submodule：各模块共享一份提交历史，跨模块改动（比如接口字段调整）可以一次提交完成，拷贝和提交作业时也不会出现子模块拉不下来的问题。模块之间目录和依赖仍然独立，后续确实需要拆库时按目录迁移即可。
 
 ## 各端启动方式
+
+### 后端 server
+
+```powershell
+cd server/patnestServer
+copy .env.example .env      # 填数据库、MinIO、JWT_SECRET、高德 Key
+go run ./cmd/migrate -dir serverdb/migrations           # 应用迁移
+go run ./cmd/migrate -dir serverdb/migrations -status   # 查看已应用版本
+go run ./cmd/api                                        # 默认监听 APP_PORT=9200
+```
+
+直接依赖只有 Gin、pgx、jwt/v5、minio-go、godotenv、x/crypto 等几项。Redis 客户端（`internal/cache`）是手写的精简 RESP 实现，只覆盖本项目用到的命令，没有为它引入第三方库。
+
+入口分三个：`cmd/api` 常驻服务、`cmd/migrate` 在线迁移、`cmd/dbprobe` 连通性排查。迁移脚本在 `serverdb/migrations`，按 `00NN_名字.sql` 顺序执行，**已经上线的迁移不再改内容，只往后追加**。
 
 ### 管理后台 webadmin
 
@@ -27,32 +44,36 @@ npm install
 npm run dev
 ```
 
-要求 Node ≥ 22.18（`package.json` 里写死的）。当前机器 PATH 里还没有 `node` / `npm`，需要先装 Node 或把已有安装加到 PATH。
+要求 Node `^22.18.0 || >=24.12.0`。本地开发靠 `.env.local` 里的 `VITE_PROXY_TARGET`（默认 `http://127.0.0.1:9200`）代理到后端，不用为此改服务端 CORS。后台的机构地图选点依赖 `VITE_AMAP_JS_KEY` / `VITE_AMAP_SECURITY_CODE`，不配也能跑，只是地图区域会降级成地址解析。
 
-### 后端 server
-
-```powershell
-cd server/patnestServer
-go mod tidy
-go run .
-```
-
-当前只有 `go.mod`（`module patnestServer`，Go 1.27），还没有 `main.go`，所以暂时跑不起来。
-
-### 移动端 app
+### 客户端 app
 
 ```powershell
 cd app/patnestApp
-./gradlew :desktopApp:run          # 桌面端
-./gradlew :androidApp:assembleDebug # Android
+./gradlew :desktopApp:run             # 桌面端
+./gradlew :androidApp:assembleDebug   # Android
+./gradlew :shared:jvmTest             # 共享层测试
 ```
 
-iOS 用 Xcode 打开 `app/patnestApp/iosApp`。工程目标 JVM 21，本机是 JDK 25，若 Gradle 报工具链不匹配，需要装一个 JDK 21。
+`shared` 放网络层、数据模型和业务状态，Android 与 Desktop 各自只负责 UI；两端服务地址读各自的 `.env`。工程目标 JVM 21，本机 JDK 不一致时装一个 JDK 21 或在 Gradle 工具链里指过去。桌面端已接登录、下单、机构经营、地图选点等主链路；iOS target 已移除。
 
 ### 微信小程序 uniapp
 
-用 HBuilderX 直接导入 `uniapp/patnestUniapp`，只发行微信小程序；该工程没有 `package.json`，不通过 npm 启动。
-App 形态（Android / iOS / Desktop）全部走上面的 KMP 工程，不用 uni-app 打包 5+App。
+用 HBuilderX 导入 `uniapp/patnestUniapp`，只发行微信小程序，不出 H5 / App；该工程没有 `package.json`，不通过 npm 启动。当前它还是 HBuilderX 默认模板，接口层尚未接入，主人端需要的接口契约整理在 `docs/09-主人端缺失接口清单.md`。
+
+## 一键构建与发布
+
+```powershell
+# Windows
+./build.ps1                        # 版本号默认取 webadmin/package.json
+./build.ps1 -Version 1.0.39 -Arch amd64
+./build.ps1 -SkipWeb               # 只重打后端
+
+# Linux / WSL
+bash build.sh --version 1.0.39 --arch amd64
+```
+
+产物是 `release/patnest-docker-<version>` 目录和同名 zip，内含前后端镜像、compose 配置与校验和。服务器侧的蓝绿双 slot 发布、客户端热更新、回滚流程见 `deploy/README.md` 与 `docs/04-部署与热更新.md`。
 
 ## Git 约定
 
@@ -63,21 +84,20 @@ App 形态（Android / iOS / Desktop）全部走上面的 KMP 工程，不用 un
   - `app: 首页商品列表`
   - `uni: 购物车页面`
   - `docs: 补充数据库设计`
-- 构建产物、IDE 配置、本地路径（`local.properties`）、运行期数据（`uploads/`、`*.db`、日志）一律不入库，规则见各目录 `.gitignore`。
+- 构建产物、IDE 配置、本地路径（`local.properties`）、运行期数据（`uploads/`、日志、`.env`）一律不入库，规则见各目录 `.gitignore`。
 
 ## 当前进度
 
 | 模块 | 状态 |
 |---|---|
-| server | 空壳，仅 `go.mod` |
-| uniapp | 官方默认模板（Hello 页） |
-| webadmin | Vite 默认模板（Home / About） |
-| app | KMP 默认模板（Click me 演示） |
-| docs | 空目录 |
+| server | 主链路完成：账号、机构资质、商品、订单、优惠券、支付流水、评价、后台管理，含鉴权分层、限流、审计、地理编码 |
+| webadmin | 可用：登录、机构与用户管理、订单、内容、优惠券、地图选点、数据看板 |
+| app | Desktop 端持续迭代，Android 可构建，`shared` 层有测试覆盖 |
+| uniapp | HBuilderX 默认模板，等待按接口清单接入 |
+| docs | 见 `docs/README.md` 索引 |
 
-## 下一步
+## 文档索引
 
-1. 确认业务主题与范围（宠物商城 / 领养社区 / 专利服务……）。
-2. 在 `server` 里搭出 Gin + SQLite 骨架：`main.go`、`models/`、`handlers/`。
-3. 定数据库模型和接口清单，写进 `docs/`。
-4. 三端按接口清单逐页实现，优先保证一条完整业务链路可演示。
+过程文档统一在 `docs/`，编号有历史断号（合并删过几篇），完整清单见 [docs/README.md](docs/README.md)。三份最先该看：`02-数据库设计.md`、`03-接口文档.md`、`05-编译打包发布运行.md`。
+
+接口文档与后端源码为准：路由、字段、错误码有冲突时先改文档，再到 `docs/12-后端权限与限流收紧说明.md` 的遗留表里记一笔。

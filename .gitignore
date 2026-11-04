@@ -29,3 +29,5 @@ build/
 out/
 target/
 release/
+.gocache/
+.gotmp

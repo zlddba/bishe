@@ -2,6 +2,7 @@ package team.wd.atnestapp.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -33,9 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -53,15 +57,23 @@ import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.GeoPickPayload
 import team.wd.atnestapp.data.api.ReversePayload
+import team.wd.atnestapp.data.api.EstimateDto
+import team.wd.atnestapp.data.api.PointsEntryDto
+import team.wd.atnestapp.data.api.RefundDto
+import team.wd.atnestapp.data.api.PetStayDto
+import team.wd.atnestapp.data.api.TicketDto
 import team.wd.atnestapp.data.api.ReceivedOrderDto
 import team.wd.atnestapp.data.api.SitterDto
 import team.wd.atnestapp.data.api.SitterReviewDto
 import team.wd.atnestapp.data.api.SitterCouponDto
 import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.data.api.UpdateShopPayload
+import team.wd.atnestapp.data.api.UpdatePetPayload
 import team.wd.atnestapp.data.api.PublicReviewDto
 import team.wd.atnestapp.data.api.SettlementDto
 import team.wd.atnestapp.data.api.AddonDto
+import team.wd.atnestapp.data.api.AddonPayload
+import team.wd.atnestapp.data.api.AddonUpdatePayload
 import team.wd.atnestapp.data.api.SitterStatsDto
 import team.wd.atnestapp.data.api.PriceRuleDto
 import team.wd.atnestapp.data.api.PriceRulePayload
@@ -81,7 +93,9 @@ import team.wd.atnestapp.ui.components.FieldLabel
 import team.wd.atnestapp.ui.components.GhostButton
 import team.wd.atnestapp.ui.components.KeyValueRow
 import team.wd.atnestapp.ui.components.PrimaryButton
+import team.wd.atnestapp.ui.components.PhotoStrip
 import team.wd.atnestapp.ui.components.MapPickerPanel
+import team.wd.atnestapp.ui.components.RemoteImage
 import team.wd.atnestapp.ui.components.SoftTextField
 import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.ThinDivider
@@ -124,6 +138,9 @@ enum class AppPage(val title: String) {
 
 private enum class Screen { Launch, Main }
 
+/** 桌面端自动拉数据的间隔：一开就是很久，新订单和新消息不该等用户手动刷新 */
+private const val AUTO_REFRESH_MILLIS = 5_000L
+
 sealed interface DrawerKind {
     data class PetDetail(val index: Int) : DrawerKind
     data class OrderDetail(val index: Int) : DrawerKind
@@ -147,12 +164,31 @@ sealed interface ModalKind {
         val longitude: Double?,
         val onPicked: (lat: Double, lng: Double, address: String) -> Unit,
     ) : ModalKind
+    /** 图片放大预览 */
+    data class Photo(val url: String, val caption: String = "") : ModalKind
+    /** 取消订单（后端会释放已占容量） */
+    data class CancelOrder(val orderId: Long, val orderNo: String) : ModalKind
+    /** 改期：待支付 / 待确认 / 已接单可改 */
+    data class Reschedule(
+        val orderId: Long,
+        val orderNo: String,
+        val startDate: String,
+        val endDate: String,
+    ) : ModalKind
+    /** 续住：只能往后延，且订单必须已支付 */
+    data class Renew(val orderId: Long, val orderNo: String, val endDate: String, val amount: Int) : ModalKind
+    /** 申请退款：进入平台审核 */
+    data class Refund(val orderId: Long, val orderNo: String, val amount: Int) : ModalKind
+    /** 联系客服：提交售后工单 */
+    data object Ticket : ModalKind
 }
 
 class AppState {
     val api = ApiClient(runCatching { AppConfig.apiBaseUrl }.getOrDefault("")).also { client ->
         // 任意接口返回"用户不存在"（账号已被删除）→ 强制退出并清空本地会话数据
         client.onSessionInvalid = { forceLogoutOnMissingUser() }
+        // 静默续期也换不到令牌（刷新令牌过期/被吊销）→ 退出登录，避免停在"看着已登录、请求全失败"的状态
+        client.onAuthExpired = { forceLogoutExpired() }
     }
     lateinit var scope: CoroutineScope
 
@@ -201,6 +237,8 @@ class AppState {
     var ownerDynamics by mutableStateOf<List<DynamicDto>>(emptyList())
     var dynamicsLoading by mutableStateOf(false)
     var dynamicsError by mutableStateOf<String?>(null)
+    // 列表接口不返回"我点过没有"，所以点赞状态只在前端乐观维护
+    val likedDynamics = mutableStateListOf<Long>()
 
     var coupons by mutableStateOf<CouponListDto?>(null)
     var couponsLoading by mutableStateOf(false)
@@ -250,10 +288,28 @@ class AppState {
     var sitterCoupons by mutableStateOf<List<SitterCouponDto>>(emptyList())
     var sitterCouponsLoading by mutableStateOf(false)
 
+    // 机构自己的加购服务（含已下架）
+    var myAddons by mutableStateOf<List<AddonDto>>(emptyList())
+    var addonsLoading by mutableStateOf(false)
+
+    // 宠物详情抽屉里的历史寄养记录（列表接口不返回，按需单独取）
+    var petStays by mutableStateOf<List<PetStayDto>>(emptyList())
+
     var selectedCouponId by mutableStateOf(0L)
     var selectedCouponTitle by mutableStateOf("")
     var selectedCouponType by mutableStateOf("")
     var selectedCouponValue by mutableStateOf(0.0)
+    var selectedPoints by mutableStateOf(0)
+
+    // 下单页估价、积分、退款与工单
+    var pointsBalance by mutableStateOf(0)
+    var pointsHistory by mutableStateOf<List<PointsEntryDto>>(emptyList())
+    var refunds by mutableStateOf<List<RefundDto>>(emptyList())
+    var tickets by mutableStateOf<List<TicketDto>>(emptyList())
+    var estimate by mutableStateOf<EstimateDto?>(null)
+    var estimating by mutableStateOf(false)
+    // >0 表示 PetEdit 处于编辑模式
+    var editingPetId by mutableStateOf(0L)
 
     fun go(target: AppPage) {
         if (target in sitterPages && !isSitterAccount) {
@@ -305,17 +361,18 @@ class AppState {
     }
 
     private suspend fun applyAuth(authResponse: AuthResponseDto) {
-        api.token = authResponse.accessToken
+        // 同时记住刷新令牌：访问令牌过期后客户端会自动续期，用户不会被中途踢下线
+        api.applyAuth(authResponse.accessToken, authResponse.refreshToken, authResponse.expiresIn)
         // 登录后查询一次用户信息，角色以服务端 /auth/me 为准
         val me = try {
             api.me()
         } catch (e: Exception) {
-            api.token = null
+            api.clearAuth()
             toast(e.message ?: "获取用户信息失败")
             return
         }
         if (me.role == "admin") {
-            api.token = null
+            api.clearAuth()
             toast("管理员账号请使用后台管理端登录")
             return
         }
@@ -390,6 +447,19 @@ class AppState {
     }
 
     /**
+     * 登录态在服务端已经作废：清掉本地会话，直接把登录框弹出来，
+     * 用户重新登录后可以继续刚才的操作（挂起页由 pendingPage 记录）。
+     */
+    private fun forceLogoutExpired() {
+        if (!loggedIn) return
+        val current = page
+        clearSession()
+        pendingPage = current
+        loginVisible = true
+        toast("登录已过期，请重新登录")
+    }
+
+    /**
      * 清空登录态与所有按用户缓存的数据。
      * 桌面端没有磁盘持久化（无本地令牌/凭据文件），内存里的这份状态就是全部"保存的数据"。
      */
@@ -401,7 +471,7 @@ class AppState {
         account = ""
         nickname = ""
         pendingPage = null
-        api.token = null
+        api.clearAuth()
         authBusy = false
 
         // 主人端缓存
@@ -421,6 +491,10 @@ class AppState {
         ownerDynamics = emptyList()
         dynamicsLoading = false
         dynamicsError = null
+        likedDynamics.clear()
+        // 换账号后计数基线要重来，否则会把上一任账号的未读数当成"新消息"提示
+        lastUnreadCount = -1
+        lastPendingCount = -1
         coupons = null
         couponsLoading = false
         couponsError = null
@@ -432,6 +506,13 @@ class AppState {
         selectedCouponTitle = ""
         selectedCouponType = ""
         selectedCouponValue = 0.0
+        selectedPoints = 0
+        pointsBalance = 0
+        pointsHistory = emptyList()
+        refunds = emptyList()
+        tickets = emptyList()
+        estimate = null
+        editingPetId = 0L
 
         // 机构端缓存
         myShop = null
@@ -511,19 +592,8 @@ class AppState {
         note: String,
         avatarUrl: String = "",
     ) {
-        val species = when (typeLabel) {
-            "猫" -> "cat"
-            "狗" -> "dog"
-            else -> "other"
-        }
-        val bodySize = when (sizeLabel) {
-            "迷你" -> "tiny"
-            "小型" -> "small"
-            "中型" -> "medium"
-            "大型" -> "large"
-            "超大型" -> "xlarge"
-            else -> ""
-        }
+        val species = speciesCode(typeLabel)
+        val bodySize = bodySizeCode(sizeLabel)
         try {
             api.createPet(
                 CreatePetPayload(
@@ -543,6 +613,54 @@ class AppState {
         } catch (e: Exception) {
             toast(e.message ?: "创建宠物失败")
         }
+    }
+
+    /** 编辑已有宠物档案 */
+    suspend fun updatePet(
+        petId: Long,
+        name: String,
+        typeLabel: String,
+        sizeLabel: String,
+        ageText: String,
+        vaccinated: Boolean,
+        note: String,
+        avatarUrl: String = "",
+    ) {
+        try {
+            api.updatePet(
+                petId,
+                UpdatePetPayload(
+                    name = name.trim(),
+                    species = speciesCode(typeLabel),
+                    bodySize = bodySizeCode(sizeLabel).ifBlank { null },
+                    ageMonth = parseAgeMonth(ageText),
+                    vaccinated = vaccinated,
+                    notes = note.trim(),
+                    avatarUrl = avatarUrl,
+                    photoUrls = if (avatarUrl.isNotBlank()) listOf(avatarUrl) else null,
+                ),
+            )
+            toast("宠物档案已更新")
+            loadPets(force = true)
+            go(AppPage.Pets)
+        } catch (e: Exception) {
+            toast(e.message ?: "更新宠物失败")
+        }
+    }
+
+    private fun speciesCode(typeLabel: String) = when (typeLabel) {
+        "猫" -> "cat"
+        "狗" -> "dog"
+        else -> "other"
+    }
+
+    private fun bodySizeCode(sizeLabel: String) = when (sizeLabel) {
+        "迷你" -> "tiny"
+        "小型" -> "small"
+        "中型" -> "medium"
+        "大型" -> "large"
+        "超大型" -> "xlarge"
+        else -> ""
     }
 
     suspend fun loadOrders(force: Boolean = false) {
@@ -568,12 +686,15 @@ class AppState {
                     endDate = endDate,
                     pets = listOf(CreateOrderPetPayload(petId)),
                     userCouponId = selectedCouponId,
+                    pointsUsed = selectedPoints,
                 ),
             )
             selectedCouponId = 0L
             selectedCouponTitle = ""
             selectedCouponType = ""
             selectedCouponValue = 0.0
+            selectedPoints = 0
+            estimate = null
             loadOrders(force = true)
             val index = orders.indexOfFirst { it.id == result.orderId }
             if (index >= 0) orderIndex = index
@@ -592,6 +713,129 @@ class AppState {
     } catch (e: Exception) {
         toast(e.message ?: "支付失败")
         false
+    }
+
+    /** 取消订单：后端会释放已占容量，成功后刷新列表与日历 */
+    suspend fun cancelOrder(orderId: Long, reason: String): Boolean = try {
+        api.cancelOrder(orderId, reason.ifBlank { "个人安排变化" })
+        loadOrders(force = true)
+        toast("订单已取消，容量已释放")
+        true
+    } catch (e: Exception) {
+        toast(e.message ?: "取消失败")
+        false
+    }
+
+    /** 改期：成功后费用会按新周期重算，返回值里带着新金额 */
+    suspend fun rescheduleOrder(orderId: Long, startDate: String, endDate: String): Boolean = try {
+        val result = api.rescheduleOrder(orderId, startDate, endDate)
+        loadOrders(force = true)
+        toast("已改到 ${result.startDate} ~ ${result.endDate}，费用 ¥${result.totalAmount}")
+        true
+    } catch (e: Exception) {
+        toast(e.message ?: "改期失败")
+        false
+    }
+
+    /** 续住：延长结束日期 */
+    suspend fun renewOrder(orderId: Long, endDate: String): Boolean = try {
+        val result = api.renewOrder(orderId, endDate)
+        loadOrders(force = true)
+        val paid = if (result.extraAmount > 0.0) "，已补差价 ¥${result.extraAmount}" else ""
+        toast("已续住 ${result.extraDays} 天$paid，订单合计 ¥${result.totalAmount}")
+        true
+    } catch (e: Exception) {
+        toast(e.message ?: "续住失败")
+        false
+    }
+
+    /** 申请退款：进入平台审核，不是直接退钱 */
+    suspend fun requestRefund(orderId: Long, reason: String): Boolean = try {
+        api.requestRefund(orderId, reason)
+        loadRefunds(force = true)
+        toast("退款申请已提交，等待平台处理")
+        true
+    } catch (e: Exception) {
+        toast(e.message ?: "提交失败")
+        false
+    }
+
+    suspend fun loadRefunds(force: Boolean = false) {
+        if (!loggedIn) return
+        if (!force && refunds.isNotEmpty()) return
+        try {
+            refunds = api.listRefundRequests()
+        } catch (e: Exception) {
+            // 列表为空不是致命问题，保留旧数据即可
+        }
+    }
+
+    suspend fun loadTickets(force: Boolean = false) {
+        if (!loggedIn) return
+        if (!force && tickets.isNotEmpty()) return
+        try {
+            tickets = api.listTickets()
+        } catch (e: Exception) {
+            // 忽略，页面上显示空列表
+        }
+    }
+
+    suspend fun submitTicket(title: String, content: String, category: String = "other"): Boolean {
+        if (title.isBlank() || content.isBlank()) {
+            toast("请填写问题标题和描述")
+            return false
+        }
+        return try {
+            api.createTicket(category, title.trim(), content.trim())
+            loadTickets(force = true)
+            toast("工单已提交，平台会尽快回复")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "提交失败")
+            false
+        }
+    }
+
+    /** 积分余额；失败时静默归零，避免下单页被拖住 */
+    suspend fun loadPoints(force: Boolean = false) {
+        if (!loggedIn) return
+        if (!force && pointsHistory.isNotEmpty()) return
+        try {
+            val data = api.myPoints()
+            pointsBalance = data.balance
+            pointsHistory = data.items
+        } catch (_: Exception) {
+            pointsBalance = 0
+        }
+    }
+
+    /** 下单前实时估价。参数不全或后端报错时清空，页面退回本地估算 */
+    suspend fun refreshEstimate(
+        sitterId: Long,
+        startDate: String,
+        endDate: String,
+        petIds: List<Long>,
+    ) {
+        if (sitterId <= 0 || petIds.isEmpty() || startDate.isBlank() || endDate.isBlank()) {
+            estimate = null
+            return
+        }
+        estimating = true
+        try {
+            estimate = api.estimateOrder(
+                sitterId = sitterId,
+                startDate = startDate,
+                endDate = endDate,
+                petIds = petIds,
+                userCouponId = selectedCouponId,
+                pointsUsed = selectedPoints,
+            )
+        } catch (_: Exception) {
+            // 日期还在改、还没选宠物都会失败，这里不弹提示，页面自己显示"本地估算"
+            estimate = null
+        } finally {
+            estimating = false
+        }
     }
 
     suspend fun submitReview(
@@ -618,6 +862,68 @@ class AppState {
         }
     }
 
+    // 轮询判断"是否真有新东西"的基线计数；-1 表示还没建立基线，那一轮不提示
+    private var lastUnreadCount = -1
+    private var lastPendingCount = -1
+
+    /**
+     * 每 5 秒一次的静默刷新。桌面端经常一开就是很久，新订单、新动态、新消息要自己冒出来，
+     * 不该等用户去点"刷新"。
+     *
+     * 抽屉和弹框都是按列表下标取数据的，中途刷新会让内容错位，所以它们打开时只刷通知；
+     * 列表已有内容时各页面不闪加载骨架，用户基本无感。
+     */
+    suspend fun autoRefresh() {
+        if (!loggedIn) return
+        loadNotifications(force = true)
+        if (drawer != null || modal != null || loginVisible) return
+
+        when (role) {
+            AppRole.Sitter -> {
+                loadReceivedOrders(force = true)
+                loadCapacity(force = true)
+                loadSitterStats(force = true)
+            }
+            else -> {
+                loadOrders(force = true)
+                loadOwnerDynamics(force = true)
+            }
+        }
+        // 只刷当前这一屏会变的业务数据，切页后下一轮自然换成另一套；
+        // 找机构这类浏览列表变化不频繁，不值得每 5 秒重拉一次
+        when (page) {
+            AppPage.Pets -> loadPets(force = true)
+            AppPage.Coupons -> loadCoupons(force = true)
+            AppPage.SbDash -> loadEarnings(force = true)
+            AppPage.SbReviews -> loadSitterReviews(force = true)
+            AppPage.SbCoupons -> loadSitterCoupons(force = true)
+            AppPage.SbPublish -> loadSitterDynamics(force = true)
+            AppPage.SbIncome -> {
+                loadEarnings(force = true)
+                loadSettlements(force = true)
+            }
+            else -> Unit
+        }
+        announceNewArrivals()
+    }
+
+    /** 只有数量真的变多才提示，且不打断正在显示的提示 */
+    private fun announceNewArrivals() {
+        val unread = notifications.count { !it.isRead }
+        if (lastUnreadCount >= 0 && unread > lastUnreadCount && toastMessage == null) {
+            toast("有 ${unread - lastUnreadCount} 条新消息")
+        }
+        lastUnreadCount = unread
+
+        if (role == AppRole.Sitter) {
+            val pending = receivedOrders.count { it.status == "待确认" }
+            if (lastPendingCount >= 0 && pending > lastPendingCount && toastMessage == null) {
+                toast("有 ${pending - lastPendingCount} 个新订单待确认")
+            }
+            lastPendingCount = pending
+        }
+    }
+
     suspend fun loadNotifications(force: Boolean = false) {
         if (!loggedIn || notificationsLoading) return
         if (!force && notifications.isNotEmpty()) return
@@ -635,6 +941,17 @@ class AppState {
     suspend fun markNotificationRead(id: Long) {
         runCatching { api.markNotificationRead(id) }
         notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
+    }
+
+    /** 一键全部已读 */
+    suspend fun markAllNotificationsRead() {
+        runCatching { api.markAllNotificationsRead() }
+        if (notifications.any { !it.isRead }) {
+            notifications = notifications.map { it.copy(isRead = true) }
+            toast("已全部标为已读")
+        } else {
+            toast("没有未读消息")
+        }
     }
 
     suspend fun loadFavorites(force: Boolean = false) {
@@ -865,6 +1182,28 @@ class AppState {
         }
     }
 
+    /** 点赞 / 取消点赞。之前这里只弹一句"已点赞"，其实后端接口早就有了，现在真的写进库。 */
+    suspend fun toggleDynamicLike(dynamicId: Long) {
+        if (!loggedIn) {
+            toast("登录后才能点赞")
+            return
+        }
+        val liked = likedDynamics.contains(dynamicId)
+        try {
+            if (liked) {
+                api.unlikeDynamic(dynamicId)
+                likedDynamics.remove(dynamicId)
+                toast("已取消点赞")
+            } else {
+                val result = api.likeDynamic(dynamicId)
+                if (!likedDynamics.contains(dynamicId)) likedDynamics.add(dynamicId)
+                toast(if (result.liked) "已点赞" else "点赞已记录")
+            }
+        } catch (e: Exception) {
+            toast(e.message ?: "操作失败")
+        }
+    }
+
     suspend fun loadCoupons(force: Boolean = false) {
         if (!loggedIn || couponsLoading) return
         if (!force && coupons != null) return
@@ -899,6 +1238,7 @@ class AppState {
             toast(e.message ?: "删除优惠券失败")
         }
     }
+
     suspend fun loadMyShop(force: Boolean = false) {
         if (!loggedIn || shopLoading) return
         if (!force && myShop != null) return
@@ -906,10 +1246,74 @@ class AppState {
         shopError = null
         try {
             myShop = api.getMyShop()
+            loadMyAddons()
         } catch (e: Exception) {
             shopError = e.message ?: "加载机构资料失败"
         } finally {
             shopLoading = false
+        }
+    }
+
+    suspend fun loadMyAddons() {
+        addonsLoading = true
+        try {
+            myAddons = api.myAddons()
+        } catch (e: Exception) {
+            // 服务项不是主流程，失败时留空列表即可
+        } finally {
+            addonsLoading = false
+        }
+    }
+
+    /** 某只宠物的历史寄养记录；换宠物查看时先清空，避免显示上一只的记录 */
+    suspend fun loadPetStays(petId: Long) {
+        if (petId <= 0L) return
+        petStays = emptyList()
+        try {
+            petStays = api.listPetStays(petId)
+        } catch (e: Exception) {
+            // 没有记录时留空即可，不打断查看档案
+        }
+    }
+
+    suspend fun createAddon(name: String, price: Double): Boolean {
+        if (name.isBlank()) {
+            toast("请填写服务名称")
+            return false
+        }
+        if (price <= 0.0) {
+            toast("价格需大于 0")
+            return false
+        }
+        return try {
+            api.createAddon(AddonPayload(name.trim(), price))
+            loadMyAddons()
+            toast("加购服务已上架")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "新增失败")
+            false
+        }
+    }
+
+    /** 上架 / 下架：后端用 enabled 标记，主人端只看得见 enabled 的项 */
+    suspend fun toggleAddon(addonId: Long, enabled: Boolean) {
+        try {
+            api.updateAddon(addonId, AddonUpdatePayload(enabled = enabled))
+            loadMyAddons()
+            toast(if (enabled) "已重新上架" else "已下架")
+        } catch (e: Exception) {
+            toast(e.message ?: "操作失败")
+        }
+    }
+
+    suspend fun removePriceRule(ruleId: Long) {
+        try {
+            api.deletePriceRule(ruleId)
+            loadPriceRules(force = true)
+            toast("节假日规则已删除")
+        } catch (e: Exception) {
+            toast(e.message ?: "删除失败")
         }
     }
 
@@ -1321,7 +1725,11 @@ class AppState {
  * 应用根：启动页 → 登录页 → 主界面。titleBar 由桌面端注入（窗口拖拽与最小化/关闭）。
  */
 @Composable
-fun AppRoot(titleBar: @Composable () -> Unit = {}) {
+fun AppRoot(
+    titleBar: @Composable () -> Unit = {},
+    /** 窗口是否最小化到任务栏；由 main.kt 传入，最小化时暂停轮询 */
+    isMinimized: () -> Boolean = { false },
+) {
     var screen by remember { mutableStateOf(Screen.Launch) }
     val scope = rememberCoroutineScope()
     val app = remember { AppState().also { it.scope = scope } }
@@ -1331,6 +1739,16 @@ fun AppRoot(titleBar: @Composable () -> Unit = {}) {
             delay(1500)
             screen = Screen.Main
             app.loadSitters()
+        }
+    }
+
+    // 每 5 秒拉一次当前视角需要的数据；最小化到任务栏时暂停，回到前台下一轮自然补上。
+    LaunchedEffect(app.loggedIn) {
+        if (!app.loggedIn) return@LaunchedEffect
+        while (true) {
+            // 后台循环不能因为一次意外异常就把整个应用带崩
+            if (!isMinimized()) runCatching { app.autoRefresh() }
+            delay(AUTO_REFRESH_MILLIS)
         }
     }
 
@@ -1460,6 +1878,8 @@ private fun DrawerBody(app: AppState, kind: DrawerKind) {
     when (kind) {
         is DrawerKind.PetDetail -> {
             val p = app.pets.getOrNull(kind.index) ?: return
+            LaunchedEffect(p.id) { app.loadPetStays(p.id) }
+            val stays = app.petStays
             listOf(
                 "宠物名" to p.name,
                 "品种" to p.breed,
@@ -1468,9 +1888,49 @@ private fun DrawerBody(app: AppState, kind: DrawerKind) {
                 "年龄" to p.age,
                 "疫苗情况" to p.vaccine,
                 "免疫证明" to p.cert,
-                "累计寄养" to "${p.orders} 单",
+                "累计寄养" to "${stays.size} 单",
                 "健康备注" to p.note,
             ).forEach { (k, v) -> KeyValueRow(k, v) }
+            if (stays.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FieldLabel("寄养记录")
+                stays.take(6).forEach { stay ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stay.sitterName.ifBlank { "机构已注销" },
+                                color = PatNestColors.Ink, fontSize = 12.5.sp,
+                            )
+                            Text(
+                                "${stay.startDate} ~ ${stay.endDate} · ${stay.totalDays} 天",
+                                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                            )
+                        }
+                        Text(
+                            orderStatusLabelOf(stay.status),
+                            color = PatNestColors.Ink2, fontSize = 12.sp,
+                        )
+                    }
+                    ThinDivider()
+                }
+            }
+            if (p.photos.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FieldLabel("宠物照片")
+                PhotoStrip(p.photos) { url -> app.modal = ModalKind.Photo(url, p.name) }
+            }
+            if (p.vaccinePhotos.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FieldLabel("免疫证明")
+                PhotoStrip(p.vaccinePhotos) { url -> app.modal = ModalKind.Photo(url, "${p.name} 免疫证明") }
+                if (p.vaccineNote.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("审核备注：${p.vaccineNote}", color = PatNestColors.Ink3, fontSize = 12.sp)
+                }
+            }
         }
         is DrawerKind.OrderDetail -> {
             val o = app.orders.getOrNull(kind.index) ?: return
@@ -1485,14 +1945,33 @@ private fun DrawerBody(app: AppState, kind: DrawerKind) {
                 "下单时间" to o.made,
                 "订单状态" to o.status,
             ).forEach { (k, v) -> KeyValueRow(k, v) }
+            // 退款申请进度：只有下过单才有意义，加载失败就当没有
+            LaunchedEffect(o.id) {
+                if (o.id > 0) app.loadRefunds()
+            }
+            val mine = app.refunds.filter { it.orderId == o.id }
+            if (mine.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FieldLabel("退款申请")
+                mine.forEach { r ->
+                    KeyValueRow(
+                        refundStatusLabel(r.status),
+                        "¥${money(r.amount)} · ${r.reason.ifBlank { "未填写原因" }}",
+                    )
+                }
+            }
         }
         is DrawerKind.DynDetail -> {
             val d = app.ownerDynamics.getOrNull(kind.index) ?: return
             listOf(
                 "发布时间" to d.createdAt.replace('T', ' ').take(16),
-                "照片" to "${d.photos.size} 张",
                 "动态内容" to d.content,
             ).forEach { (k, v) -> KeyValueRow(k, v) }
+            if (d.photos.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FieldLabel("照片 ${d.photos.size} 张")
+                PhotoStrip(d.photos) { url -> app.modal = ModalKind.Photo(url, "寄养动态") }
+            }
         }
         is DrawerKind.SbOrderDetail -> {
             val o = app.receivedOrders.getOrNull(kind.index) ?: return
@@ -1554,10 +2033,13 @@ private fun DrawerFooter(app: AppState, kind: DrawerKind) {
         }
         is DrawerKind.DynDetail -> {
             GhostButton("关闭", { app.drawer = null })
-            PrimaryButton("点赞", {
-                app.drawer = null
-                app.toast("已点赞")
-            })
+            val d = app.ownerDynamics.getOrNull(kind.index)
+            if (d != null) {
+                PrimaryButton(
+                    if (app.likedDynamics.contains(d.id)) "已点赞" else "点赞",
+                    { app.scope.launch { app.toggleDynamicLike(d.id) } },
+                )
+            }
         }
         is DrawerKind.SbOrderDetail -> {
             val o = app.receivedOrders.getOrNull(kind.index) ?: return
@@ -1594,7 +2076,7 @@ private fun BoxScope.ModalOverlay(app: AppState) {
     Column(
         Modifier
             .align(Alignment.Center)
-            .width(if (modal is ModalKind.MapPicker) 760.dp else 420.dp)
+            .width(if (modal is ModalKind.MapPicker || modal is ModalKind.Photo) 760.dp else 420.dp)
             .patShadow(30.dp, PatNestShape.Xl)
             .clip(PatNestShape.Xl)
             .background(Color.White)
@@ -1617,6 +2099,12 @@ private fun BoxScope.ModalOverlay(app: AppState) {
                     is ModalKind.CouponForm -> if (modal.coupon == null) "发布优惠券" else "编辑优惠券"
                     is ModalKind.AdjustCapacity -> "调整容量 · ${modal.date}"
                     is ModalKind.MapPicker -> "地图选点"
+                    is ModalKind.Photo -> "图片预览"
+                    is ModalKind.CancelOrder -> "取消订单"
+                    is ModalKind.Reschedule -> "申请改期"
+                    is ModalKind.Renew -> "续住"
+                    is ModalKind.Refund -> "申请退款"
+                    ModalKind.Ticket -> "联系客服"
                 },
                 color = PatNestColors.Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             )
@@ -1627,12 +2115,12 @@ private fun BoxScope.ModalOverlay(app: AppState) {
         }
         ThinDivider()
         // 地图弹框不能套 verticalScroll：拖动地图的手势会被滚动容器吃掉
-        val mapModal = modal is ModalKind.MapPicker
+        val bareModal = modal is ModalKind.MapPicker || modal is ModalKind.Photo
         Column(
             Modifier
                 .fillMaxWidth()
                 .then(
-                    if (mapModal) Modifier
+                    if (bareModal) Modifier
                     else Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())
                 )
                 .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -1714,6 +2202,35 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
                         uploadingPhoto = false
                     }
                 }
+            }
+            if (photoUrls.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    photoUrls.forEach { url ->
+                        Box {
+                            RemoteImage(
+                                url = url,
+                                modifier = Modifier.size(76.dp, 56.dp),
+                                contentDescription = "动态配图",
+                            )
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(2.dp)
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .clickable { photoUrls = photoUrls - url },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("×", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            if (uploadingPhoto) {
+                Text("正在上传…", color = PatNestColors.Ink3, fontSize = 11.5.sp, modifier = Modifier.padding(top = 8.dp))
             }
             Text(
                 "提交后经平台审核，通过后对主人可见",
@@ -2073,8 +2590,202 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
                 modal.onPicked(lat, lng, addr)
             },
         )
+        is ModalKind.Photo -> Column(Modifier.fillMaxWidth()) {
+            RemoteImage(
+                url = modal.url,
+                modifier = Modifier.fillMaxWidth().height(420.dp),
+                contentDescription = "图片预览",
+                contentScale = ContentScale.Fit,
+                shape = PatNestShape.Md,
+            )
+            if (modal.caption.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(modal.caption, color = PatNestColors.Ink3, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Spacer(Modifier.weight(1f))
+                GhostButton("关闭", { app.modal = null })
+            }
+        }
+        is ModalKind.CancelOrder -> {
+            var reason by remember(modal.orderId) { mutableStateOf("") }
+            Text(
+                "取消后 ${modal.orderNo} 占用的当日容量会立即释放，已支付的订单需另行申请退款。",
+                color = PatNestColors.Ink2, fontSize = 13.sp, lineHeight = 20.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            FieldLabel("取消原因（选填）")
+            SoftTextField(reason, { reason = it }, Modifier.fillMaxWidth(), placeholder = "如：临时出差，改天再约")
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GhostButton("再想想", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("确认取消", {
+                    app.modal = null
+                    app.scope.launch { app.cancelOrder(modal.orderId, reason.trim()) }
+                }, Modifier.weight(1f))
+            }
+        }
+        is ModalKind.Reschedule -> {
+            var startText by remember(modal.orderId) { mutableStateOf(modal.startDate) }
+            var endText by remember(modal.orderId) { mutableStateOf(modal.endDate) }
+            FieldLabel("新的开始日期")
+            SoftTextField(startText, { startText = it }, Modifier.fillMaxWidth(), placeholder = "YYYY-MM-DD")
+            Spacer(Modifier.height(10.dp))
+            FieldLabel("新的结束日期")
+            SoftTextField(endText, { endText = it }, Modifier.fillMaxWidth(), placeholder = "YYYY-MM-DD")
+            Spacer(Modifier.height(8.dp))
+            Text("改期会按新周期重算费用，日期格式如 2026-11-08", color = PatNestColors.Ink3, fontSize = 11.5.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("提交改期", {
+                    if (!isPlainDate(startText) || !isPlainDate(endText) || endText <= startText) {
+                        app.toast("日期格式应为 YYYY-MM-DD，且结束晚于开始")
+                    } else {
+                        app.modal = null
+                        app.scope.launch { app.rescheduleOrder(modal.orderId, startText, endText) }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
+        is ModalKind.Renew -> {
+            var endText by remember(modal.orderId) { mutableStateOf(nextDay(modal.endDate)) }
+            FieldLabel("续住到（含当天之前）")
+            SoftTextField(endText, { endText = it }, Modifier.fillMaxWidth(), placeholder = "YYYY-MM-DD")
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "订单 ${modal.orderNo} 实付 ¥${modal.amount}，当前结束日期 ${modal.endDate}，新日期必须晚于它。",
+                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "续住会占用新增夜间的容量，并按机构当前排期价立即补收差价后生效。",
+                color = PatNestColors.Ink2, fontSize = 11.5.sp,
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("确认续住并补差价", {
+                    if (!isPlainDate(endText) || endText <= modal.endDate) {
+                        app.toast("请填写晚于 ${modal.endDate} 的日期，格式 YYYY-MM-DD")
+                    } else {
+                        app.modal = null
+                        app.scope.launch { app.renewOrder(modal.orderId, endText) }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
+        is ModalKind.Refund -> {
+            var reason by remember(modal.orderId) { mutableStateOf("") }
+            Text(
+                "订单 ${modal.orderNo} 实付 ¥${modal.amount}，提交后由平台审核，审核通过才退款。",
+                color = PatNestColors.Ink2, fontSize = 13.sp, lineHeight = 20.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            FieldLabel("退款原因")
+            SoftTextField(reason, { reason = it }, Modifier.fillMaxWidth(), placeholder = "如：机构临时无法接待")
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("提交申请", {
+                    if (reason.trim().length < 2) {
+                        app.toast("请至少简单写两句原因")
+                    } else {
+                        app.modal = null
+                        app.scope.launch { app.requestRefund(modal.orderId, reason.trim()) }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
+        ModalKind.Ticket -> {
+            var category by remember { mutableStateOf("订单问题") }
+            var title by remember { mutableStateOf("") }
+            var content by remember { mutableStateOf("") }
+            FieldLabel("问题类型")
+            ChipRow(listOf("订单问题", "机构投诉", "支付退款", "账号其他"), category) { category = it }
+            Spacer(Modifier.height(12.dp))
+            FieldLabel("标题")
+            SoftTextField(title, { title = it }, Modifier.fillMaxWidth(), placeholder = "一句话说清问题")
+            Spacer(Modifier.height(10.dp))
+            FieldLabel("详细描述")
+            SoftTextField(content, { content = it }, Modifier.fillMaxWidth(), singleLine = false, minHeight = 84.dp)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GhostButton("取消", { app.modal = null }, Modifier.weight(1f))
+                PrimaryButton("提交工单", {
+                    app.scope.launch {
+                        if (app.submitTicket(title, content, ticketCategoryCode(category))) {
+                            app.modal = null
+                        }
+                    }
+                }, Modifier.weight(1f))
+            }
+        }
     }
 }
+
+/** 后端日期参数一律 YYYY-MM-DD，这里只做最朴素的形状校验，业务规则交给服务端 */
+private fun isPlainDate(text: String): Boolean {
+    if (text.length != 10) return false
+    if (text[4] != '-' || text[7] != '-') return false
+    val y = text.substring(0, 4).toIntOrNull() ?: return false
+    val m = text.substring(5, 7).toIntOrNull() ?: return false
+    val d = text.substring(8, 10).toIntOrNull() ?: return false
+    return y in 2000..2999 && m in 1..12 && d in 1..31
+}
+
+/** 在 YYYY-MM-DD 上加一天，跨月跨年都靠"当月天数"表兜住 */
+private fun nextDay(date: String): String {
+    if (!isPlainDate(date)) return date
+    val daysInMonth = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    var y = date.substring(0, 4).toInt()
+    var m = date.substring(5, 7).toInt()
+    var d = date.substring(8, 10).toInt()
+    val leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    val last = daysInMonth[m - 1] + if (m == 2 && leap) 1 else 0
+    d += 1
+    if (d > last) {
+        d = 1
+        m += 1
+        if (m > 12) {
+            m = 1
+            y += 1
+        }
+    }
+    return "%04d-%02d-%02d".format(y, m, d)
+}
+
+private fun ticketCategoryCode(label: String) = when (label) {
+    "订单问题" -> "order"
+    "机构投诉" -> "sitter"
+    "支付退款" -> "refund"
+    else -> "other"
+}
+
+private fun refundStatusLabel(status: String) = when (status) {
+    "pending" -> "审核中"
+    "approved" -> "已通过"
+    "rejected" -> "已驳回"
+    "cancelled" -> "已撤销"
+    else -> status
+}
+
+/** 寄养记录里的订单状态：与订单列表用同一套中文标签 */
+private fun orderStatusLabelOf(status: String) = when (status) {
+    "pending_pay" -> "待支付"
+    "confirmed" -> "待确认"
+    "accepted" -> "已接单"
+    "staying" -> "寄养中"
+    "completed" -> "已结束"
+    "evaluated" -> "已评价"
+    "cancelled" -> "已取消"
+    "rejected" -> "已拒绝"
+    else -> status
+}
+
+/** 金额显示：整钱不带小数，避免 ¥156.0 这种观感；不用 String.format 以防跟随系统 locale */
+private fun money(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
 
 private fun ReceivedOrderDto.toUiOrder(): SbOrder = SbOrder(
     no = orderNo,

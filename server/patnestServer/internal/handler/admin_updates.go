@@ -116,6 +116,6 @@ func auditUpdate(c *gin.Context, action string, detail map[string]interface{}) {
 	adminID, _ := c.Get("user_id")
 	id, _ := adminID.(int64)
 	_, _ = db.Pool.Exec(c.Request.Context(),
-		"SELECT fn_audit($1, $2, 'update_job', NULL, $3::jsonb)",
-		id, action, string(b))
+		"SELECT fn_audit($1, $2, 'update_job', NULL, $3::jsonb, NULLIF($4, '')::inet)",
+		id, action, string(b), auditClientIP(c))
 }

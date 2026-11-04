@@ -24,12 +24,14 @@ import team.wd.atnestapp.ui.AppPage
 import team.wd.atnestapp.ui.components.CalDayCard
 import team.wd.atnestapp.ui.components.GhostButton
 import team.wd.atnestapp.ui.components.GridRows
+import team.wd.atnestapp.ui.components.LinkText
 import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
 import team.wd.atnestapp.ui.components.SlotTag
 import team.wd.atnestapp.ui.components.ThinDivider
 import team.wd.atnestapp.data.api.CapacityItemDto
+import team.wd.atnestapp.data.api.PriceRuleDto
 import team.wd.atnestapp.ui.data.CalDay
 import team.wd.atnestapp.ui.theme.PatNestColors
 import kotlinx.coroutines.launch
@@ -68,7 +70,7 @@ fun SitterCapacityPage(app: AppState) {
                     }, height = 32.dp)
                 }
             } else {
-                GridRows(app.capacityItems.map { it.toCalDay() }, columns = 7, gap = 10.dp) { day ->
+                GridRows(app.capacityItems.map { it.toCalDay(app.priceRules) }, columns = 7, gap = 10.dp) { day ->
                     CalDayCard(day, onClick = {
                         if (day.rawDate.isNotBlank()) app.modal = ModalKind.AdjustCapacity(day.rawDate)
                     })
@@ -76,12 +78,14 @@ fun SitterCapacityPage(app: AppState) {
             }
             Spacer(Modifier.height(14.dp))
             Row(
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 LegendDot("空闲", "free", "余量充足")
                 LegendDot("紧张", "busy", "余量 ≤ 1")
                 LegendDot("满员", "full", "不可下单")
+                Spacer(Modifier.weight(1f))
                 Text("节假日", color = PatNestColors.Danger, fontSize = 12.5.sp)
             }
         }
@@ -129,6 +133,14 @@ fun SitterCapacityPage(app: AppState) {
                             "×${rule.multiplier}",
                             color = PatNestColors.BrandInk, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
                         )
+                        Spacer(Modifier.width(10.dp))
+                        // 删除走确认弹框，误删会影响已有订单的价格口径
+                        LinkText("删除") {
+                            app.modal = ModalKind.Confirm(
+                                "删除定价规则",
+                                "删除「${rule.name}」后，该区间恢复按基础日单价计费，已下单的订单金额不受影响。",
+                            ) { app.scope.launch { app.removePriceRule(rule.id) } }
+                        }
                     }
                     ThinDivider()
                 }
@@ -137,7 +149,7 @@ fun SitterCapacityPage(app: AppState) {
     }
 }
 
-private fun CapacityItemDto.toCalDay(): CalDay {
+private fun CapacityItemDto.toCalDay(rules: List<PriceRuleDto>): CalDay {
     val week = runCatching {
         when (java.time.LocalDate.parse(date).dayOfWeek.value) {
             1 -> "周一"
@@ -154,10 +166,15 @@ private fun CapacityItemDto.toCalDay(): CalDay {
         available <= 1 -> "busy"
         else -> "free"
     }
+    // 落在任一节假日定价区间内就标成假期：YYYY-MM-DD 的字符串比较即时间顺序
+    val holiday = date.isNotBlank() && rules.any { rule ->
+        rule.startDate <= date && date <= rule.endDate
+    }
     return CalDay(
         date = if (date.length >= 10) date.substring(5).replace('-', '/') else date,
         week = week,
         slots = listOf("已用 $used/$capacity" to kind),
+        holiday = holiday,
         rawDate = date,
     )
 }
@@ -165,7 +182,8 @@ private fun CapacityItemDto.toCalDay(): CalDay {
 @Composable
 private fun LegendDot(label: String, kind: String, desc: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        SlotTag(label, kind)
+        // 图例是横向排列，标签必须包内容，否则 fillMaxWidth 会把说明文字挤成一列竖字
+        SlotTag(label, kind, fill = false)
         Text(desc, color = PatNestColors.Ink2, fontSize = 12.5.sp)
     }
 }

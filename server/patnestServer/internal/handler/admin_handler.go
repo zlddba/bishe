@@ -250,8 +250,8 @@ func AdminUpdateSitterStatus(c *gin.Context) {
 	}
 
 	_, _ = db.Pool.Exec(context.Background(),
-		"SELECT fn_audit($1, 'UPDATE_SITTER_STATUS', 'sitter', $2, $3)",
-		adminID, sitterID, fmt.Sprintf(`{"new_status": "%s", "reason": "%s"}`, req.Status, req.Reason))
+		"SELECT fn_audit($1, 'UPDATE_SITTER_STATUS', 'sitter', $2, $3, NULLIF($4, '')::inet)",
+		adminID, sitterID, fmt.Sprintf(`{"new_status": "%s", "reason": "%s"}`, req.Status, req.Reason), auditClientIP(c))
 
 	OK(c, gin.H{"id": sitterID, "status": req.Status})
 }

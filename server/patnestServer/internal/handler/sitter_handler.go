@@ -207,6 +207,15 @@ func GetMyShop(c *gin.Context) {
 func CreateMyShop(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 
+	// 一个账号只该有一条机构记录，否则 mySitterID 取到哪条全靠运气
+	var existing int64
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT COALESCE(MAX(id), 0) FROM sitters WHERE user_id = $1 AND deleted_at IS NULL", userID,
+	).Scan(&existing); err == nil && existing > 0 {
+		Conflict(c, "该账号已有机构资料，请直接编辑")
+		return
+	}
+
 	var req model.CreateSitterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "invalid request: "+err.Error())
@@ -318,6 +327,7 @@ func UpdateMyShop(c *gin.Context) {
 		return
 	}
 
+	changed := changedColumns(updates)
 	updates = updates[:len(updates)-2]
 	args = append(args, userID)
 
@@ -337,5 +347,30 @@ func UpdateMyShop(c *gin.Context) {
 		return
 	}
 
+	writeAudit(c, "SITTER_UPDATE_SHOP", "sitter", s.ID,
+		fmt.Sprintf(`{"fields":[%s]}`, strings.Join(quotedNames(changed), ",")))
+
 	OK(c, s)
+}
+
+// changedColumns 从拼好的 SET 子句里取出本次真正改动的列名。
+// 审计关心的是"动了哪几栏"，不是新值本身：这些字段在业务表里查得到，
+// 日志里再存一份快照反而容易和后来的修改对不上。
+func changedColumns(setClause string) []string {
+	parts := strings.Split(setClause, ", ")
+	names := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if i := strings.Index(p, " = $"); i > 0 {
+			names = append(names, p[:i])
+		}
+	}
+	return names
+}
+
+func quotedNames(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = fmt.Sprintf("%q", n)
+	}
+	return out
 }

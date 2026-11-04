@@ -269,7 +269,8 @@ private fun HeroBanner(app: AppState, currentStay: team.wd.atnestapp.data.model.
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (app.loggedIn) "欢迎回来，${app.nickname.ifBlank { "陈雨" }}" else "发现靠谱的寄养机构",
+                    // 昵称没设置时退回账号名，别再显示一个写死的假名字
+                    if (app.loggedIn) "欢迎回来，${app.nickname.ifBlank { app.account }.ifBlank { "朋友" }}" else "发现靠谱的寄养机构",
                     color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 )
                 Text(

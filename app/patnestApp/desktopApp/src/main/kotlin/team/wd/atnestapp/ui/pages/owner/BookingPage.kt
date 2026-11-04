@@ -65,6 +65,8 @@ fun BookingPage(app: AppState) {
     var endDate by remember { mutableStateOf(java.time.LocalDate.now().plusDays(4).toString()) }
     var petIndex by remember { mutableStateOf(0) }
     var agreed by remember { mutableStateOf(false) }
+    // 积分输入框的文本态；真正参与下单的是 app.selectedPoints
+    var pointsText by remember { mutableStateOf("0") }
 
     val sitter = app.sitters.getOrNull(selectedSitter)
     if (sitter == null) {
@@ -90,6 +92,18 @@ fun BookingPage(app: AppState) {
     LaunchedEffect(app.pets.size) {
         if (petIndex > app.pets.lastIndex) petIndex = 0
     }
+
+    // 进页面先取积分余额，再让后端按同一套口径算一遍价（含节假日上浮、券、积分）
+    LaunchedEffect(Unit) { app.loadPoints() }
+    LaunchedEffect(startDate, endDate, pet?.id, app.selectedCouponId, app.selectedPoints) {
+        val chosen = pet
+        if (chosen == null || sitter.id <= 0) {
+            app.estimate = null
+        } else {
+            app.refreshEstimate(sitter.id, startDate, endDate, listOf(chosen.id))
+        }
+    }
+    val quote = app.estimate
 
     Column(
         Modifier
@@ -219,18 +233,67 @@ fun BookingPage(app: AppState) {
                         KeyValueRow("机构", sitter.name)
                         KeyValueRow("寄养天数", "$days 天")
                         KeyValueRow("日单价", "¥${sitter.price}")
-                        KeyValueRow("小计", "¥$subtotal")
-                        if (app.selectedCouponId != 0L) {
-                            KeyValueRow(
-                                "优惠券（${app.selectedCouponTitle}）",
-                                "-¥${couponDiscount.toInt()}",
-                                valueColor = PatNestColors.Ok,
+                        if (quote != null) {
+                            // 服务端明细：节假日上浮、券、积分都算进去了
+                            quote.breakdown.forEach { line ->
+                                val abs = if (line.amount < 0) -line.amount else line.amount
+                                KeyValueRow(
+                                    line.label.ifBlank { if (line.type == "base") "寄养费用" else line.type },
+                                    (if (line.amount < 0) "-¥" else "¥") + moneyOf(abs),
+                                    valueColor = if (line.amount < 0) PatNestColors.Ok else PatNestColors.Ink,
+                                )
+                            }
+                            KeyValueRow("小计", "¥${moneyOf(quote.subtotal)}")
+                            if (app.selectedCouponId != 0L) {
+                                LinkText("不使用优惠券") {
+                                    app.selectedCouponId = 0L
+                                    app.selectedCouponTitle = ""
+                                    app.selectedCouponType = ""
+                                    app.selectedCouponValue = 0.0
+                                }
+                            }
+                        } else {
+                            KeyValueRow("小计", "¥$subtotal")
+                            if (app.selectedCouponId != 0L) {
+                                KeyValueRow(
+                                    "优惠券（${app.selectedCouponTitle}）",
+                                    "-¥${couponDiscount.toInt()}",
+                                    valueColor = PatNestColors.Ok,
+                                )
+                                LinkText("不使用优惠券") {
+                                    app.selectedCouponId = 0L
+                                    app.selectedCouponTitle = ""
+                                    app.selectedCouponType = ""
+                                    app.selectedCouponValue = 0.0
+                                }
+                            }
+                            Text(
+                                if (app.estimating) "正在向服务端取报价…" else "本地估算，提交时以服务端报价为准",
+                                color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                                modifier = Modifier.padding(top = 6.dp),
                             )
-                            LinkText("不使用优惠券") {
-                                app.selectedCouponId = 0L
-                                app.selectedCouponTitle = ""
-                                app.selectedCouponType = ""
-                                app.selectedCouponValue = 0.0
+                        }
+                        // 积分抵扣：最多用掉当前余额，且不超过应付金额
+                        if (app.pointsBalance > 0) {
+                            ThinDivider(Modifier.padding(top = 10.dp))
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text("积分抵扣", color = PatNestColors.Ink2, fontSize = 12.5.sp)
+                                Spacer(Modifier.weight(1f))
+                                SoftTextField(
+                                    pointsText,
+                                    { text ->
+                                        pointsText = text.filter { it.isDigit() }.take(7)
+                                        app.selectedPoints = (pointsText.toIntOrNull() ?: 0).coerceAtMost(app.pointsBalance)
+                                        pointsText = app.selectedPoints.toString()
+                                    },
+                                    Modifier.width(96.dp),
+                                    placeholder = "0",
+                                )
+                                Text("/ ${app.pointsBalance} 分", color = PatNestColors.Ink3, fontSize = 12.sp)
                             }
                         }
                         ThinDivider(Modifier.padding(top = 10.dp))
@@ -240,7 +303,10 @@ fun BookingPage(app: AppState) {
                         ) {
                             Text("应付", color = PatNestColors.Ink2, fontSize = 13.sp)
                             Spacer(Modifier.weight(1f))
-                            Text("¥${payable.toInt()}", color = PatNestColors.BrandInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "¥${moneyOf(quote?.totalAmount ?: payable)}",
+                                color = PatNestColors.BrandInk, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                            )
                         }
                         PrimaryButton("下一步：确认订单", {
                             val start = runCatching { LocalDate.parse(startDate) }.getOrNull()
@@ -260,15 +326,29 @@ fun BookingPage(app: AppState) {
                         KeyValueRow("机构", sitter.name)
                         KeyValueRow("寄养区间", "${displayDate(startDate)} - ${displayDate(endDate)}")
                         KeyValueRow("宠物", pet?.let { "${it.name}（${it.breed}）" } ?: "未选择宠物")
-                        KeyValueRow("费用构成", "${sitter.price} × $days 天 = ¥$subtotal")
-                        if (app.selectedCouponId != 0L) {
-                            KeyValueRow(
-                                "优惠",
-                                "-¥${couponDiscount.toInt()}（${app.selectedCouponTitle}）",
-                                valueColor = PatNestColors.Ok,
-                            )
+                        if (quote != null) {
+                            // 与下单接口同一口径，避免"确认页一个价、提交后另一个价"
+                            KeyValueRow("寄养费用", "${sitter.price} × $days 天 = ¥$subtotal")
+                            quote.breakdown.filter { it.type != "base" }.forEach { line ->
+                                val abs = if (line.amount < 0) -line.amount else line.amount
+                                KeyValueRow(
+                                    line.label.ifBlank { if (line.type == "points") "积分抵扣" else "其他" },
+                                    (if (line.amount < 0) "-¥" else "¥") + moneyOf(abs),
+                                    valueColor = if (line.amount < 0) PatNestColors.Ok else PatNestColors.Ink,
+                                )
+                            }
+                            KeyValueRow("应付", "¥${moneyOf(quote.totalAmount)}", valueColor = PatNestColors.BrandInk, bold = true)
+                        } else {
+                            KeyValueRow("费用构成", "${sitter.price} × $days 天 = ¥$subtotal")
+                            if (app.selectedCouponId != 0L) {
+                                KeyValueRow(
+                                    "优惠",
+                                    "-¥${couponDiscount.toInt()}（${app.selectedCouponTitle}）",
+                                    valueColor = PatNestColors.Ok,
+                                )
+                            }
+                            KeyValueRow("应付", "¥${payable.toInt()}", valueColor = PatNestColors.BrandInk, bold = true)
                         }
-                        KeyValueRow("应付", "¥${payable.toInt()}", valueColor = PatNestColors.BrandInk, bold = true)
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -380,3 +460,6 @@ private fun calcDays(start: String, end: String): Int = runCatching {
 
 private fun displayDate(value: String): String =
     if (value.length >= 10) value.substring(5).replace('-', '/') else value
+
+/** 金额展示：整钱不带小数，小数最多两位；不用 String.format 以免跟随系统 locale */
+private fun moneyOf(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
