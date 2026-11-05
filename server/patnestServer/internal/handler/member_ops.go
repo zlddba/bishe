@@ -317,36 +317,6 @@ func MyCoupons(c *gin.Context) {
 	OK(c, gin.H{"items": items, "claimable": claimable})
 }
 
-// DeleteMyCoupon handles DELETE /api/v1/pet-owner/coupons/mine/:id
-// 删除券包中的优惠券（:id 为 user_coupons 记录 id）；已使用的券保留为消费记录，不可删除。
-func DeleteMyCoupon(c *gin.Context) {
-	userID := c.GetInt64("user_id")
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		BadRequest(c, "优惠券编号无效")
-		return
-	}
-
-	var status string
-	if err := db.Pool.QueryRow(context.Background(),
-		"SELECT status FROM user_coupons WHERE id = $1 AND user_id = $2", id, userID,
-	).Scan(&status); err != nil {
-		NotFound(c, "优惠券不存在")
-		return
-	}
-	if status == "used" {
-		Conflict(c, "已使用的优惠券保留为消费记录，无法删除")
-		return
-	}
-
-	if _, err := db.Pool.Exec(context.Background(),
-		"DELETE FROM user_coupons WHERE id = $1 AND user_id = $2", id, userID); err != nil {
-		InternalError(c, "删除优惠券失败")
-		return
-	}
-
-	OK(c, gin.H{"deleted": true})
-}
 func ClaimCoupon(c *gin.Context) {
 	couponID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	userID := c.GetInt64("user_id")

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"patnestServer/internal/cache"
@@ -30,26 +31,36 @@ func Register(c *gin.Context) {
 		BadRequest(c, "请求参数无效: "+err.Error())
 		return
 	}
+	// 手机号从 2026-11-05 起为注册必填项：它是找回账号、寄养/订单提醒的唯一可靠联系方式。
+	// binding:"required" 只能拦住缺失或空串，纯空格的输入要在这里再拦一次。
+	req.Phone = strings.TrimSpace(req.Phone)
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Phone == "" {
+		BadRequest(c, "请填写手机号")
+		return
+	}
 	if !validPhone(req.Phone) {
-		BadRequest(c, "手机号格式不正确")
+		BadRequest(c, "请输入正确的 11 位手机号")
+		return
+	}
+	// 手机号可用来登录，若账号本身也是手机号格式，登录时「用户名 / 手机号」两条分支会撞车
+	if validPhone(req.Username) {
+		BadRequest(c, "账号不能使用手机号格式，请换一个用户名")
 		return
 	}
 
 	// 手机号是永久身份凭证：uq_users_phone 为全表唯一（含软删行），查重口径与其一致，
 	// 避免撞唯一约束时只报笼统的"创建用户失败"。
-	if req.Phone != "" {
-		var phoneTaken bool
-		err := db.Pool.QueryRow(context.Background(),
-			"SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)",
-			req.Phone).Scan(&phoneTaken)
-		if err != nil {
-			InternalError(c, "数据库错误")
-			return
-		}
-		if phoneTaken {
-			Conflict(c, "该手机号已被注册")
-			return
-		}
+	var phoneTaken bool
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)",
+		req.Phone).Scan(&phoneTaken); err != nil {
+		InternalError(c, "数据库错误")
+		return
+	}
+	if phoneTaken {
+		Conflict(c, "该手机号已被注册")
+		return
 	}
 
 	if req.Role == "admin" {
@@ -108,10 +119,12 @@ func Register(c *gin.Context) {
 
 	Created(c, "registration successful", model.AuthResponse{
 		User: model.UserPublic{
-			ID:       user.ID,
-			Username: user.Username,
-			Nickname: nickname,
-			Role:     user.Role,
+			ID:         user.ID,
+			Username:   user.Username,
+			Nickname:   nickname,
+			Role:       user.Role,
+			Phone:      req.Phone,
+			PhoneBound: true,
 		},
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -126,20 +139,30 @@ func Login(c *gin.Context) {
 		BadRequest(c, "请求参数无效: "+err.Error())
 		return
 	}
+	// 账号字段支持「用户名 或 手机号」：客户端只用一个输入框，服务端两条分支都查。
+	loginAccount := strings.TrimSpace(req.Username)
+	if loginAccount == "" {
+		BadRequest(c, "请输入用户名或手机号")
+		return
+	}
 
-	limitKey := cache.LoginLimitKey(c.ClientIP(), req.Username)
+	limitKey := cache.LoginLimitKey(c.ClientIP(), loginAccount)
 	if cache.LoginBlocked(limitKey) {
 		Fail(c, http.StatusTooManyRequests, 42901, "登录尝试过于频繁，请 10 分钟后再试")
 		return
 	}
 
 	var user model.User
+	// 极端情况下某个账号的 username 恰好等于另一个账号的 phone，
+	// 用 ORDER BY 让「用户名精确命中」优先，避免查询结果随执行计划漂移。
 	err := db.Pool.QueryRow(context.Background(),
-		`SELECT id, username, password_hash, nickname, role, status, login_fail_count, locked_until
+		`SELECT id, username, password_hash, nickname, phone, role, status, login_fail_count, locked_until
 		 FROM users
-		 WHERE username = $1 AND deleted_at IS NULL`,
-		req.Username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Nickname, &user.Role,
+		 WHERE deleted_at IS NULL AND (username = $1 OR phone = $1)
+		 ORDER BY (username = $1) DESC, id ASC
+		 LIMIT 1`,
+		loginAccount,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Nickname, &user.Phone, &user.Role,
 		&user.Status, &user.LoginFailCount, &user.LockedUntil)
 
 	if err != nil {
@@ -203,19 +226,26 @@ func Login(c *gin.Context) {
 	if user.Nickname != nil {
 		nickname = *user.Nickname
 	}
+	phone, phoneBound := "", false
+	if user.Phone != nil && strings.TrimSpace(*user.Phone) != "" {
+		phone, phoneBound = strings.TrimSpace(*user.Phone), true
+	}
 
 	OK(c, model.AuthResponse{
 		User: model.UserPublic{
-			ID:       user.ID,
-			Username: user.Username,
-			Nickname: nickname,
-			Role:     user.Role,
+			ID:         user.ID,
+			Username:   user.Username,
+			Nickname:   nickname,
+			Role:       user.Role,
+			Phone:      phone,
+			PhoneBound: phoneBound,
 		},
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
 		ExpiresIn:       int64(middleware.AccessTokenTTLSeconds()),
 		SingleSession:   user.Role == "admin",
 		CancelWithdrawn: cancelWithdrawn,
+		NeedBindPhone:   !phoneBound,
 	})
 }
 
@@ -371,6 +401,7 @@ func GetProfile(c *gin.Context) {
 		"username":           user.Username,
 		"nickname":           user.Nickname,
 		"phone":              user.Phone,
+		"phone_bound":        user.Phone != nil && strings.TrimSpace(*user.Phone) != "",
 		"email":              user.Email,
 		"role":               user.Role,
 		"avatar_url":         user.AvatarURL,

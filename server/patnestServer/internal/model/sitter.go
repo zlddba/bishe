@@ -19,8 +19,12 @@ type Sitter struct {
 	ReviewCount   int      `json:"review_count"`
 	CoverPhotoURL *string  `json:"cover_photo_url"`
 	DetailPhotos  []string `json:"detail_photos"`
+	// 公开联系信息：机构详情/列表页用于「一键拨号」，只放手机号与联系人姓名，
+	// 不返回邮箱等其它个人信息（见 docs/13-隐私与个人信息说明.md）
+	ContactPhone  string  `json:"contact_phone"`
+	ContactName   string  `json:"contact_name"`
+	ContactPerson *string `json:"contact_person"`
 	// 资质材料仅后台审核可见，不随公开接口序列化
-	ContactPerson   *string    `json:"-"`
 	LicensePhotoURL *string    `json:"-"`
 	IDCardPhotoURL  *string    `json:"-"`
 	ReviewNote      *string    `json:"-"`

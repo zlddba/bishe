@@ -66,10 +66,14 @@ func ListSitters(c *gin.Context) {
 	countQ := "SELECT COUNT(*) FROM sitters s " + where
 	_ = db.Pool.QueryRow(context.Background(), countQ, args...).Scan(&total)
 
+	// 公开列表带联系方式：小程序端「一键拨号」需要，机构没填时返回空串由前端降级成站内留言。
+	// 只取 contact_phone / contact_name（users）与 contact_person（sitters），不碰 email 等其它个人信息。
 	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.name, s.type, s.description, s.daily_price, s.visit_price,
 		s.price_mode, s.capacity, s.address, s.latitude, s.longitude, s.avg_score, s.review_count,
-		s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at
-		FROM sitters s %s ORDER BY %s LIMIT $%d OFFSET $%d`, where, orderBy, idx, idx+1)
+		s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at,
+		COALESCE(u.contact_phone, ''), COALESCE(u.contact_name, ''), s.contact_person
+		FROM sitters s LEFT JOIN users u ON u.id = s.user_id
+		%s ORDER BY %s LIMIT $%d OFFSET $%d`, where, orderBy, idx, idx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := db.Pool.Query(context.Background(), query, args...)
@@ -84,7 +88,8 @@ func ListSitters(c *gin.Context) {
 		var s model.Sitter
 		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
 			&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
-			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+			&s.ContactPhone, &s.ContactName, &s.ContactPerson); err != nil {
 			InternalError(c, "failed to scan sitter")
 			return
 		}
@@ -109,13 +114,16 @@ func GetSitter(c *gin.Context) {
 
 	var s model.Sitter
 	err = db.Pool.QueryRow(context.Background(),
-		`SELECT id, user_id, name, type, description, daily_price, visit_price, price_mode, capacity,
-		 address, latitude, longitude, avg_score, review_count, cover_photo_url, detail_photos, status, created_at, updated_at
-		 FROM sitters WHERE id = $1 AND status = 'active' AND deleted_at IS NULL`,
+		`SELECT s.id, s.user_id, s.name, s.type, s.description, s.daily_price, s.visit_price, s.price_mode, s.capacity,
+		 s.address, s.latitude, s.longitude, s.avg_score, s.review_count, s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at,
+		 COALESCE(u.contact_phone, ''), COALESCE(u.contact_name, ''), s.contact_person
+		 FROM sitters s LEFT JOIN users u ON u.id = s.user_id
+		 WHERE s.id = $1 AND s.status = 'active' AND s.deleted_at IS NULL`,
 		sitterID,
 	).Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
 		&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
-		&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt)
+		&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+		&s.ContactPhone, &s.ContactName, &s.ContactPerson)
 
 	if err != nil {
 		NotFound(c, "机构不存在或已下架")
@@ -149,11 +157,13 @@ func SearchSitters(c *gin.Context) {
 		"%"+q+"%").Scan(&total)
 
 	rows, err := db.Pool.Query(context.Background(),
-		`SELECT id, user_id, name, type, description, daily_price, visit_price, price_mode, capacity,
-		 address, latitude, longitude, avg_score, review_count, cover_photo_url, detail_photos, status, created_at, updated_at
-		 FROM sitters
-		 WHERE status = 'active' AND deleted_at IS NULL AND (name ILIKE $1 OR address ILIKE $1 OR description ILIKE $1)
-		 ORDER BY similarity(name, $2) DESC, avg_score DESC
+		`SELECT s.id, s.user_id, s.name, s.type, s.description, s.daily_price, s.visit_price, s.price_mode, s.capacity,
+		 s.address, s.latitude, s.longitude, s.avg_score, s.review_count, s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at,
+		 COALESCE(u.contact_phone, ''), COALESCE(u.contact_name, ''), s.contact_person
+		 FROM sitters s LEFT JOIN users u ON u.id = s.user_id
+		 WHERE s.status = 'active' AND s.deleted_at IS NULL
+		   AND (s.name ILIKE $1 OR s.address ILIKE $1 OR s.description ILIKE $1)
+		 ORDER BY similarity(s.name, $2) DESC, s.avg_score DESC
 		 LIMIT $3 OFFSET $4`,
 		"%"+q+"%", q, perPage, offset)
 	if err != nil {
@@ -167,7 +177,8 @@ func SearchSitters(c *gin.Context) {
 		var s model.Sitter
 		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
 			&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
-			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+			&s.ContactPhone, &s.ContactName, &s.ContactPerson); err != nil {
 			continue
 		}
 		sitters = append(sitters, s)

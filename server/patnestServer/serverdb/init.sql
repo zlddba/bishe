@@ -53,7 +53,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE pay_method AS ENUM ('mock','alipay','wechat');
+    CREATE TYPE pay_method AS ENUM ('mock','alipay','wechat','balance');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -878,6 +878,54 @@ INSERT INTO notifications (user_id, type, scope, title, body, extra) VALUES
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO patnest_app;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO patnest_app;
 -- GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO patnest_app;
+
+-- ==================================================================
+-- 钱包（真实货币）：与迁移 0017_wallet.sql 保持一致
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS wallets (
+    user_id         BIGINT       PRIMARY KEY REFERENCES users(id) ON DELETE RESTRICT,
+    balance         NUMERIC(12,2) NOT NULL DEFAULT 0,
+    frozen_balance  NUMERIC(12,2) NOT NULL DEFAULT 0,
+    total_recharge  NUMERIC(14,2) NOT NULL DEFAULT 0,
+    total_consume   NUMERIC(14,2) NOT NULL DEFAULT 0,
+    version         BIGINT        NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wallets_balance ON wallets (balance DESC);
+
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT       NOT NULL REFERENCES wallets(user_id),
+    type           TEXT         NOT NULL CHECK (type IN ('recharge','consume','refund','withdraw','settle_in','adjust_add','adjust_sub')),
+    amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    balance_after  NUMERIC(12,2) NOT NULL,
+    status         TEXT         NOT NULL DEFAULT 'success' CHECK (status IN ('pending','success','failed')),
+    channel        TEXT         NOT NULL DEFAULT 'mock' CHECK (channel IN ('mock','wechat','alipay','bank','admin')),
+    ref_type       TEXT,
+    ref_id         BIGINT,
+    transaction_id TEXT,
+    remark         TEXT,
+    created_at     TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wtx_user_time ON wallet_transactions (user_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_wtx_ref       ON wallet_transactions (ref_type, ref_id);
+
+CREATE TABLE IF NOT EXISTS recharge_orders (
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT       NOT NULL REFERENCES wallets(user_id),
+    amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    channel        TEXT         NOT NULL DEFAULT 'mock' CHECK (channel IN ('mock','wechat','alipay')),
+    status         TEXT         NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','closed')),
+    transaction_id TEXT UNIQUE,
+    paid_at        TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_recharge_user ON recharge_orders (user_id, id DESC);
+
+-- 为已存在用户补齐钱包记录（新注册用户由 ensureWallet 在访问时自动创建）
+INSERT INTO wallets (user_id) SELECT id FROM users ON CONFLICT DO NOTHING;
 
 COMMIT;
 

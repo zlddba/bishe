@@ -42,6 +42,9 @@ func Setup() *gin.Engine {
 		auth.POST("/refresh", handler.Refresh)
 	}
 
+	// === 支付异步回调（公开，无需登录；真实微信/支付宝网关回调入口）===
+	v1.POST("/payments/recharge/notify/:channel", handler.PaymentNotify)
+
 	// === Protected routes ===
 	protected := v1.Group("")
 	protected.Use(middleware.JWTAuth())
@@ -92,11 +95,16 @@ func Setup() *gin.Engine {
 			owner.DELETE("/favorites/:sitter_id", handler.RemoveFavorite)
 			owner.GET("/favorites/compare", handler.CompareFavorites)
 
-			owner.GET("/points", handler.MyPoints)
-			owner.GET("/coupons", handler.MyCoupons)
+		owner.GET("/points", handler.MyPoints)
+
+		// --- 钱包（真实货币）---
+		owner.GET("/wallet", handler.WalletOverview)
+		owner.GET("/wallet/transactions", handler.WalletTransactions)
+		owner.POST("/wallet/recharge", handler.CreateRecharge)
+		owner.POST("/wallet/recharge/:id/pay", handler.ConfirmRecharge)
+
+		owner.GET("/coupons", handler.MyCoupons)
 			owner.POST("/coupons/:id/claim", handler.ClaimCoupon)
-			// 删除券包中的优惠券，:id 是 user_coupons 记录 id（claim 的 :id 是券模板 id）
-			owner.DELETE("/coupons/mine/:id", handler.DeleteMyCoupon)
 
 			owner.POST("/dynamics/:id/like", handler.LikeDynamic)
 			owner.DELETE("/dynamics/:id/like", handler.UnlikeDynamic)
@@ -265,8 +273,15 @@ func Setup() *gin.Engine {
 			admin.POST("/tickets/:id/reply", handler.AdminReplyTicket)
 			admin.PUT("/tickets/:id", handler.AdminUpdateTicket)
 
-			admin.GET("/settlements", handler.AdminListSettlements)
-			admin.PUT("/settlements/:id", handler.AdminPaySettlement)
+		admin.GET("/settlements", handler.AdminListSettlements)
+		admin.PUT("/settlements/:id", handler.AdminPaySettlement)
+
+		// --- 钱包管理 ---
+		admin.GET("/wallets", handler.AdminListWallets)
+		admin.GET("/wallets/:user_id", handler.AdminGetWallet)
+		admin.POST("/wallets/:user_id/adjust", handler.AdminAdjustWallet)
+		admin.GET("/wallet/recharges", handler.AdminListRecharges)
+		admin.POST("/wallet/recharges/:id/confirm", handler.AdminConfirmRecharge)
 
 			admin.GET("/push-tasks", handler.AdminListPushTasks)
 			admin.POST("/push-tasks", handler.AdminCreatePushTask)

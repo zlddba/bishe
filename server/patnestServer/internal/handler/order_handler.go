@@ -353,9 +353,28 @@ func ListMyOrders(c *gin.Context) {
 	}
 	offset := (page - 1) * perPage
 
-	where := "WHERE o.owner_id = $1 AND o.deleted_at IS NULL"
-	args := []interface{}{ownerID}
-	idx := 2
+	// 两种视角共用同一套字段与排序：
+	//   scope=mine（默认）—— 我作为主人下的单
+	//   scope=received     —— 我作为机构接的单
+	// 机构账号既可能下单也可能接单，用参数区分而不是靠角色二选一。
+	scope := c.DefaultQuery("scope", "mine")
+	if scope != "mine" && scope != "received" {
+		BadRequest(c, "未知的订单视角: "+scope)
+		return
+	}
+
+	// owner 用 LEFT JOIN：user 即使被软删/异常缺失，订单本身也不该从列表里消失
+	joins := " FROM orders o JOIN sitters s ON s.id = o.sitter_id LEFT JOIN users u ON u.id = o.owner_id "
+	var where string
+	args := []interface{}{}
+	idx := 1
+	if scope == "received" {
+		where = fmt.Sprintf("WHERE s.user_id = $%d AND o.deleted_at IS NULL", idx)
+	} else {
+		where = fmt.Sprintf("WHERE o.owner_id = $%d AND o.deleted_at IS NULL", idx)
+	}
+	args = append(args, ownerID)
+	idx++
 
 	if status := c.Query("status_filter"); status != "" {
 		// 支持逗号分隔的多状态筛选（如 confirmed,accepted,staying），单值同样兼容
@@ -379,16 +398,17 @@ func ListMyOrders(c *gin.Context) {
 	}
 
 	var total int
-	_ = db.Pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM orders o "+where, args...).Scan(&total)
+	_ = db.Pool.QueryRow(context.Background(), "SELECT COUNT(*)"+joins+where, args...).Scan(&total)
 
 	query := fmt.Sprintf(`SELECT o.id, o.order_no, o.status, o.payment_status, o.start_date::text, o.end_date::text,
-		o.total_days, o.pet_count, o.estimated_amount, o.total_amount, o.created_at, s.name, o.sitter_id
-		FROM orders o JOIN sitters s ON s.id = o.sitter_id
-		%s ORDER BY o.created_at DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
+		o.total_days, o.pet_count, o.estimated_amount, o.total_amount, o.created_at,
+		s.name, COALESCE(u.username, ''), o.owner_id, o.sitter_id%s %s ORDER BY o.created_at DESC LIMIT $%d OFFSET $%d`,
+		joins, where, idx, idx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := db.Pool.Query(context.Background(), query, args...)
 	if err != nil {
+		log.Printf("[ListMyOrders] query error: %v", err)
 		InternalError(c, "failed to query orders")
 		return
 	}
@@ -398,15 +418,15 @@ func ListMyOrders(c *gin.Context) {
 	for rows.Next() {
 		var o model.Order
 		if err := rows.Scan(&o.ID, &o.OrderNo, &o.Status, &o.PaymentStatus, &o.StartDate, &o.EndDate,
-			&o.TotalDays, &o.PetCount, &o.EstimatedAmount, &o.TotalAmount, &o.CreatedAt, &o.SitterName,
-			&o.SitterID); err != nil {
+			&o.TotalDays, &o.PetCount, &o.EstimatedAmount, &o.TotalAmount, &o.CreatedAt,
+			&o.SitterName, &o.OwnerName, &o.OwnerID, &o.SitterID); err != nil {
 			log.Printf("[ListMyOrders] scan error: %v", err)
 			continue
 		}
 		orders = append(orders, o)
 	}
 
-	OK(c, gin.H{"items": orders, "total": total, "page": page, "per_page": perPage})
+	OK(c, gin.H{"items": orders, "total": total, "page": page, "per_page": perPage, "scope": scope})
 }
 
 // ListReceivedOrders handles GET /api/v1/sitter/orders/manage
@@ -465,25 +485,17 @@ func GetOrderDetail(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt64("user_id")
-	role := c.GetString("role")
 
 	var o model.Order
-	var query string
-	if role == "sitter" {
-		query = `SELECT o.id, o.order_no, o.owner_id, o.sitter_id, o.status, o.payment_status,
-			o.start_date::text, o.end_date::text, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
-			o.cancel_reason, o.cancel_time, o.paid_at, o.accepted_at, o.completed_at, o.evaluated_at,
-			o.remark, o.created_at, o.updated_at, s.name, u.username
-			FROM orders o JOIN sitters s ON s.id = o.sitter_id JOIN users u ON u.id = o.owner_id
-			WHERE o.id = $1 AND s.user_id = $2 AND o.deleted_at IS NULL`
-	} else {
-		query = `SELECT o.id, o.order_no, o.owner_id, o.sitter_id, o.status, o.payment_status,
-			o.start_date::text, o.end_date::text, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
-			o.cancel_reason, o.cancel_time, o.paid_at, o.accepted_at, o.completed_at, o.evaluated_at,
-			o.remark, o.created_at, o.updated_at, s.name, u.username
-			FROM orders o JOIN sitters s ON s.id = o.sitter_id JOIN users u ON u.id = o.owner_id
-			WHERE o.id = $1 AND o.owner_id = $2 AND o.deleted_at IS NULL`
-	}
+	// 订单可见性只判断「我是下单人」或「我是接单机构」，不再按角色二选一，
+	// 与 ListMyOrders 的口径保持一致（sitter 账号也能查自己下的单）。
+	query := `SELECT o.id, o.order_no, o.owner_id, o.sitter_id, o.status, o.payment_status,
+		o.start_date::text, o.end_date::text, o.total_days, o.pet_count, o.estimated_amount, o.total_amount,
+		o.cancel_reason, o.cancel_time, o.paid_at, o.accepted_at, o.completed_at, o.evaluated_at,
+		o.remark, o.created_at, o.updated_at, s.name, u.username
+		FROM orders o JOIN sitters s ON s.id = o.sitter_id JOIN users u ON u.id = o.owner_id
+		WHERE o.id = $1 AND o.deleted_at IS NULL
+		  AND (o.owner_id = $2 OR s.user_id = $2)`
 
 	err = db.Pool.QueryRow(context.Background(), query, orderID, userID).Scan(
 		&o.ID, &o.OrderNo, &o.OwnerID, &o.SitterID, &o.Status, &o.PaymentStatus,
@@ -551,9 +563,10 @@ func GetOrderDetail(c *gin.Context) {
 		review = &r
 	}
 
-	// 支付/退款流水仅主人可见
+	// 支付/退款流水仅下单主人可见：机构视角（即使是机构账号自己下的单也算主人）
+	// 不返回资金流水，避免机构看到用户的支付渠道信息。
 	var payments []model.Payment
-	if role != "sitter" {
+	if o.OwnerID == userID {
 		payRows, _ := db.Pool.Query(context.Background(),
 			`SELECT id, amount, method::text, status, COALESCE(transaction_id, ''),
 			        to_char(created_at, 'YYYY-MM-DD HH24:MI'),
@@ -599,6 +612,20 @@ func PayOrder(c *gin.Context) {
 	}
 	ownerID := c.GetInt64("user_id")
 
+	// 支付方式：balance=钱包余额；其余（mock/wechat/alipay）演示阶段按同步成功处理；缺省 mock 保持旧端兼容
+	var payReq model.PayOrderRequest
+	_ = c.ShouldBindJSON(&payReq)
+	method := payReq.Method
+	if method == "" {
+		method = "mock"
+	}
+	switch method {
+	case "balance", "mock", "wechat", "alipay":
+	default:
+		BadRequest(c, "不支持的支付方式")
+		return
+	}
+
 	tx, err := db.Pool.Begin(context.Background())
 	if err != nil {
 		InternalError(c, "transaction error")
@@ -615,23 +642,72 @@ func PayOrder(c *gin.Context) {
 		NotFound(c, "order not found")
 		return
 	}
-	if status != "pending_pay" {
-		BadRequest(c, "order is not in pending_pay status")
+	// 幂等：已支付的订单再调一次不能重复扣款；用 409 明确告诉客户端「已经付过了」。
+	if paymentStatus == "paid" {
+		Conflict(c, "该订单已支付，无需重复支付")
 		return
 	}
-	if paymentStatus == "paid" {
-		BadRequest(c, "order already paid")
+	if status != "pending_pay" {
+		Conflict(c, "当前订单状态不支持支付")
 		return
 	}
 
 	now := time.Now()
-	// 0 元订单（全额抵扣）不需要支付流水，直接确认；否则 payments 的 amount > 0 约束会让事务提交失败
 	txID := ""
+
+	// 余额支付：事务内校验并扣减钱包，并写资金流水；其余渠道（mock/wechat/alipay）演示阶段按同步成功处理
 	if totalAmount <= 0 {
 		if _, err = tx.Exec(context.Background(),
 			"UPDATE orders SET status = 'confirmed', payment_status = 'paid', paid_at = $1 WHERE id = $2",
 			now, orderID); err != nil {
 			InternalError(c, "failed to update order")
+			return
+		}
+	} else if method == "balance" {
+		// 确保钱包记录存在（新注册用户可能没有），余额不足直接拦截
+		if _, err = tx.Exec(context.Background(),
+			"INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", ownerID); err != nil {
+			InternalError(c, "初始化钱包失败")
+			return
+		}
+		var balAfter float64
+		tag, e := tx.Exec(context.Background(),
+			"UPDATE wallets SET balance = balance - $1, total_consume = total_consume + $1, version = version + 1, updated_at = now() WHERE user_id = $2 AND balance >= $1",
+			totalAmount, ownerID)
+		if e != nil {
+			log.Printf("[PayOrder] 扣减钱包失败 user=%d order=%d: %v", ownerID, orderID, e)
+			InternalError(c, "扣减钱包失败: "+e.Error())
+			return
+		}
+		if tag.RowsAffected() != 1 {
+			Conflict(c, "钱包余额不足")
+			return
+		}
+		_ = tx.QueryRow(context.Background(),
+			"SELECT balance FROM wallets WHERE user_id = $1", ownerID).Scan(&balAfter)
+		txID = fmt.Sprintf("WALLET-PAY-%d", orderID)
+		if _, err = tx.Exec(context.Background(),
+			`INSERT INTO wallet_transactions (user_id, type, amount, balance_after, channel, ref_type, ref_id, transaction_id, status)
+			 VALUES ($1, 'consume', $2, $3, 'balance', 'order', $4, $5, 'success')`,
+			ownerID, totalAmount, balAfter, orderID, txID); err != nil {
+			// 约束名/列名一律打出来：这类错误只回一句「写入钱包流水失败」是定位不到字段的
+			log.Printf("[PayOrder] 写入钱包流水失败 user=%d order=%d amount=%.2f balance_after=%.2f: %v",
+				ownerID, orderID, totalAmount, balAfter, err)
+			InternalError(c, "写入钱包流水失败: "+err.Error())
+			return
+		}
+		if _, err = tx.Exec(context.Background(),
+			"UPDATE orders SET status = 'confirmed', payment_status = 'paid', paid_at = $1 WHERE id = $2",
+			now, orderID); err != nil {
+			InternalError(c, "failed to update order")
+			return
+		}
+		if _, err = tx.Exec(context.Background(),
+			`INSERT INTO payments (order_id, amount, method, transaction_id, status, paid_at)
+			 VALUES ($1, $2, 'balance', $3, 'paid', $4)`,
+			orderID, totalAmount, txID, now); err != nil {
+			log.Printf("[PayOrder] 写入支付流水失败 order=%d: %v", orderID, err)
+			InternalError(c, "写入支付流水失败: "+err.Error())
 			return
 		}
 	} else {
@@ -641,12 +717,11 @@ func PayOrder(c *gin.Context) {
 			InternalError(c, "failed to update order")
 			return
 		}
-
 		txID = fmt.Sprintf("PAY-MOCK-%s-%d", now.Format("20060102"), orderID)
 		if _, err = tx.Exec(context.Background(),
 			`INSERT INTO payments (order_id, amount, method, transaction_id, status, paid_at)
-			 VALUES ($1, $2, 'mock', $3, 'paid', $4)`,
-			orderID, totalAmount, txID, now); err != nil {
+			 VALUES ($1, $2, $3, $4, 'paid', $5)`,
+			orderID, totalAmount, method, txID, now); err != nil {
 			log.Printf("[PayOrder] insert payment error: %v", err)
 			InternalError(c, "写入支付流水失败: "+err.Error())
 			return
@@ -685,7 +760,9 @@ func CancelOrder(c *gin.Context) {
 
 	tag, err := db.Pool.Exec(context.Background(),
 		`UPDATE orders SET status = 'cancelled', cancel_reason = $1, cancel_time = now()
-		 WHERE id = $2 AND owner_id = $3 AND status IN ('pending_pay','confirmed','accepted') AND deleted_at IS NULL`,
+		 WHERE id = $2 AND deleted_at IS NULL
+		   AND status IN ('pending_pay','confirmed','accepted')
+		   AND (owner_id = $3 OR sitter_id = (SELECT id FROM sitters WHERE user_id = $3 AND deleted_at IS NULL))`,
 		nilIfEmpty(req.Reason), orderID, ownerID)
 	if err != nil {
 		InternalError(c, "failed to cancel order")

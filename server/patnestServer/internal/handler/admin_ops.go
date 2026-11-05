@@ -203,11 +203,22 @@ func AdminUpdateCoupon(c *gin.Context) {
 }
 
 func AdminDeleteCoupon(c *gin.Context) {
-	// 平台券物理删除。已被订单核销的券拒绝删除（历史订单只存券 id，删了无法追溯），请改为停用；
-	// 领取未使用的券包记录随外键级联清除。
+	// 平台券物理删除。已被用户领取的券拒绝删除（user_coupons 是 ON DELETE CASCADE，
+	// 删券会让用户券包里的券凭空消失）；已被订单核销的券同样拒绝（历史订单要可追溯）。请改为停用。
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		BadRequest(c, "无效的优惠券ID")
+		return
+	}
+
+	var claimed int
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT COUNT(*) FROM user_coupons WHERE coupon_id = $1", id).Scan(&claimed); err != nil {
+		InternalError(c, "查询优惠券领取情况失败")
+		return
+	}
+	if claimed > 0 {
+		Conflict(c, "该优惠券已被用户领取，无法删除，请改为停用")
 		return
 	}
 

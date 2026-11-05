@@ -183,7 +183,7 @@ func UpdateSitterCoupon(c *gin.Context) {
 }
 
 // DeleteSitterCoupon handles DELETE /api/v1/sitter/coupons/:id
-// 已被订单核销的券拒绝删除（历史订单需要追溯）；未核销的领取记录随外键级联清除。
+// 已被用户领取的券拒绝删除（user_coupons 级联删除会让用户券包丢失）；已被订单核销的券也拒绝删除。
 func DeleteSitterCoupon(c *gin.Context) {
 	sitterID, err := mySitterID(c.GetInt64("user_id"))
 	if err != nil {
@@ -193,6 +193,17 @@ func DeleteSitterCoupon(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		BadRequest(c, "无效的优惠券ID")
+		return
+	}
+
+	var claimed int
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT COUNT(*) FROM user_coupons WHERE coupon_id = $1", id).Scan(&claimed); err != nil {
+		InternalError(c, "查询优惠券领取情况失败")
+		return
+	}
+	if claimed > 0 {
+		Conflict(c, "该优惠券已被用户领取，无法删除，请改为停用")
 		return
 	}
 

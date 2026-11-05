@@ -81,7 +81,7 @@ func RescheduleOrder(c *gin.Context) {
 		return
 	}
 
-	ownerID := c.GetInt64("user_id")
+	actorID := c.GetInt64("user_id")
 	tx, err := db.Pool.Begin(context.Background())
 	if err != nil {
 		InternalError(c, "开启事务失败")
@@ -90,17 +90,22 @@ func RescheduleOrder(c *gin.Context) {
 	defer tx.Rollback(context.Background())
 
 	var (
+		orderOwnerID                   int64
 		status, paymentStatus, orderNo string
 		sitterID                       int64
 		oldStart, oldEnd               time.Time
 		petCount                       int
 		oldTotal, oldEstimated         float64
 	)
+	// 归属判断与详情接口一致：下单主人或接单机构都能改期，不再按角色二选一。
 	err = tx.QueryRow(context.Background(), `
-		SELECT order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
+		SELECT owner_id, order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
 		       pet_count, total_amount, estimated_amount
-		FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &oldStart, &oldEnd, &petCount, &oldTotal, &oldEstimated)
+		FROM orders
+		WHERE id = $1 AND deleted_at IS NULL
+		  AND (owner_id = $2 OR sitter_id = (SELECT id FROM sitters WHERE user_id = $2 AND deleted_at IS NULL))
+		FOR UPDATE`,
+		orderID, actorID).Scan(&orderOwnerID, &orderNo, &status, &paymentStatus, &sitterID, &oldStart, &oldEnd, &petCount, &oldTotal, &oldEstimated)
 	if err != nil {
 		NotFound(c, "订单不存在")
 		return
@@ -144,7 +149,7 @@ func RescheduleOrder(c *gin.Context) {
 	}
 	_, _ = tx.Exec(context.Background(),
 		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
-		ownerID, "订单已改期",
+		orderOwnerID, "订单已改期",
 		fmt.Sprintf("订单 %s 已改期至 %s 至 %s", orderNo, in.StartDate, in.EndDate),
 		fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
 	var sitterUserID int64
@@ -178,7 +183,7 @@ func RenewOrder(c *gin.Context) {
 		BadRequest(c, "日期格式应为 YYYY-MM-DD")
 		return
 	}
-	ownerID := c.GetInt64("user_id")
+	actorID := c.GetInt64("user_id")
 
 	tx, err := db.Pool.Begin(context.Background())
 	if err != nil {
@@ -188,17 +193,22 @@ func RenewOrder(c *gin.Context) {
 	defer tx.Rollback(context.Background())
 
 	var (
+		orderOwnerID                   int64
 		status, paymentStatus, orderNo string
 		sitterID                       int64
 		start, oldEnd                  time.Time
 		petCount                       int
 		oldTotal, oldEstimated         float64
 	)
+	// 归属判断与改期 / 详情接口一致：下单主人或接单机构都能续费。
 	err = tx.QueryRow(context.Background(), `
-		SELECT order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
+		SELECT owner_id, order_no, status::text, payment_status::text, sitter_id, start_date, end_date,
 		       pet_count, total_amount, estimated_amount
-		FROM orders WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-		orderID, ownerID).Scan(&orderNo, &status, &paymentStatus, &sitterID, &start, &oldEnd, &petCount, &oldTotal, &oldEstimated)
+		FROM orders
+		WHERE id = $1 AND deleted_at IS NULL
+		  AND (owner_id = $2 OR sitter_id = (SELECT id FROM sitters WHERE user_id = $2 AND deleted_at IS NULL))
+		FOR UPDATE`,
+		orderID, actorID).Scan(&orderOwnerID, &orderNo, &status, &paymentStatus, &sitterID, &start, &oldEnd, &petCount, &oldTotal, &oldEstimated)
 	if err != nil {
 		NotFound(c, "订单不存在")
 		return
@@ -257,6 +267,14 @@ func RenewOrder(c *gin.Context) {
 		"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
 		sitterUserID, "订单续费", fmt.Sprintf("订单 %s 续费至 %s，补收差价 %.2f 元", orderNo, in.EndDate, charge),
 		fmt.Sprintf(`{"order_id": %d}`, orderID), "business")
+	// 机构代续费时也让主人知道住期被延长了
+	if orderOwnerID != actorID {
+		_, _ = tx.Exec(context.Background(),
+			"SELECT fn_notify($1, 'system_announcement', $2, $3, $4, $5)",
+			orderOwnerID, "订单续费成功",
+			fmt.Sprintf("订单 %s 已续费至 %s", orderNo, in.EndDate),
+			fmt.Sprintf(`{"order_id": %d}`, orderID), "personal")
+	}
 	if err := tx.Commit(context.Background()); err != nil {
 		InternalError(c, "续费失败")
 		return
