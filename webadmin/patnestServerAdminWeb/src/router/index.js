@@ -25,6 +25,7 @@ const routes = [
       { path: 'push-tasks', name: 'PushTasks', component: () => import('@/views/PushTasksView.vue'), meta: { title: '推送任务' } },
       { path: 'aftersales', name: 'AfterSales', component: () => import('@/views/AfterSalesView.vue'), meta: { title: '售后服务' } },
       { path: 'settlements', name: 'Settlements', component: () => import('@/views/SettlementsView.vue'), meta: { title: '机构结算' } },
+      { path: 'wallets', name: 'Wallets', component: () => import('@/views/WalletsView.vue'), meta: { title: '钱包管理' } },
       { path: 'users', name: 'Users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户管理' } },
       { path: 'permissions', name: 'Permissions', component: () => import('@/views/PermissionsView.vue'), meta: { title: '权限配置' } },
       { path: 'audit', name: 'Audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志' } },

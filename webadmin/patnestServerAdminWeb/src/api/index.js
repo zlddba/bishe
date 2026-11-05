@@ -201,6 +201,13 @@ export const adminApi = {
   getSettlements: (params) => request.get('/admin/settlements', { params }),
   paySettlement: (id, data) => request.put(`/admin/settlements/${id}`, data),
 
+  // 钱包管理
+  getWallets: (params) => request.get('/admin/wallets', { params }),
+  getWalletDetail: (userId) => request.get(`/admin/wallets/${userId}`),
+  adjustWallet: (userId, data) => request.post(`/admin/wallets/${userId}/adjust`, data),
+  getRecharges: (params) => request.get('/admin/wallet/recharges', { params }),
+  confirmRecharge: (id) => request.post(`/admin/wallet/recharges/${id}/confirm`),
+
   verifyPetVaccine: (id, data) => request.put(`/admin/pets/${id}/vaccine`, data),
 
   uploadImage: (file) => {

@@ -19,6 +19,15 @@ material3 = "1.13.0-beta01"
 jetbrains-icons = "262.10968.176"
 ktor = "3.6.1"
 kotlinx-serialization = "1.12.0"
+navigationCompose="2.10.2"
+datastore = "1.2.1"
+# 高德地图 Android SDK（3D 地图）。服务端的 Web 服务 Key 不能用于它，
+# 需要在同一应用下另建一张「Android 平台」Key，绑定包名 + 签名 SHA1。
+#
+# 这一行只是兜底：Maven Central 上的 com.amap.api:3dmap 更新滞后，官网下载的新版
+# 通常更新。把官网 aar 放进 shared/libs/ 后，shared 会自动改用本地包、
+# 忽略这里的版本号（见 shared/build.gradle.kts 的 useLocalAmapAar）。
+amap3dmap = "10.0.600"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -35,6 +44,7 @@ androidx-lifecycle-viewmodelCompose = { module = "org.jetbrains.androidx.lifecyc
 androidx-lifecycle-runtimeCompose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-animation = { module = "org.jetbrains.compose.animation:animation", version.ref = "composeMultiplatform" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
@@ -48,6 +58,11 @@ ktor-client-contentNegotiation = { module = "io.ktor:ktor-client-content-negotia
 ktor-serialization-kotlinxJson = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+navigation-compose={module="androidx.navigation:navigation-compose",version.ref="navigationCompose"}
+amap-map3d = { module = "com.amap.api:3dmap", version.ref = "amap3dmap" }
+# 会话持久化：两端共用 commonMain 里的一套 SessionStore（KMP 版 DataStore，1.1.0+ 支持多平台）
+datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
+datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

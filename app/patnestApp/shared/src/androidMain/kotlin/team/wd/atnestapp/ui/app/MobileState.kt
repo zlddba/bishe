@@ -1,4 +1,4 @@
-package team.wd.atnestapp.ui.mobile
+package team.wd.atnestapp.ui.app
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -17,13 +17,14 @@ import team.wd.atnestapp.data.api.CouponListDto
 import team.wd.atnestapp.data.api.CreateOrderPayload
 import team.wd.atnestapp.data.api.CreateOrderPetPayload
 import team.wd.atnestapp.data.api.CreatePetPayload
+import team.wd.atnestapp.data.api.DynamicCommentDto
 import team.wd.atnestapp.data.api.DynamicDto
 import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.EstimateDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.NotificationDto
-import team.wd.atnestapp.data.api.OrderDto
+import team.wd.atnestapp.data.NotificationCenter
 import team.wd.atnestapp.data.api.PetStayDto
 import team.wd.atnestapp.data.api.PointsEntryDto
 import team.wd.atnestapp.data.api.PriceRuleDto
@@ -32,12 +33,14 @@ import team.wd.atnestapp.data.api.PublicReviewDto
 import team.wd.atnestapp.data.api.ReceivedOrderDto
 import team.wd.atnestapp.data.api.RefundDto
 import team.wd.atnestapp.data.api.ReviewPayload
+import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.SettlementDto
 import team.wd.atnestapp.data.api.SitterCouponDto
 import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.data.api.SitterDto
 import team.wd.atnestapp.data.api.SitterReviewDto
 import team.wd.atnestapp.data.api.SitterStatsDto
+import team.wd.atnestapp.data.api.TicketDetailDto
 import team.wd.atnestapp.data.api.TicketDto
 import team.wd.atnestapp.data.api.UpdatePetPayload
 import team.wd.atnestapp.data.api.UpdateProfilePayload
@@ -49,79 +52,6 @@ import team.wd.atnestapp.data.model.Pet
 import team.wd.atnestapp.data.model.Sitter
 import java.time.LocalDate
 import kotlin.math.roundToInt
-
-/** 手机端路由表：单 Activity + 手写返回栈，不为几个页面引入 navigation 依赖。 */
-enum class MobileScreen {
-    Home, Sitters, SitterDetail, Booking, Orders, OrderDetail, Pay,
-    Pets, PetEdit, Coupons, Messages, Favorites, Dynamics, Profile,
-    Points, Tickets, Stays,
-    SbOverview, SbOrders, SbCapacity, SbShop, SbReviews, SbDynamics, SbCoupons, SbIncome;
-
-    val needsLogin: Boolean
-        get() = this != Home && this != Sitters && this != SitterDetail
-}
-
-/** 底部弹层内容。移动端把所有确认和短表单都做成从底部滑出的面板。 */
-sealed interface MobileSheet {
-    data class Message(
-        val title: String,
-        val body: String,
-        val actionLabel: String = "知道了",
-        val onAction: (() -> Unit)? = null,
-    ) : MobileSheet
-
-    data class Reason(
-        val title: String,
-        val hint: String,
-        val submitLabel: String,
-        val initial: String = "",
-        val onSubmit: (String) -> Unit,
-    ) : MobileSheet
-
-    data class DateRange(
-        val title: String,
-        val startDate: String,
-        val endDate: String,
-        val minStart: String,
-        val submitLabel: String,
-        val note: String = "",
-        val onSubmit: (String, String) -> Unit,
-    ) : MobileSheet
-
-    data class DatePick(
-        val title: String,
-        val value: String,
-        val minValue: String,
-        val submitLabel: String,
-        val note: String = "",
-        val onSubmit: (String) -> Unit,
-    ) : MobileSheet
-
-    data class Review(val orderNo: String, val onSubmit: (Int, Int, Int, Int, String) -> Unit) : MobileSheet
-
-    data class Form(val title: String, val fields: List<FormField>, val submitLabel: String, val onSubmit: (List<String>) -> Unit) : MobileSheet
-
-    data class CouponForm(val coupon: SitterCouponDto?) : MobileSheet
-    data class AddonForm(val addon: AddonDto?) : MobileSheet
-    data class PriceRuleForm(val rules: List<PriceRuleDto>) : MobileSheet
-    data class CapacityForm(val date: String, val capacity: Int) : MobileSheet
-    /** 下单时从券包里挑一张 */
-    object CouponPicker : MobileSheet
-
-    object ApplySitter : MobileSheet
-    object Ticket : MobileSheet
-    data class Photo(val url: String, val caption: String) : MobileSheet
-}
-
-/** 通用表单里的一个输入项， keyboardType 只用来切换数字键盘。 */
-data class FormField(
-    val label: String,
-    val placeholder: String = "",
-    val initial: String = "",
-    val multiline: Boolean = false,
-    val numeric: Boolean = false,
-    val secret: Boolean = false,
-)
 
 /**
  * 手机端状态中枢。数据层完全复用 shared 里的 ApiClient，
@@ -142,23 +72,8 @@ class MobileState(private val session: MobileSession) {
         api.onSessionInvalid = { forceLogout("账号不存在，已退出登录") }
         // 刷新令牌也换不到新令牌：清会话并把用户送回登录页
         api.onAuthExpired = { forceLogout("登录已过期，请重新登录") }
-    }
-
-    /** 更换接口地址后重建客户端，同时把本地令牌带过去 */
-    fun updateServerAddress(url: String) {
-        val cleaned = url.trim().removeSuffix("/")
-        if (cleaned.isBlank()) {
-            toast("请填写接口地址")
-            return
-        }
-        val oldToken = api.token
-        val oldRefresh = session.refreshToken
-        session.baseUrl = cleaned
-        serverAddress = cleaned
-        api = ApiClient(cleaned)
-        bindClientCallbacks()
-        if (!oldToken.isNullOrBlank()) api.applyAuth(oldToken, oldRefresh, 3600)
-        toast("接口地址已更新")
+        // 静默续期成功：把轮换后的令牌写回本地，否则下次冷启动拿着的是已作废的那张
+        api.onAuthRefreshed = { access, refresh -> session.updateTokens(access, refresh) }
     }
 
     /* ---------- 会话 ---------- */
@@ -170,19 +85,56 @@ class MobileState(private val session: MobileSession) {
         private set
     var userRole by mutableStateOf("owner")
         private set
+    /** 账号本身具备的机构能力（服务端 role == sitter）。只描述能力，不表示当前在用哪套。 */
     var isSitterAccount by mutableStateOf(false)
         private set
+
+    /**
+     * 当前正在使用的身份：owner / sitter。
+     *
+     * 和 [userRole] 必须分开：机构账号也是用户，切到主人端要能正常下单，
+     * 而切过去之后整套页面（底部导航、首页、订单、消息）都要换成主人端那一套。
+     * 只改一个高亮标记会让用户看到「机构账号 + 主人端页面 + 没有宠物和订单」的错位状态。
+     *
+     * 初值直接读本地会话快照（DataStore 构造时已同步读好），
+     * 这样机构身份冷启动时 NavHost 的起始页就能直接是工作台，不会先闪一下主人端首页。
+     */
+    var activeIdentity by mutableStateOf(resolveIdentity(session.activeRole, session.role))
+        private set
+    val isSitterMode: Boolean get() = activeIdentity == "sitter"
+    /** 是否可以用机构端（已入驻的机构账号才有） */
+    val canUseSitter: Boolean get() = userRole == "sitter"
+    /** 切换身份正在进行：页面据此禁用点击、显示进度 */
+    var identitySwitching by mutableStateOf(false)
+        private set
+    /** 当前身份的中文名，设置、我的、身份页共用一份口径 */
+    val identityLabel: String get() = if (isSitterMode) "机构端" else "宠物主人"
+
+    /**
+     * 由「上次选的」和「账号实际角色」推出当前身份。
+     *
+     * 三条规则：选过机构且账号确实是机构 → 机构；选过其它 → 主人端（尊重用户选择）；
+     * 没选过 → 跟账号角色走。机构资格被收回时下次启动会自动落回主人端。
+     */
+    private fun resolveIdentity(saved: String, role: String): String = when {
+        saved == "sitter" && role == "sitter" -> "sitter"
+        saved.isNotBlank() -> "owner"
+        role == "sitter" -> "sitter"
+        else -> "owner"
+    }
     var profile by mutableStateOf<UserDto?>(null)
         private set
-    var serverAddress by mutableStateOf(session.baseUrl)
+    /**
+     * 未绑定手机号（历史/后台导入账号）。
+     *
+     * 后端从 docs/16 起允许这类账号继续登录，但会回 `phone_bound=false`，
+     * 客户端要提示去绑定 —— 否则用户不知道自己的手机号是空的，
+     * 后续任何需要手机号的环节都会莫名失败（且没有可自查的地方）。
+     */
+    var needsPhoneBinding by mutableStateOf(false)
         private set
 
-    /* ---------- 导航与浮层 ---------- */
-    var screen by mutableStateOf(MobileScreen.Home)
-        private set
-    /** 返回栈里只存"当前页之下"的页面，空栈表示已经在 Tab 首页，此时系统返回键直接退出 */
-    private var stack by mutableStateOf(emptyList<MobileScreen>())
-    var sheet by mutableStateOf<MobileSheet?>(null)
+    /* ---------- 跨页选择与提示 ---------- */
     var toastMessage by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false)
         private set
@@ -190,6 +142,22 @@ class MobileState(private val session: MobileSession) {
     var selectedOrder by mutableStateOf<Order?>(null)
     var editingPet by mutableStateOf<Pet?>(null)
     var viewingPet by mutableStateOf<Pet?>(null)
+    /** 动态详情（设计层跳转用，避免把整条动态塞进路由参数） */
+    var selectedDynamic by mutableStateOf<DynamicDto?>(null)
+    /** 评价详情 */
+    var selectedReview by mutableStateOf<PublicReviewDto?>(null)
+    /** 优惠券详情 */
+    var selectedCoupon by mutableStateOf<UserCouponDto?>(null)
+    /** 地图选点回填：选点页解析出的坐标，机构资料保存时一并提交 */
+    var pickedLatitude by mutableStateOf<Double?>(null)
+    var pickedLongitude by mutableStateOf<Double?>(null)
+    var pickedAddress by mutableStateOf("")
+    /** 机构端「发布动态」要关联的订单 id，0 表示还没选 */
+    var selectedOrderIdForDynamic by mutableStateOf(0L)
+    /** 机构端订单详情当前查看的订单 */
+    var selectedReceivedOrder by mutableStateOf<ReceivedOrderDto?>(null)
+    /** 最近一次提交的评价 id，追评页据此提交 */
+    var lastReviewId by mutableStateOf(0L)
 
     /* ---------- 主人端数据 ---------- */
     var sitters by mutableStateOf(listOf<Sitter>())
@@ -220,19 +188,9 @@ class MobileState(private val session: MobileSession) {
     var favoritesLoading by mutableStateOf(false)
         private set
 
-    var notifications by mutableStateOf(listOf<NotificationDto>())
-        private set
-    var notificationsLoading by mutableStateOf(false)
-        private set
-
-    // 消息页按归属视角分开拉取；notifications（全部）只用于未读角标
-    var notificationScope by mutableStateOf("personal")
-    var personalNotifications by mutableStateOf(listOf<NotificationDto>())
-        private set
-    var businessNotifications by mutableStateOf(listOf<NotificationDto>())
-        private set
-    var scopedNotificationsLoading by mutableStateOf(false)
-        private set
+    // 通知状态统一收敛到 shared 的 NotificationCenter，避免与 Desktop 端重复实现。
+    // toast 以回调注入（安卓 toast 机制见下方 toast() 定义）。
+    val notificationsCenter = NotificationCenter(api) { toast(it) }
 
     var ownerDynamics by mutableStateOf(listOf<DynamicDto>())
         private set
@@ -243,6 +201,26 @@ class MobileState(private val session: MobileSession) {
     var orderDynamics by mutableStateOf(listOf<DynamicDto>())
         private set
     var orderDynamicsLoading by mutableStateOf(false)
+        private set
+
+    /** 动态详情页的留言（后端一次全给，不翻页） */
+    var dynamicComments by mutableStateOf(listOf<DynamicCommentDto>())
+        private set
+    var commentsLoading by mutableStateOf(false)
+        private set
+    /** 留言接口顺带回的点赞总数，比本地记录更准 */
+    var dynamicLikes by mutableStateOf(0)
+        private set
+    var commentSending by mutableStateOf(false)
+        private set
+
+    /** 售后工单会话：列表点开时先记 id，会话页进页面再拉详情（避免点一下等一秒才跳页） */
+    var selectedTicketId by mutableStateOf(0L)
+    var ticketDetail by mutableStateOf<TicketDetailDto?>(null)
+        private set
+    var ticketLoading by mutableStateOf(false)
+        private set
+    var ticketReplying by mutableStateOf(false)
         private set
 
     var coupons by mutableStateOf<CouponListDto?>(null)
@@ -315,136 +293,13 @@ class MobileState(private val session: MobileSession) {
     var sitterStats by mutableStateOf<SitterStatsDto?>(null)
         private set
 
-    val unreadCount: Int get() = notifications.count { !it.isRead }
-    val pendingOrderCount: Int get() = orders.count { it.rawStatus == "pending_pay" }
-    val pendingReceiveCount: Int get() = receivedOrders.count { it.status == "confirmed" }
-    /* ================= 导航 ================= */
+    val unreadCount: Int get() = notificationsCenter.notifications.count { !it.isRead }
+
+    /* ================= 提示 ================= */
 
     fun toast(message: String) {
         toastMessage = message
     }
-
-    fun go(target: MobileScreen, keepCurrent: Boolean = true) {
-        if (target.needsLogin && !loggedIn) {
-            toast("请先登录")
-            return
-        }
-        stack = if (keepCurrent) stack + screen else stack
-        screen = target
-    }
-
-    /** 底部导航直接切主 Tab，返回栈清空，避免按返回键在 Tab 之间反复横跳 */
-    fun switchTab(target: MobileScreen) {
-        if (target.needsLogin && !loggedIn) {
-            toast("请先登录")
-            return
-        }
-        stack = emptyList()
-        screen = target
-    }
-
-    fun back(): Boolean {
-        if (sheet != null) {
-            sheet = null
-            return true
-        }
-        if (stack.isEmpty()) return false
-        screen = stack.last()
-        stack = stack.dropLast(1)
-        return true
-    }
-
-    /** 返回键是否还有内容可以撤销：有弹层先关弹层，否则退一页 */
-    val canGoBack: Boolean
-        get() = sheet != null || stack.isNotEmpty()
-
-    /**
-     * 页面级按需加载。loadAll 只装首页那一轮，剩下的进页面再取，
-     * 每个 loader 内部有"已有数据就跳过"的护栏，重复调用不会打爆接口。
-     */
-    fun loadFor(target: MobileScreen) {
-        if (!loggedIn) return
-        scope.launch {
-            when (target) {
-                MobileScreen.Booking -> { loadCoupons(); loadAddonsForBooking() }
-                MobileScreen.SitterDetail -> selectedSitter?.let { loadSitterExtras(it.id) }
-                MobileScreen.OrderDetail -> selectedOrder?.let { loadOrderDynamics(it) }
-                MobileScreen.Stays -> viewingPet?.let { loadPetStays(it) }
-                MobileScreen.Coupons -> loadCoupons()
-                MobileScreen.Points -> loadPoints()
-                MobileScreen.Tickets -> { loadTickets(); loadRefunds() }
-                MobileScreen.Dynamics -> loadOwnerDynamics()
-                MobileScreen.Messages -> { loadNotifications(); loadScopedNotifications() }
-                MobileScreen.Favorites -> loadFavorites()
-                MobileScreen.Pets -> loadPets()
-                MobileScreen.Profile -> loadProfile()
-                MobileScreen.SbOverview -> { loadSitterStats(); loadMyShop() }
-                MobileScreen.SbOrders -> loadReceivedOrders()
-                MobileScreen.SbCapacity -> loadCapacity()
-                MobileScreen.SbIncome -> { loadEarnings(); loadSettlements() }
-                MobileScreen.SbReviews -> loadSitterReviews()
-                MobileScreen.SbDynamics -> loadSitterDynamics()
-                MobileScreen.SbCoupons -> loadSitterCoupons()
-                MobileScreen.SbShop -> { loadMyShop(); loadMyAddons(); loadPriceRules() }
-                else -> Unit
-            }
-        }
-    }
-
-    /** 下单页要展示机构的加购项，detailAddons 是随详情一起拉的，这里兜底补一次 */
-    private suspend fun loadAddonsForBooking() {
-        val sitter = selectedSitter ?: return
-        if (detailAddons.isEmpty()) loadSitterExtras(sitter.id)
-    }
-
-    fun openSitter(sitter: Sitter) {
-        selectedSitter = sitter
-        go(MobileScreen.SitterDetail)
-        scope.launch { loadSitterExtras(sitter.id) }
-    }
-
-    fun openOrder(order: Order) {
-        selectedOrder = order
-        go(MobileScreen.OrderDetail)
-    }
-
-    /** 去收银台：先记住这张订单，支付页直接读它 */
-    fun openPay(order: Order) {
-        selectedOrder = order
-        go(MobileScreen.Pay)
-    }
-
-    fun startBooking(sitter: Sitter) {
-        if (!loggedIn) {
-            toast("登录后即可下单")
-            return
-        }
-        if (pets.isEmpty()) {
-            toast("请先添加宠物档案")
-            go(MobileScreen.PetEdit)
-            return
-        }
-        selectedSitter = sitter
-        bookingPetIds = listOf(pets.first().id)
-        bookingCoupon = null
-        bookingPoints = 0
-        bookingAddons = emptyList()
-        go(MobileScreen.Booking)
-        scope.launch {
-            loadPets()
-            loadCoupons()
-            loadPoints()
-            refreshEstimate()
-        }
-    }
-
-    val visibleSitters: List<Sitter>
-        get() {
-            val keyword = sitterQuery.trim()
-            return sitters.filter { sitter ->
-                (keyword.isBlank() || sitter.name.contains(keyword, true) || sitter.addr.contains(keyword, true))
-            }
-        }
 
     private fun sitterTypeCode(): String? = when (sitterType) {
         "家庭寄养" -> "home"
@@ -464,6 +319,9 @@ class MobileState(private val session: MobileSession) {
         nickname = session.nickname.ifBlank { session.account }
         userRole = session.role
         isSitterAccount = session.role == "sitter"
+        // 上次切到哪个身份就回哪个；没选过就按账号角色走。
+        // 账号的机构资格被收回时（role 变回 owner）强制落回主人端，避免停在一个用不了的台子里。
+        activeIdentity = resolveIdentity(session.activeRole, session.role)
         loggedIn = true
         scope.launch {
             try {
@@ -517,7 +375,9 @@ class MobileState(private val session: MobileSession) {
         session.token = api.token.orEmpty()
         session.refreshToken = auth.refreshToken
         applyMe(me)
-        toast("登录成功，欢迎 " + nickname)
+        // 一条提示就够：未绑手机号的账号把「去绑定」放在前面的位置，
+        // 否则「欢迎 XX」会把真正需要用户处理的事挤掉
+        toast(if (needsPhoneBinding) "登录成功，请先绑定手机号" else "登录成功，欢迎 " + nickname)
         loadAll()
     }
 
@@ -526,7 +386,12 @@ class MobileState(private val session: MobileSession) {
         nickname = me.nickname?.takeIf { it.isNotBlank() } ?: account
         userRole = me.role
         isSitterAccount = me.role == "sitter"
+        // 用服务端事实校正身份：资格被收回就退回主人端，并把落盘的偏好一起改掉，
+        // 否则下次冷启动又会读到那个已经无效的 sitter。
+        activeIdentity = resolveIdentity(session.activeRole, me.role)
+        if (session.activeRole != activeIdentity) session.activeRole = activeIdentity
         profile = me
+        needsPhoneBinding = me.phone.isNullOrBlank()
         loggedIn = true
         session.account = account
         session.nickname = nickname
@@ -547,7 +412,6 @@ class MobileState(private val session: MobileSession) {
             val current = api.token
             if (!current.isNullOrBlank()) runCatching { api.logout(current) }
             clearSession()
-            sheet = null
             toast("注销申请已提交，3 天内重新登录可撤销")
         } catch (e: Exception) {
             toast(e.message ?: "提交失败")
@@ -564,20 +428,17 @@ class MobileState(private val session: MobileSession) {
         loggedIn = false
         isSitterAccount = false
         userRole = "owner"
+        activeIdentity = "owner"
+        identitySwitching = false
         account = ""
         nickname = ""
         profile = null
         api.clearAuth()
         session.clearAuth()
-        sheet = null
         pets = emptyList()
         orders = emptyList()
         favorites = emptyList()
-        notifications = emptyList()
-        personalNotifications = emptyList()
-        businessNotifications = emptyList()
-        scopedNotificationsLoading = false
-        notificationScope = "personal"
+        notificationsCenter.reset()
         ownerDynamics = emptyList()
         coupons = null
         refunds = emptyList()
@@ -596,42 +457,88 @@ class MobileState(private val session: MobileSession) {
         myAddons = emptyList()
         priceRules = emptyList()
         sitterStats = null
-        stack = emptyList()
-        screen = MobileScreen.Home
     }
 
+    /**
+     * 登录成功 / 冷启动恢复登录态后先拉这一轮数据，具体页面再按需补拉。
+     * 只管取数，不做任何页面跳转 —— 跳转由设计层的 DNav 负责。
+     */
     private suspend fun loadAll() {
         loadSitters()
-        if (isSitterAccount) {
+        // 机构端数据只在账号真有机构资格时拉，纯主人账号不必白跑两趟 404。
+        if (canUseSitter) {
             loadMyShop()
             loadReceivedOrders()
-            switchTab(MobileScreen.SbOverview)
-        } else {
+        }
+        // 主人端数据按当前身份决定：机构账号切到主人端后才需要宠物 / 订单 / 收藏。
+        if (!isSitterMode) {
             loadPets()
             loadOrders()
-            loadNotifications()
             loadFavorites()
-            switchTab(MobileScreen.Home)
         }
+        loadNotifications()
     }
-    /** 机构账号在主人与机构两种工作台之间切换 */
-    fun switchToSitter() {
-        if (!isSitterAccount) {
-            toast("当前账号不是机构账号")
-            return
+
+    /**
+     * 切换当前身份，返回 true 表示切换成功（调用方据此跳到对应的工作台）。
+     *
+     * 切换不是换个高亮：主人端与机构端的订单、宠物、通知范围是两套数据，
+     * 所以这里要把新身份的数据重新拉一遍，并清掉上一个身份留下的「选中对象」，
+     * 否则会看到「切到主人端仍然展示机构订单」这类串台。
+     */
+    suspend fun switchIdentity(target: String): Boolean {
+        val want = if (target == "sitter") "sitter" else "owner"
+        if (want == activeIdentity) {
+            toast(if (want == "sitter") "当前已是机构端" else "当前已是主人端")
+            return false
         }
-        screen = MobileScreen.SbOverview
-        stack = emptyList()
-        scope.launch {
-            loadMyShop()
-            loadReceivedOrders()
+        if (want == "sitter" && !canUseSitter) {
+            toast("机构端还没开通")
+            return false
+        }
+        if (identitySwitching) return false
+        identitySwitching = true
+        try {
+            activeIdentity = want
+            session.activeRole = want
+            clearIdentitySelection()
+            if (want == "sitter") {
+                loadMyShop()
+                loadReceivedOrders()
+                loadSitterStats()
+            } else {
+                loadPets()
+                loadOrders()
+                loadFavorites()
+                loadCoupons()
+                loadPoints()
+            }
+            loadNotifications(force = true)
+            toast(if (want == "sitter") "已切换到机构端" else "已切换到主人端")
+            return true
+        } catch (e: Exception) {
+            // 取数失败也留在新身份上：身份本身切换成功了，页面各自的空态 / 重试负责补救
+            toast(e.message ?: "切换后数据加载失败")
+            return true
+        } finally {
+            identitySwitching = false
         }
     }
 
-    fun switchToOwner() {
-        screen = MobileScreen.Home
-        stack = emptyList()
-        scope.launch { loadAll() }
+    /** 换身份后这些「选中对象」指向的都是上一个身份的数据，必须清掉。 */
+    private fun clearIdentitySelection() {
+        selectedSitter = null
+        selectedOrder = null
+        selectedReceivedOrder = null
+        selectedDynamic = null
+        selectedReview = null
+        selectedCoupon = null
+        selectedTicketId = 0L
+        ticketDetail = null
+        selectedOrderIdForDynamic = 0L
+        viewingPet = null
+        editingPet = null
+        notificationsCenter.reset()
     }
 
     /* ================= 主人端：加载 ================= */
@@ -683,71 +590,19 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
-    suspend fun loadNotifications(force: Boolean = false) {
-        if (!loggedIn || notificationsLoading) return
-        if (!force && notifications.isNotEmpty()) return
-        notificationsLoading = true
-        try {
-            notifications = api.listNotifications()
-        } catch (_: Exception) {
-            // 消息不是主流程，失败留空即可
-        } finally {
-            notificationsLoading = false
-        }
-    }
+    suspend fun loadNotifications(force: Boolean = false) = notificationsCenter.loadNotifications(force)
 
-    /** 消息页：一次拉取两个视角；商家消息只有机构账号才有 */
-    suspend fun loadScopedNotifications(force: Boolean = false) {
-        if (!loggedIn || scopedNotificationsLoading) return
-        if (!force && (personalNotifications.isNotEmpty() || businessNotifications.isNotEmpty())) return
-        scopedNotificationsLoading = true
-        try {
-            personalNotifications = api.listPersonalNotifications()
-            businessNotifications = if (isSitterAccount) api.listBusinessNotifications() else emptyList()
-        } catch (_: Exception) {
-            // 消息不是主流程，失败留空即可
-        } finally {
-            scopedNotificationsLoading = false
-        }
-    }
+    /** 消息页：一次拉取两个视角；商家消息只在当前身份是机构端时才有意义 */
+    suspend fun loadScopedNotifications(force: Boolean = false) =
+        notificationsCenter.loadScopedNotifications(force, isSitterMode)
 
-    /** 消息页当前展示的列表 */
-    fun visibleNotifications(): List<NotificationDto> =
-        if (notificationScope == "business") businessNotifications else personalNotifications
+    /** 消息页当前展示的列表（委托到共享通知中心） */
+    fun visibleNotifications(): List<NotificationDto> = notificationsCenter.visibleNotifications()
 
-    suspend fun markScopedRead(id: Long) {
-        runCatching {
-            if (notificationScope == "business") api.markBusinessNotificationRead(id)
-            else api.markPersonalNotificationRead(id)
-        }
-        if (notificationScope == "business") {
-            businessNotifications = businessNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
-        } else {
-            personalNotifications = personalNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
-        }
-        notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
-    }
+    suspend fun markScopedRead(id: Long) = notificationsCenter.markScopedNotificationRead(id)
 
-    /** 一键已读只清当前视角，另一类消息的未读数不受影响 */
-    suspend fun markAllScopedRead() {
-        val current = visibleNotifications()
-        if (current.none { !it.isRead }) {
-            toast("没有未读消息")
-            return
-        }
-        runCatching {
-            if (notificationScope == "business") api.markAllBusinessNotificationsRead()
-            else api.markAllPersonalNotificationsRead()
-        }
-        val ids = current.map { it.id }.toSet()
-        if (notificationScope == "business") {
-            businessNotifications = businessNotifications.map { it.copy(isRead = true) }
-        } else {
-            personalNotifications = personalNotifications.map { it.copy(isRead = true) }
-        }
-        notifications = notifications.map { if (it.id in ids) it.copy(isRead = true) else it }
-        toast("已全部标为已读")
-    }
+    /** 一键已读只清当前视角，另一类消息的未读数不受影响（委托到共享通知中心） */
+    suspend fun markAllScopedRead() = notificationsCenter.markAllScopedNotificationsRead()
 
     suspend fun loadFavorites(force: Boolean = false) {
         if (!loggedIn || favoritesLoading) return
@@ -801,6 +656,52 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
+    /**
+     * 某条动态的留言列表。
+     *
+     * 先清空再拉：从 A 的详情返回立刻进 B 时，不清会先闪一屏 A 的留言。
+     * 点赞数也一并从响应里取，比本地 likedDynamics 推算准（别人点的赞也算）。
+     */
+    suspend fun loadDynamicComments(dynamicId: Long, reset: Boolean = true) {
+        if (dynamicId <= 0L || commentsLoading) return
+        if (reset) {
+            dynamicComments = emptyList()
+            dynamicLikes = 0
+        }
+        commentsLoading = true
+        try {
+            val page = api.listDynamicComments(dynamicId)
+            dynamicComments = page.items
+            dynamicLikes = page.likes
+        } catch (e: Exception) {
+            toast(e.message ?: "留言加载失败")
+        } finally {
+            commentsLoading = false
+        }
+    }
+
+    /** 发表留言，成功后重新拉一遍（后端不回完整对象，重拉比本地拼更省事也更准） */
+    suspend fun sendDynamicComment(dynamicId: Long, content: String): Boolean {
+        val text = content.trim()
+        if (text.isEmpty()) {
+            toast("请先写点什么")
+            return false
+        }
+        if (commentSending) return false
+        commentSending = true
+        return try {
+            api.createDynamicComment(dynamicId, text)
+            loadDynamicComments(dynamicId, reset = false)
+            toast("留言已发送")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "留言失败")
+            false
+        } finally {
+            commentSending = false
+        }
+    }
+
     suspend fun loadCoupons(force: Boolean = false) {
         if (!loggedIn || couponsLoading) return
         if (!force && coupons != null) return
@@ -835,6 +736,51 @@ class MobileState(private val session: MobileSession) {
     suspend fun loadTickets() {
         if (!loggedIn) return
         tickets = runCatching { api.listTickets() }.getOrDefault(tickets)
+    }
+
+    /** 打开某张工单的完整对话（后端按时间正序回消息） */
+    suspend fun openTicket(ticketId: Long) {
+        if (ticketId <= 0L) return
+        ticketLoading = true
+        ticketDetail = null
+        try {
+            ticketDetail = api.ticketDetail(ticketId)
+        } catch (e: Exception) {
+            toast(e.message ?: "工单加载失败")
+        } finally {
+            ticketLoading = false
+        }
+    }
+
+    fun closeTicket() {
+        ticketDetail = null
+    }
+
+    /**
+     * 追加一条回复。
+     *
+     * 成功后原地刷新会话，不走 openTicket —— 那个会先把 ticketDetail 置空，
+     * 界面上会闪一帧"加载中"，对话页体验很差。
+     */
+    suspend fun replyTicket(ticketId: Long, content: String): Boolean {
+        val text = content.trim()
+        if (text.isEmpty()) {
+            toast("请填写回复内容")
+            return false
+        }
+        if (ticketReplying) return false
+        ticketReplying = true
+        return try {
+            api.replyTicket(ticketId, text)
+            ticketDetail = runCatching { api.ticketDetail(ticketId) }.getOrNull() ?: ticketDetail
+            loadTickets()
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "回复失败")
+            false
+        } finally {
+            ticketReplying = false
+        }
     }
 
     suspend fun loadProfile() {
@@ -906,7 +852,6 @@ class MobileState(private val session: MobileSession) {
             }
             editingPet = null
             loadPets(force = true)
-            go(MobileScreen.Pets, keepCurrent = false)
             true
         } catch (e: Exception) {
             toast(e.message ?: "保存失败")
@@ -943,7 +888,6 @@ class MobileState(private val session: MobileSession) {
         try {
             api.deletePet(pet.id)
             pets = pets.filterNot { it.id == pet.id }
-            sheet = null
             toast("宠物档案已删除")
         } catch (e: Exception) {
             toast(e.message ?: "删除失败")
@@ -955,7 +899,6 @@ class MobileState(private val session: MobileSession) {
             api.updatePetVaccine(pet.id, urls)
             toast("免疫证明已提交，等待核验")
             loadPets(force = true)
-            sheet = null
         } catch (e: Exception) {
             toast(e.message ?: "提交失败")
         }
@@ -1084,7 +1027,6 @@ class MobileState(private val session: MobileSession) {
         estimate = null
         loadOrders(force = true)
         toast("订单已创建，请在 30 分钟内完成支付")
-        go(MobileScreen.Pay)
         return true
     }
 
@@ -1102,14 +1044,12 @@ class MobileState(private val session: MobileSession) {
         loadOrders(force = true)
         selectedOrder = orders.firstOrNull { it.id == order.id } ?: order
         toast("支付成功")
-        go(MobileScreen.Orders, keepCurrent = false)
         return true
     }
 
     suspend fun cancelOrder(order: Order, reason: String) {
         try {
             api.cancelOrder(order.id, reason.ifBlank { "个人安排变化" })
-            sheet = null
             toast("订单已取消，容量已释放")
             loadOrders(force = true)
         } catch (e: Exception) {
@@ -1120,7 +1060,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun rescheduleOrder(order: Order, start: String, end: String) {
         try {
             val r = api.rescheduleOrder(order.id, start, end)
-            sheet = null
             toast("已改到 " + r.startDate + " 至 " + r.endDate + "，费用 " + money(r.totalAmount))
             loadOrders(force = true)
         } catch (e: Exception) {
@@ -1132,7 +1071,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun renewOrder(order: Order, end: String) {
         try {
             val r = api.renewOrder(order.id, end)
-            sheet = null
             val paid = if (r.extraAmount > 0.0) "，已补差价 " + money(r.extraAmount) else ""
             toast("已续住 " + r.extraDays + " 天" + paid + "，订单合计 " + money(r.totalAmount))
             loadOrders(force = true)
@@ -1144,7 +1082,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun requestRefund(order: Order, reason: String) {
         try {
             api.requestRefund(order.id, reason)
-            sheet = null
             toast("退款申请已提交，等待平台处理")
             loadRefunds()
             loadOrders(force = true)
@@ -1155,16 +1092,35 @@ class MobileState(private val session: MobileSession) {
 
     suspend fun submitReview(order: Order, overall: Int, service: Int, environment: Int, hygiene: Int, comment: String) {
         try {
-            api.submitReview(
+            val result = api.submitReview(
                 order.id,
                 ReviewPayload(overall, service, environment, hygiene, comment.ifBlank { "服务满意，感谢照料。" }.take(1000)),
             )
-            sheet = null
+            lastReviewId = result.id
             toast("评价已提交")
             loadOrders(force = true)
-            go(MobileScreen.Orders, keepCurrent = false)
         } catch (e: Exception) {
             toast(e.message ?: "评价提交失败")
+        }
+    }
+
+    /** 24 小时内追评，只支持文字 */
+    suspend fun appendReview(reviewId: Long, content: String): Boolean {
+        if (reviewId <= 0L) {
+            toast("没有找到可追评的评价")
+            return false
+        }
+        if (content.isBlank()) {
+            toast("追评内容不能为空")
+            return false
+        }
+        return try {
+            api.followupReview(reviewId, content.trim().take(1000))
+            toast("追评已提交")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "追评提交失败")
+            false
         }
     }
 
@@ -1192,16 +1148,9 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
-    suspend fun markAllRead() {
-        runCatching { api.markAllNotificationsRead() }
-        notifications = notifications.map { it.copy(isRead = true) }
-        toast("已全部标为已读")
-    }
+    suspend fun markAllRead() = notificationsCenter.markAllNotificationsRead()
 
-    suspend fun markRead(id: Long) {
-        runCatching { api.markNotificationRead(id) }
-        notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
-    }
+    suspend fun markRead(id: Long) = notificationsCenter.markNotificationRead(id)
 
     suspend fun claimCoupon(couponId: Long) {
         try {
@@ -1210,17 +1159,6 @@ class MobileState(private val session: MobileSession) {
             loadCoupons(force = true)
         } catch (e: Exception) {
             toast(e.message ?: "领取失败")
-        }
-    }
-
-    /** 删除券包里的券，已使用的会被服务端拒绝，这里直接显示后端原文 */
-    suspend fun deleteMyCoupon(coupon: UserCouponDto) {
-        try {
-            api.deleteMyCoupon(coupon.id)
-            toast("优惠券已删除")
-            loadCoupons(force = true)
-        } catch (e: Exception) {
-            toast(e.message ?: "删除失败")
         }
     }
 
@@ -1252,7 +1190,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.createTicket(category, title.trim(), content.trim())
-            sheet = null
             toast("工单已提交，平台会尽快回复")
             loadTickets()
         } catch (e: Exception) {
@@ -1267,7 +1204,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.contactSitter(sitter.id, message.trim())
-            sheet = null
             toast("已发送，机构会在消息里回复")
         } catch (e: Exception) {
             toast(e.message ?: "发送失败")
@@ -1277,7 +1213,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun saveProfile(nicknameInput: String, phone: String, address: String, contactName: String, contactPhone: String) {
         try {
             api.updateProfile(UpdateProfilePayload(nicknameInput.trim(), phone.trim(), address.trim(), contactName.trim(), contactPhone.trim()))
-            sheet = null
             nickname = nicknameInput.trim()
             session.nickname = nickname
             loadProfile()
@@ -1290,7 +1225,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun changePassword(oldPassword: String, newPassword: String) {
         try {
             api.changePassword(oldPassword, newPassword)
-            sheet = null
             toast("密码已修改")
         } catch (e: Exception) {
             toast(e.message ?: "修改失败")
@@ -1324,7 +1258,6 @@ class MobileState(private val session: MobileSession) {
                     description = description.trim(),
                 ),
             )
-            sheet = null
             toast("入驻申请已提交，等待平台审核")
             loadProfile()
         } catch (e: Exception) {
@@ -1392,7 +1325,6 @@ class MobileState(private val session: MobileSession) {
                     longitude = longitude,
                 ),
             )
-            sheet = null
             toast("机构资料已保存")
         } catch (e: Exception) {
             toast(e.message ?: "保存失败")
@@ -1416,6 +1348,15 @@ class MobileState(private val session: MobileSession) {
             null
         }
     }
+
+    /**
+     * 坐标换地址：拖动地图选点时用。
+     *
+     * 故意不 toast、不抛异常——拖动过程中会连着问好几次，每次都弹提示会很吵；
+     * 拿不到就保持上一次的地址文本，用户仍然可以手动改。
+     */
+    suspend fun reverseAddress(latitude: Double, longitude: Double): GeocodeDto? =
+        runCatching { api.reverseGeocode(ReversePayload(latitude, longitude)) }.getOrNull()
 
     suspend fun loadSitterStats() {
         if (!loggedIn) return
@@ -1448,7 +1389,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun rejectOrder(order: ReceivedOrderDto, reason: String) {
         try {
             api.rejectOrder(order.id, reason.ifBlank { "机构暂时无法接待" })
-            sheet = null
             toast("已拒绝该订单")
             loadReceivedOrders(force = true)
         } catch (e: Exception) {
@@ -1497,7 +1437,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun setCapacity(date: String, capacity: Int) {
         try {
             api.setMyCapacity(date, capacity)
-            sheet = null
             toast("已更新 " + date + " 的接待容量")
             loadCapacity(force = true)
         } catch (e: Exception) {
@@ -1531,7 +1470,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.replyReview(reviewId, text.take(500))
-            sheet = null
             toast("回复已发送")
             loadSitterReviews()
         } catch (e: Exception) {
@@ -1551,7 +1489,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.publishDynamic(orderId, content.ifBlank { "宠物状态良好，按时投喂。" }.take(2000), photos)
-            sheet = null
             toast("动态已发布")
             loadSitterDynamics()
         } catch (e: Exception) {
@@ -1581,7 +1518,6 @@ class MobileState(private val session: MobileSession) {
     suspend fun saveSitterCoupon(coupon: SitterCouponDto?, payload: SitterCouponPayload) {
         try {
             if (coupon == null) api.createSitterCoupon(payload) else api.updateSitterCoupon(coupon.id, payload)
-            sheet = null
             toast(if (coupon == null) "优惠券已发布" else "优惠券已保存")
             loadSitterCoupons()
         } catch (e: Exception) {
@@ -1627,7 +1563,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.createAddon(AddonPayload(name.trim(), price, unit))
-            sheet = null
             loadMyAddons()
             toast("加购服务已上架")
         } catch (e: Exception) {
@@ -1642,7 +1577,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.updateAddon(addon.id, AddonUpdatePayload(name = name.trim(), price = price, unit = unit))
-            sheet = null
             loadMyAddons()
             toast("加购服务已更新")
         } catch (e: Exception) {
@@ -1672,7 +1606,6 @@ class MobileState(private val session: MobileSession) {
         }
         try {
             api.createPriceRule(PriceRulePayload(name.trim(), start, end, multiplier))
-            sheet = null
             loadPriceRules()
             toast("定价规则已保存")
         } catch (e: Exception) {
@@ -1737,34 +1670,5 @@ class MobileState(private val session: MobileSession) {
         6 -> "周六"
         7 -> "周日"
         else -> ""
-    }
-
-    /**
-     * 前台轮询。手机不像桌面端一直开着，间隔取 15 秒，且只在没有任何弹层遮挡时刷，
-     * 免得用户正在看某个订单时被换掉内容。
-     */
-    suspend fun autoRefresh() {
-        if (!loggedIn) return
-        loadNotifications(force = true)
-        if (sheet != null) return
-        if (isSitterAccount) {
-            loadReceivedOrders(force = true)
-            when (screen) {
-                MobileScreen.SbCapacity -> loadCapacity(force = true)
-                MobileScreen.SbIncome -> loadEarnings(force = true)
-                MobileScreen.SbReviews -> loadSitterReviews()
-                MobileScreen.SbCoupons -> loadSitterCoupons()
-                MobileScreen.SbDynamics -> loadSitterDynamics()
-                else -> return
-            }
-            return
-        }
-        when (screen) {
-            MobileScreen.Orders, MobileScreen.OrderDetail, MobileScreen.Pay -> loadOrders(force = true)
-            MobileScreen.Pets -> loadPets(force = true)
-            MobileScreen.Coupons -> loadCoupons(force = true)
-            MobileScreen.Dynamics -> loadOwnerDynamics(force = true)
-            else -> Unit
-        }
     }
 }

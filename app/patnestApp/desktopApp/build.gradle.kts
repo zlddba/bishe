@@ -34,6 +34,9 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "team.wd.atnestapp"
             packageVersion = "1.0.0"
+            // DataStore 落盘时用到 java.base 之外的内部 API。jpackage 产物默认只带最小模块集，
+            // 不显式声明的话，装完运行会抛异常（IDE 里跑得起来，打包后才炸）。
+            modules("jdk.unsupported", "jdk.unsupported.desktop")
         }
     }
 }

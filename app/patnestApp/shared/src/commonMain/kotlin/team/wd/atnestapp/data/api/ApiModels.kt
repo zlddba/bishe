@@ -227,6 +227,10 @@ data class ReviewPayload(
 @Serializable
 data class ReviewResult(val id: Long = 0)
 
+/** 追评：只带一段文字，服务端校验 24 小时窗口 */
+@Serializable
+data class FollowupPayload(val content: String)
+
 @Serializable
 data class UpdateProfilePayload(
     val nickname: String,
@@ -306,6 +310,31 @@ data class DynamicPageDto(
     val page: Int = 1,
     @SerialName("per_page") val perPage: Int = 20,
 )
+
+/**
+ * 动态下的一条留言。
+ *
+ * 后端只回展示名（users.nickname 缺省回退 username）而不回 user_id：
+ * App 侧只展示，不按人做二次查询，够用且少一次关联。
+ */
+@Serializable
+data class DynamicCommentDto(
+    val id: Long = 0,
+    val user: String = "",
+    val content: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+/** GET /pet-owner/dynamics/:id/comments —— 顺带把点赞数带回来，省一次单独计数。 */
+@Serializable
+data class DynamicCommentListDto(
+    @SerialName("dynamic_id") val dynamicId: Long = 0,
+    val likes: Int = 0,
+    val items: List<DynamicCommentDto> = emptyList(),
+)
+
+@Serializable
+data class CommentPayload(val content: String)
 
 @Serializable
 data class UserCouponDto(
@@ -744,6 +773,27 @@ data class TicketDto(
 @Serializable
 data class TicketListDto(val items: List<TicketDto> = emptyList())
 
+/** 工单会话里的一条消息；sender_role 只有 user（本人）与 admin（客服）两种。 */
+@Serializable
+data class TicketMessageDto(
+    @SerialName("sender_role") val senderRole: String = "",
+    val content: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+/** GET /support/tickets/:id —— 标题、状态与按时间正序的完整对话。 */
+@Serializable
+data class TicketDetailDto(
+    val id: Long = 0,
+    @SerialName("ticket_no") val ticketNo: String = "",
+    val title: String = "",
+    val status: String = "open",
+    val messages: List<TicketMessageDto> = emptyList(),
+)
+
+@Serializable
+data class TicketReplyPayload(val content: String)
+
 @Serializable
 data class RefundDto(
     val id: Long = 0,
@@ -857,6 +907,54 @@ data class PriceRuleDto(
 
 @Serializable
 data class PriceRuleListDto(val items: List<PriceRuleDto> = emptyList())
+
+@Serializable
+data class PayOrderPayload(val method: String)
+
+/* ---------- 钱包（真实货币） ---------- */
+
+@Serializable
+data class WalletDto(
+    @SerialName("user_id") val userId: Long = 0,
+    val balance: Double = 0.0,
+    @SerialName("frozen_balance") val frozenBalance: Double = 0.0,
+    @SerialName("total_recharge") val totalRecharge: Double = 0.0,
+    @SerialName("total_consume") val totalConsume: Double = 0.0,
+)
+
+@Serializable
+data class WalletTransactionDto(
+    val id: Long = 0,
+    @SerialName("user_id") val userId: Long = 0,
+    val type: String = "",
+    val amount: Double = 0.0,
+    @SerialName("balance_after") val balanceAfter: Double = 0.0,
+    val status: String = "",
+    val channel: String = "",
+    @SerialName("ref_type") val refType: String = "",
+    @SerialName("ref_id") val refId: Long = 0,
+    @SerialName("transaction_id") val transactionId: String = "",
+    val remark: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class WalletTransactionListDto(val items: List<WalletTransactionDto> = emptyList())
+
+@Serializable
+data class RechargeRequestDto(val amount: Double, val channel: String = "mock")
+
+@Serializable
+data class RechargeResultDto(
+    @SerialName("recharge_id") val rechargeId: Long = 0,
+    val amount: Double = 0.0,
+    val channel: String = "",
+    val status: String = "",
+    @SerialName("pay_params") val payParams: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class RechargeConfirmDto(val status: String = "", val balance: Double = 0.0)
 
 @Serializable
 data class PriceRulePayload(

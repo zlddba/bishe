@@ -47,6 +47,15 @@ class ApiClient(rawBaseUrl: String) {
      */
     @PublishedApi internal var refreshToken: String? = null
 
+    /**
+     * 令牌被静默续期后的回调：新的访问令牌 + 轮换后的刷新令牌。
+     *
+     * 服务端每次刷新都会换一张刷新令牌，本地存储必须跟着更新，
+     * 否则下次冷启动手里握着已经作废的那张，一过期就被踢下线。
+     * 不设置回调也不影响请求，只是不落盘。
+     */
+    var onAuthRefreshed: ((access: String, refresh: String) -> Unit)? = null
+
     /** 登录/注册成功后一次性写入会话，避免调用方只记住 access_token */
     fun applyAuth(access: String, refresh: String?, expiresIn: Long) {
         token = access
@@ -81,6 +90,8 @@ class ApiClient(rawBaseUrl: String) {
             if (result.refreshToken.isNotBlank()) {
                 refreshToken = result.refreshToken
             }
+            // 落盘：轮换后的凭据立刻写回本地，冷启动才不会拿着旧刷新令牌
+            refreshToken?.let { onAuthRefreshed?.invoke(result.accessToken, it) }
             true
         } catch (_: Exception) {
             refreshToken = null
@@ -255,7 +266,7 @@ class ApiClient(rawBaseUrl: String) {
                     ?: "请求失败（HTTP ${status.value}）",
             )
         }
-        if (envelope == null) throw ApiException("服务返回格式异常")
+        if (envelope == null) throw ApiException(describeNonEnvelope(text, status))
         if (envelope.code != 0) {
             throw ApiException(sessionInvalidMessage(envelope.message) ?: envelope.message.ifBlank { "请求失败" })
         }
@@ -270,11 +281,27 @@ class ApiClient(rawBaseUrl: String) {
                     ?: "请求失败（HTTP ${status.value}）",
             )
         }
-        if (envelope == null) throw ApiException("服务返回格式异常")
+        if (envelope == null) throw ApiException(describeNonEnvelope(text, status))
         if (envelope.code != 0) {
             throw ApiException(sessionInvalidMessage(envelope.message) ?: envelope.message.ifBlank { "请求失败" })
         }
         return envelope.data ?: throw ApiException("服务返回数据为空")
+    }
+
+    /**
+     * 响应不是 { code, message, data } 信封时，把状态码和响应开头一起带出来。
+     * 只说「格式异常」没法排查——最常见的原因就是接口根地址写错了，
+     * 少了 /api/v1 就会被网关或静态站点兜回一个 HTML 页面。
+     */
+    @PublishedApi
+    internal fun describeNonEnvelope(text: String, status: HttpStatusCode): String {
+        val snippet = text.replace(Regex("\\s+"), " ").trim().take(80)
+        return if (snippet.isEmpty()) {
+            "服务返回空响应（HTTP ${status.value}），请检查 .env 里的 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
+        } else {
+            "服务返回的不是接口数据（HTTP ${status.value}）：$snippet —— " +
+                "请检查 .env 里的 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
+        }
     }
 
     suspend fun login(username: String, password: String): AuthResponseDto =
@@ -344,8 +371,8 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun createOrder(payload: CreateOrderPayload): CreateOrderResult =
         postData("/pet-owner/orders", payload)
 
-    suspend fun payOrder(orderId: Long): PayResult =
-        putEmpty<PayResult>("/pet-owner/orders/$orderId/pay")
+    suspend fun payOrder(orderId: Long, method: String = "mock"): PayResult =
+        putData("/pet-owner/orders/$orderId/pay", PayOrderPayload(method))
 
     /** 取消订单：后端会释放已占容量 */
     suspend fun cancelOrder(orderId: Long, reason: String): CancelResult =
@@ -395,6 +422,26 @@ class ApiClient(rawBaseUrl: String) {
     /** 积分余额与流水 */
     suspend fun myPoints(): PointsDto = getData("/pet-owner/points")
 
+    /* ---------- 钱包（真实货币） ---------- */
+
+    /** 钱包概览（余额、冻结、累计充值/消费） */
+    suspend fun walletOverview(): WalletDto = getData("/pet-owner/wallet")
+
+    /** 钱包流水（按类型筛选、分页） */
+    suspend fun walletTransactions(page: Int = 1, type: String = ""): WalletTransactionListDto {
+        val params = mutableMapOf("page" to page.toString(), "per_page" to "20")
+        if (type.isNotBlank()) params["type"] = type
+        return getData("/pet-owner/wallet/transactions", params)
+    }
+
+    /** 发起充值，返回充值单与支付参数（演示阶段模拟支付） */
+    suspend fun createRecharge(amount: Double, channel: String = "mock"): RechargeResultDto =
+        postData("/pet-owner/wallet/recharge", RechargeRequestDto(amount, channel))
+
+    /** 模拟确认充值（演示阶段直接确认到账） */
+    suspend fun confirmRecharge(rechargeId: Long): RechargeConfirmDto =
+        postNoBody<RechargeConfirmDto>("/pet-owner/wallet/recharge/$rechargeId/pay")
+
     /** 提交售后工单（联系客服） */
     suspend fun createTicket(category: String, title: String, content: String): ClaimResult =
         postData("/support/tickets", TicketPayload(category, title, content))
@@ -404,8 +451,19 @@ class ApiClient(rawBaseUrl: String) {
         return data.items
     }
 
+    /** 工单会话详情：标题、状态与按时间正序的完整往返记录 */
+    suspend fun ticketDetail(ticketId: Long): TicketDetailDto = getData("/support/tickets/$ticketId")
+
+    /** 追加一条回复；工单已关闭时后端回 409，走统一错误文案 */
+    suspend fun replyTicket(ticketId: Long, content: String): ClaimResult =
+        postData("/support/tickets/$ticketId/messages", TicketReplyPayload(content.trim()))
+
     suspend fun submitReview(orderId: Long, payload: ReviewPayload): ReviewResult =
         postData("/pet-owner/orders/$orderId/review", payload)
+
+    /** 24 小时内追加评价（追评），只允许文字 */
+    suspend fun followupReview(reviewId: Long, content: String): UpdatedResult =
+        postData("/pet-owner/reviews/$reviewId/followup", FollowupPayload(content))
 
     suspend fun updateProfile(payload: UpdateProfilePayload): UpdatedResult =
         putData("/auth/profile", payload)
@@ -487,10 +545,21 @@ class ApiClient(rawBaseUrl: String) {
         deleteNoContent("/pet-owner/dynamics/$dynamicId/like")
     }
 
+    /**
+     * 动态留言列表。
+     *
+     * 返回体里同时带 likes（点赞总数），所以详情页进页面拉一次留言就能把
+     * 「已有 N 人点赞」渲染出来，不必再让 /dynamics 列表的数据当缓存。
+     */
+    suspend fun listDynamicComments(dynamicId: Long): DynamicCommentListDto =
+        getData("/pet-owner/dynamics/$dynamicId/comments")
+
+    /** 发表留言；后端只校验长度 1~500，返回新建记录的 id。 */
+    suspend fun createDynamicComment(dynamicId: Long, content: String): ClaimResult =
+        postData("/pet-owner/dynamics/$dynamicId/comments", CommentPayload(content.trim()))
+
     suspend fun listCoupons(): CouponListDto = getData("/pet-owner/coupons")
 
-    /** 删除券包中的优惠券（id 为券包记录 id；已使用的券服务端会拒绝删除）。 */
-    suspend fun deleteMyCoupon(userCouponId: Long) = deleteNoContent("/pet-owner/coupons/mine/$userCouponId")
 
     suspend fun claimCoupon(couponId: Long) {
         postNoBody<ClaimResult>("/pet-owner/coupons/$couponId/claim")

@@ -115,13 +115,6 @@ fun CouponsPage(app: AppState) {
                                 }
                                 row.claimId != null -> app.scope.launch { app.claimCoupon(row.claimId) }
                             }
-                        }, onDelete = row.userCoupon?.let { uc ->
-                            {
-                                app.modal = ModalKind.Confirm(
-                                    "删除优惠券",
-                                    "删除后无法恢复（领取活动发放的券如仍在有效期内可重新领取）。确定删除吗？",
-                                ) { app.scope.launch { app.deleteMyCoupon(uc.id) } }
-                            }
                         })
                         Spacer(Modifier.height(12.dp))
                     }

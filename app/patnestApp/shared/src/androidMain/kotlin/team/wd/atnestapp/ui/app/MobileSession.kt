@@ -1,62 +1,56 @@
-package team.wd.atnestapp.ui.mobile
+package team.wd.atnestapp.ui.app
 
 import android.content.Context
-import android.content.SharedPreferences
+import team.wd.atnestapp.data.session.androidSessionStore
 
 /**
- * 手机端会话持久化：桌面端每次启动读 .env，手机没有这个条件，
- * 所以接口地址、访问令牌、刷新令牌、账号信息统一放 SharedPreferences，
- * 应用被系统杀掉后重新打开仍是登录态。
+ * 手机端会话的读写门面。
+ *
+ * 真正的落盘在 `data/session/SessionStore`（commonMain，DataStore Preferences），
+ * 这里只是把「同步读、异步写」包成属性，让 `MobileState` 与 61 屏里的读取保持原样。
+ *
+ * 接口地址不在这里存：它由构建期从项目根的 .env（PATNEST_API_BASE）注入，
+ * 通过构造参数传进来，App 内不提供修改入口，避免旧值把配置盖掉。
  */
-class MobileSession(context: Context) {
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences("patnest_mobile", Context.MODE_PRIVATE)
+class MobileSession(context: Context, apiBaseUrl: String) {
+    private val store = androidSessionStore(context)
 
-    var baseUrl: String
-        get() = prefs.getString(KEY_BASE_URL, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_BASE_URL
-        set(value) { prefs.edit().putString(KEY_BASE_URL, value.trim()).apply() }
+    /** 接口根地址，来自 BuildConfig.API_BASE（即 .env 的 PATNEST_API_BASE）。 */
+    val baseUrl: String = apiBaseUrl.trim()
 
     var token: String
-        get() = prefs.getString(KEY_TOKEN, "").orEmpty()
-        set(value) { prefs.edit().putString(KEY_TOKEN, value).apply() }
+        get() = store.current.token
+        set(value) = store.setToken(value)
 
     var refreshToken: String
-        get() = prefs.getString(KEY_REFRESH, "").orEmpty()
-        set(value) { prefs.edit().putString(KEY_REFRESH, value).apply() }
+        get() = store.current.refreshToken
+        set(value) = store.setRefreshToken(value)
 
     var account: String
-        get() = prefs.getString(KEY_ACCOUNT, "").orEmpty()
-        set(value) { prefs.edit().putString(KEY_ACCOUNT, value).apply() }
+        get() = store.current.account
+        set(value) = store.setAccount(value)
 
     var nickname: String
-        get() = prefs.getString(KEY_NICKNAME, "").orEmpty()
-        set(value) { prefs.edit().putString(KEY_NICKNAME, value).apply() }
+        get() = store.current.nickname
+        set(value) = store.setNickname(value)
 
-    /** owner / sitter，决定进入主界面后是哪一套底部导航 */
+    /** owner / sitter，账号本身注册的角色（服务端事实，不随切换身份改变） */
     var role: String
-        get() = prefs.getString(KEY_ROLE, "owner").orEmpty()
-        set(value) { prefs.edit().putString(KEY_ROLE, value).apply() }
+        get() = store.current.role
+        set(value) = store.setRole(value)
 
-    val hasSession: Boolean get() = token.isNotBlank()
+    /** 当前使用的身份，切换后落盘，冷启动直接回到这套工作台 */
+    var activeRole: String
+        get() = store.current.activeRole
+        set(value) = store.setActiveRole(value)
 
-    fun clearAuth() {
-        prefs.edit()
-            .remove(KEY_TOKEN)
-            .remove(KEY_REFRESH)
-            .remove(KEY_ACCOUNT)
-            .remove(KEY_NICKNAME)
-            .remove(KEY_ROLE)
-            .apply()
-    }
+    val hasSession: Boolean get() = store.current.isLoggedIn
 
-    companion object {
-        const val DEFAULT_BASE_URL = "http://192.168.3.100:9200"
-        private const val KEY_BASE_URL = "api_base_url"
-        private const val KEY_TOKEN = "access_token"
-        private const val KEY_REFRESH = "refresh_token"
-        private const val KEY_ACCOUNT = "account"
-        private const val KEY_NICKNAME = "nickname"
-        private const val KEY_ROLE = "role"
-    }
+    /**
+     * 静默续期成功后回写。
+     * 服务端每次刷新都会轮换刷新令牌，本地不跟着更新的话，下次冷启动就刷不动了。
+     */
+    fun updateTokens(access: String, refresh: String?) = store.setTokens(access, refresh)
+
+    fun clearAuth() = store.clear()
 }
-

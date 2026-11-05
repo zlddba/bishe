@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.ui.AppState
+import team.wd.atnestapp.ui.AppPage
 import team.wd.atnestapp.ui.ModalKind
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.components.FieldLabel
@@ -219,6 +220,7 @@ private fun SupportPanel(app: AppState) {
     LaunchedEffect(app.loggedIn) {
         if (app.loggedIn) {
             app.loadPoints()
+            app.loadWallet()
             app.loadTickets()
         }
     }
@@ -257,6 +259,40 @@ private fun SupportPanel(app: AppState) {
                     Text(
                         (if (entry.change >= 0) "+" else "") + entry.change + " 分",
                         color = if (entry.change >= 0) PatNestColors.Ok else PatNestColors.Danger,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        ThinDivider()
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 11.dp).clickable {
+                app.go(AppPage.Wallet)
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("我的钱包", color = PatNestColors.Ink, fontSize = 13.5.sp)
+                Text("真实货币余额，可用于支付订单", color = PatNestColors.Ink3, fontSize = 11.5.sp)
+            }
+            Text("¥${app.walletBalance}", color = PatNestColors.BrandInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Text("›", color = PatNestColors.Ink3, fontSize = 15.sp)
+        }
+        if (app.walletTransactions.isNotEmpty()) {
+            ThinDivider()
+            app.walletTransactions.take(3).forEach { tx ->
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(walletTypeLabel(tx.type), color = PatNestColors.Ink2, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    val signed = walletSignedAmount(tx)
+                    val positive = signed >= 0
+                    Text(
+                        (if (positive) "+" else "-") + "¥" + moneyText(if (positive) signed else -signed),
+                        color = if (positive) PatNestColors.Danger else PatNestColors.Ok,
                         fontSize = 12.sp,
                     )
                 }

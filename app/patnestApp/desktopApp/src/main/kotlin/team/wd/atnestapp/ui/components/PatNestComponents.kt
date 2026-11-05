@@ -781,7 +781,7 @@ fun CalDayCard(day: CalDay, modifier: Modifier = Modifier, onClick: (() -> Unit)
 /* ---------- 优惠券 ---------- */
 
 @Composable
-fun CouponCard(coupon: Coupon, onUse: () -> Unit, onDelete: (() -> Unit)? = null) {
+fun CouponCard(coupon: Coupon, onUse: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -826,10 +826,6 @@ fun CouponCard(coupon: Coupon, onUse: () -> Unit, onDelete: (() -> Unit)? = null
                     "可用" -> PrimaryButton("立即使用", onUse, height = 30.dp)
                     "可领取" -> PrimaryButton("领取", onUse, height = 30.dp)
                     else -> Tag(coupon.state, TagKind.Soft)
-                }
-                if (onDelete != null) {
-                    Spacer(Modifier.width(8.dp))
-                    GhostButton("删除", onDelete, height = 30.dp, textColor = PatNestColors.Danger)
                 }
             }
         }

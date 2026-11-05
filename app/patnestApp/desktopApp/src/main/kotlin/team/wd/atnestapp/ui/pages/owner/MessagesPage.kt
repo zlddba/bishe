@@ -42,11 +42,11 @@ import team.wd.atnestapp.ui.theme.patCard
 @Composable
 fun MessagesPage(app: AppState) {
     LaunchedEffect(app.loggedIn) {
-        if (app.loggedIn) app.loadScopedNotifications()
+        if (app.loggedIn) app.notificationsCenter.loadScopedNotifications(isSitter = app.isSitterAccount)
     }
 
-    val scopeLabel = if (app.notificationScope == "business") "商家消息" else "个人消息"
-    val items = app.visibleNotifications()
+    val scopeLabel = if (app.notificationsCenter.notificationScope == "business") "商家消息" else "个人消息"
+    val items = app.notificationsCenter.visibleNotifications()
     val unread = items.count { !it.isRead }
 
     Column(
@@ -60,10 +60,10 @@ fun MessagesPage(app: AppState) {
             "$scopeLabel · ${if (unread > 0) "$unread 条未读" else "全部已读"}",
             trailing = {
                 GhostButton("全部已读", {
-                    app.scope.launch { app.markAllScopedNotificationsRead() }
+                    app.scope.launch { app.notificationsCenter.markAllScopedNotificationsRead() }
                 }, height = 32.dp)
                 PrimaryButton("刷新", {
-                    app.scope.launch { app.loadScopedNotifications(force = true) }
+                    app.scope.launch { app.notificationsCenter.loadScopedNotifications(force = true, isSitter = app.isSitterAccount) }
                 }, height = 32.dp)
             },
         )
@@ -71,27 +71,27 @@ fun MessagesPage(app: AppState) {
         ChipRow(
             options = listOf("个人消息", "商家消息"),
             selected = scopeLabel,
-            onSelect = { label ->
-                app.notificationScope = if (label == "商家消息") "business" else "personal"
+                onSelect = { label ->
+                app.notificationsCenter.notificationScope = if (label == "商家消息") "business" else "personal"
             },
             modifier = Modifier.padding(bottom = 16.dp),
         )
 
         when {
-            app.scopedNotificationsLoading && items.isEmpty() -> {
+            app.notificationsCenter.scopedNotificationsLoading && items.isEmpty() -> {
                 Text("正在加载消息…", color = PatNestColors.Ink3, fontSize = 12.5.sp)
             }
             items.isEmpty() -> {
                 Panel {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            app.scopedNotificationsError
+                            app.notificationsCenter.scopedNotificationsError
                                 ?: if (scopeLabel == "商家消息") "当前账号没有商家消息" else "暂时没有新消息",
                             color = PatNestColors.Ink2, fontSize = 13.sp,
                             modifier = Modifier.weight(1f),
                         )
                         PrimaryButton("刷新", {
-                            app.scope.launch { app.loadScopedNotifications(force = true) }
+                            app.scope.launch { app.notificationsCenter.loadScopedNotifications(force = true, isSitter = app.isSitterAccount) }
                         }, height = 32.dp)
                     }
                 }
@@ -109,7 +109,7 @@ fun MessagesPage(app: AppState) {
                             .fillMaxWidth()
                             .patCard(PatNestShape.Md, 8.dp)
                             .clickable {
-                                app.scope.launch { app.markScopedNotificationRead(message.id) }
+                                app.scope.launch { app.notificationsCenter.markScopedNotificationRead(message.id) }
                             }
                             .padding(horizontal = 16.dp, vertical = 15.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),

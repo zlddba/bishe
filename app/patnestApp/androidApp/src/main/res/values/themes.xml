@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        只负责「进程起来到第一帧 Compose 画出来」之间那一小段：窗口底色 + 透明系统栏。
+        真正的配色在 Compose 里（DTheme / DColor），这里不做主题切换逻辑。
+        底色拆成 values / values-night 两份，深色模式下冷启动不会先闪一下白屏。
+    -->
+    <style name="Theme.PatNest" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/d_window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>

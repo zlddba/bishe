@@ -31,3 +31,4 @@ target/
 release/
 .gocache/
 .gotmp
+.workbuddy

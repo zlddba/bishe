@@ -63,6 +63,7 @@ import team.wd.atnestapp.ui.pages.owner.ProfilePage
 import team.wd.atnestapp.ui.pages.owner.ReviewPage
 import team.wd.atnestapp.ui.pages.owner.SitterDetailPage
 import team.wd.atnestapp.ui.pages.owner.SittersPage
+import team.wd.atnestapp.ui.pages.owner.WalletPage
 import team.wd.atnestapp.ui.pages.sitter.SitterCapacityPage
 import team.wd.atnestapp.ui.pages.sitter.SitterCouponsPage
 import team.wd.atnestapp.ui.pages.sitter.SitterIncomePage
@@ -124,6 +125,7 @@ private val ownerNav = listOf(
         NavItem(AppPage.Favorites, "我的收藏", AppIcon.Heart),
         NavItem(AppPage.Coupons, "优惠券", AppIcon.Ticket),
         NavItem(AppPage.Messages, "消息通知", AppIcon.Bell),
+        NavItem(AppPage.Wallet, "我的钱包", AppIcon.Card),
     ),
 )
 
@@ -190,7 +192,7 @@ private fun RailNav(app: AppState) {
                 items.forEach { item ->
                     val badge = when (item.page) {
                         AppPage.Orders -> app.orders.count { it.status == "待支付" }
-                        AppPage.Messages -> app.notifications.count { !it.isRead }
+                        AppPage.Messages -> app.notificationsCenter.notifications.count { !it.isRead }
                         AppPage.SbOrders -> app.receivedOrders.count { it.status == "待确认" }
                         else -> 0
                     }
@@ -475,6 +477,7 @@ private fun PageHost(app: AppState) {
         AppPage.Favorites -> FavoritesPage(app)
         AppPage.Coupons -> CouponsPage(app)
         AppPage.Messages -> MessagesPage(app)
+        AppPage.Wallet -> WalletPage(app)
         AppPage.SbDash -> SitterOverviewPage(app)
         AppPage.SbOrders -> SitterOrdersPage(app)
         AppPage.SbCapacity -> SitterCapacityPage(app)

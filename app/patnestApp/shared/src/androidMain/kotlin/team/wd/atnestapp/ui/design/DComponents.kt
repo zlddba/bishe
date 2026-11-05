@@ -1,0 +1,931 @@
+package team.wd.atnestapp.ui.design
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import team.wd.atnestapp.ui.components.AppIcon
+import team.wd.atnestapp.ui.app.MobileImage
+
+/* ------------------------------------------------------------------ *
+ * 屏骨架：状态栏 / 顶栏 / 可滚动内容 / 固定底栏 / 底部 Tab
+ * ------------------------------------------------------------------ */
+
+@Composable
+fun DFrame(
+    nav: DNav,
+    title: String? = null,
+    activeTab: DTab? = null,
+    backable: Boolean = true,
+    // true = 内容自带沉浸头部（首页 hero），DFrame 不再补状态栏高度。
+    immersiveTop: Boolean = false,
+    actions: @Composable RowScope.() -> Unit = {},
+    bottomBar: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+        if (title != null) {
+            DTopBar(title = title, nav = nav, backable = backable, actions = actions)
+        } else if (!immersiveTop) {
+            // 无顶栏的页面（登录、找机构、支付成功等）自己也要让开状态栏，
+            // 否则第一行内容会被状态栏压住。
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        }
+        Box(Modifier.weight(1f)) {
+            // 进场动效交给 NavHost 的转场统一处理，这里不再给整屏内容加 alpha 动画：
+            // 整屏 alpha < 1 会让这一页整体离屏合成（整块 RenderNode 每帧重绘），
+            // 页面里再有封面图时掉帧非常明显。转场本身已经足够顺，不需要二次淡入。
+            //
+            // 没有底栏 / Tab 的页面，滚动内容要自己让开系统导航条。
+            val needBottomInset = bottomBar == null && activeTab == null
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(bottom = 14.dp),
+                content = content,
+            )
+        }
+        if (bottomBar != null) bottomBar()
+        if (activeTab != null) DBottomTabs(activeTab, nav)
+    }
+}
+
+/**
+ * 与 [DFrame] 同构，但正文用 LazyColumn。
+ *
+ * 机构 / 订单这类一次可能返回几十条的页面走这个骨架：LazyColumn 只组合可见项，
+ * 首屏不用一次建满 50 张卡片，内存和首帧耗时都会明显下降。
+ * 用法差别只有一处：正文是 [LazyListScope]，所以每块内容要自己包 `item { }`。
+ */
+@Composable
+fun DLazyFrame(
+    nav: DNav,
+    title: String? = null,
+    activeTab: DTab? = null,
+    backable: Boolean = true,
+    immersiveTop: Boolean = false,
+    actions: @Composable RowScope.() -> Unit = {},
+    bottomBar: (@Composable () -> Unit)? = null,
+    content: LazyListScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+        if (title != null) {
+            DTopBar(title = title, nav = nav, backable = backable, actions = actions)
+        } else if (!immersiveTop) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        }
+        Box(Modifier.weight(1f)) {
+            val needBottomInset = bottomBar == null && activeTab == null
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier),
+                contentPadding = PaddingValues(bottom = 14.dp),
+                content = content,
+            )
+        }
+        if (bottomBar != null) bottomBar()
+        if (activeTab != null) DBottomTabs(activeTab, nav)
+    }
+}
+
+/**
+ * 让状态栏图标临时切成浅色（白色），用于首页粉色 hero 顶到状态栏的场景；
+ * 离开该页时自动还原成当前主题要求的颜色（浅色主题深图标 / 深色主题浅图标）。
+ */
+@Composable
+fun DPaleStatusBar() {
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val window = context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        val previous = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose {
+            if (previous != null) controller.isAppearanceLightStatusBars = previous
+        }
+    }
+}
+
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+@Composable
+fun DTopBar(
+    title: String,
+    nav: DNav,
+    backable: Boolean = true,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        // statusBarsPadding 放在 height 之前：状态栏高度 + 48dp 才是顶栏实际占位，
+        // 这样沉浸式下标题栏不会被系统状态栏压住。
+        Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (backable) {
+            Box(
+                Modifier.size(30.dp).clip(CircleShape).clickable { nav.back() },
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+            }
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+        Spacer(Modifier.weight(1f))
+        actions()
+    }
+}
+
+@Composable
+fun DBottomTabs(active: DTab, nav: DNav) {
+    // 两套底栏：主人端「首页 / 找机构 / 寄养动态 / 我的」，
+    // 机构端「工作台 / 订单 / 动态 / 我的」。同一个位置，两边是完全不同的页面。
+    val isSitter = DLocalStore.current.isSitterMode
+    val tabs = DTab.entries.filter { it.sitter == isSitter }
+    Row(
+        // 白底一直铺到屏幕最底部（手势条下面），按钮内容再用 navigationBarsPadding 顶上来。
+        Modifier.fillMaxWidth().background(DColor.Card)
+            .border(1.dp, DColor.Line, DShape.Sm)
+            .navigationBarsPadding()
+            .height(64.dp)
+            .padding(top = 8.dp),
+    ) {
+        tabs.forEach { tab ->
+            val on = tab == active
+            val icon = when (tab) {
+                DTab.Home, DTab.SitterHome -> AppIcon.Home
+                DTab.Sitters -> AppIcon.Search
+                DTab.Dynamics, DTab.SitterMoments -> AppIcon.Image
+                DTab.Profile, DTab.SitterProfile -> AppIcon.User
+                DTab.SitterOrders -> AppIcon.Orders
+            }
+            Column(
+                Modifier.weight(1f).clickable { nav.tab(tab) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // 选中态用颜色 + 轻微放大过渡，切换 Tab 时不会「啪」地跳一下。
+                val tint by animateColorAsState(
+                    targetValue = if (on) DColor.BrandInk else DColor.Ink3,
+                    animationSpec = tween(180),
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (on) 1.08f else 1f,
+                    animationSpec = tween(180),
+                )
+                AppIcon(
+                    icon,
+                    Modifier.size(21.dp).graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                    tint,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    tab.label,
+                    fontSize = 10.5.sp,
+                    color = tint,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 基础块
+ * ------------------------------------------------------------------ */
+
+/** 页面左右 18dp 安全边距。 */
+@Composable
+fun DPad(content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), content = content)
+}
+
+@Composable
+fun DCard(
+    modifier: Modifier = Modifier,
+    padding: Dp = 14.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(DShape.Lg)
+            .background(DColor.Card)
+            .border(1.dp, DColor.Line, DShape.Lg)
+            .padding(padding),
+        content = content,
+    )
+}
+
+@Composable
+fun DSection(text: String, more: String? = null, onMore: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+        Spacer(Modifier.weight(1f))
+        if (more != null) {
+            Text(
+                more,
+                fontSize = 12.sp,
+                color = DColor.Ink3,
+                modifier = Modifier.clickable(enabled = onMore != null) { onMore?.invoke() },
+            )
+        }
+    }
+}
+
+@Composable
+fun DDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(DColor.Line))
+}
+
+/**
+ * 首页 / 个人中心的粉色头部。
+ * insetTop = true 时渐变会一直铺到状态栏下面（沉浸式），文字内容自动让开状态栏。
+ *
+ * @param trailing 标题行右侧的插图位（首页放通知铃铛）；标题占满剩余宽度，
+ *   所以插图始终贴在标题行的最右边，不会把标题挤窄。
+ */
+@Composable
+fun DHero(
+    title: String,
+    sub: String,
+    insetTop: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
+    content: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    Column(
+        Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            .then(if (insetTop) Modifier.statusBarsPadding() else Modifier)
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = DColor.White,
+                modifier = Modifier.weight(1f),
+            )
+            if (trailing != null) trailing()
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(sub, fontSize = 12.5.sp, color = DColor.White.copy(alpha = 0.9f))
+        if (content != null) {
+            Spacer(Modifier.height(12.dp))
+            content()
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 标签 / 按钮 / 选择
+ * ------------------------------------------------------------------ */
+
+enum class DTagTone { Brand, Ok, Warn, Line, Info, Danger }
+
+@Composable
+fun DTag(text: String, tone: DTagTone = DTagTone.Brand) {
+    val (bg, fg) = when (tone) {
+        DTagTone.Brand -> DColor.BrandSoft to DColor.BrandInk
+        DTagTone.Ok -> DColor.OkSoft to DColor.Ok
+        DTagTone.Warn -> DColor.WarnSoft to DColor.Warn
+        DTagTone.Line -> DColor.NeutralSoft to DColor.Ink2
+        DTagTone.Info -> DColor.InfoSoft to DColor.Info
+        DTagTone.Danger -> DColor.DangerSoft to DColor.Danger
+    }
+    Box(
+        Modifier.clip(DShape.Pill).background(bg).padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(text, fontSize = 10.5.sp, color = fg)
+    }
+}
+
+enum class DButtonStyle { Primary, Ghost, Outline }
+
+@Composable
+fun DButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    style: DButtonStyle = DButtonStyle.Primary,
+    height: Dp = 44.dp,
+    enabled: Boolean = true,
+) {
+    val (bg, fg, border) = when (style) {
+        DButtonStyle.Primary -> Triple(DColor.Brand, DColor.White, DColor.Brand)
+        DButtonStyle.Ghost -> Triple(DColor.BrandSoft, DColor.BrandInk, DColor.BrandSoft)
+        DButtonStyle.Outline -> Triple(DColor.Card, DColor.Ink2, DColor.Line2)
+    }
+    Box(
+        modifier
+            .height(height)
+            .clip(DShape.Md)
+            .background(if (enabled) bg else DColor.Line2)
+            .border(1.dp, border, DShape.Md)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (enabled) fg else DColor.Ink3,
+        )
+    }
+}
+
+/** 行内小按钮（编辑 / 删除 / 去支付等）。 */
+@Composable
+fun DSmallButton(
+    text: String,
+    onClick: () -> Unit,
+    filled: Boolean = false,
+) {
+    Box(
+        Modifier
+            .clip(DShape.Pill)
+            .background(if (filled) DColor.Brand else DColor.Card)
+            .border(1.dp, if (filled) DColor.Brand else DColor.Line2, DShape.Pill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text,
+            fontSize = 11.5.sp,
+            color = if (filled) DColor.White else DColor.Ink2,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+fun DChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(DShape.Pill)
+            // 选中态是「填充」，用 BrandStrong 而不是 BrandInk：深色主题下 BrandInk 会提亮成浅粉，
+            // 再配白字就看不清了，填充色必须自己保持深一档。
+            .background(if (selected) DColor.BrandStrong else DColor.Card)
+            .border(1.dp, if (selected) DColor.BrandStrong else DColor.Line, DShape.Pill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text, fontSize = 12.sp, color = if (selected) DColor.White else DColor.Ink2)
+    }
+}
+
+@Composable
+fun DTabLine(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+        items.forEachIndexed { i, text ->
+            Column(
+                Modifier.padding(end = 20.dp).clickable { onSelect(i) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text,
+                    fontSize = 13.sp,
+                    fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (i == selected) DColor.BrandInk else DColor.Ink2,
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier.width(24.dp).height(3.dp).clip(DShape.Pill)
+                        .background(if (i == selected) DColor.Brand else Color.Transparent),
+                )
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 表单 / 列表行
+ * ------------------------------------------------------------------ */
+
+@Composable
+fun DField(label: String, value: String, hint: String = "", onClick: (() -> Unit)? = null) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Text(label, fontSize = 12.sp, color = DColor.Ink2)
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+                .border(1.dp, DColor.Line, DShape.Md)
+                .clickable(enabled = onClick != null) { onClick?.invoke() }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            Text(
+                value.ifBlank { hint },
+                fontSize = 14.sp,
+                color = if (value.isBlank()) DColor.Ink3 else DColor.Ink,
+            )
+        }
+    }
+}
+
+@Composable
+fun DKeyValue(label: String, value: String, valueColor: Color = DColor.Ink) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, fontSize = 12.5.sp, color = DColor.Ink2)
+        Spacer(Modifier.weight(1f))
+        Text(value, fontSize = 12.5.sp, color = valueColor, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+fun DLabelValue(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        Text(label, fontSize = 12.5.sp, color = DColor.Ink2, modifier = Modifier.width(88.dp))
+        Text(value, fontSize = 12.5.sp, color = DColor.Ink)
+    }
+}
+
+@Composable
+fun DMenuRow(
+    text: String,
+    value: String = "",
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 13.5.sp, color = DColor.Ink)
+        Spacer(Modifier.weight(1f))
+        if (value.isNotBlank()) Text(value, fontSize = 11.5.sp, color = DColor.Ink3)
+        Spacer(Modifier.width(6.dp))
+        Text("›", fontSize = 16.sp, color = DColor.Ink3)
+    }
+}
+
+@Composable
+fun DInfoRow(text: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 13.5.sp, color = DColor.Ink)
+        Spacer(Modifier.weight(1f))
+        if (value.isNotBlank()) Text(value, fontSize = 11.5.sp, color = DColor.Ink3)
+    }
+}
+
+@Composable
+fun DOptionRow(
+    title: String,
+    sub: String = "",
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(DShape.Md)
+            .background(if (selected) DColor.BrandSoft else DColor.Card)
+            .border(1.5.dp, if (selected) DColor.Brand else DColor.Line, DShape.Md)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(18.dp).clip(CircleShape)
+                .border(2.dp, if (selected) DColor.Brand else DColor.Line2, CircleShape)
+                .background(if (selected) DColor.Brand else Color.Transparent),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DColor.Ink)
+            if (sub.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(sub, fontSize = 11.sp, color = DColor.Ink3)
+            }
+        }
+    }
+}
+
+@Composable
+fun DStepHeader(no: Int, text: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(22.dp).clip(CircleShape).background(DColor.Brand),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(no.toString(), fontSize = 12.sp, color = DColor.White, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 12.5.sp, color = DColor.Ink2)
+    }
+}
+
+@Composable
+fun DFeeLine(label: String, value: String, total: Boolean = false) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            fontSize = if (total) 13.sp else 12.sp,
+            color = DColor.BrandInk,
+            fontWeight = if (total) FontWeight.Bold else FontWeight.Normal,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            value,
+            fontSize = if (total) 15.sp else 12.sp,
+            color = DColor.BrandInk,
+            fontWeight = if (total) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 展示块：星级 / 头像 / 封面 / 图片 / 时间线 / 空状态
+ * ------------------------------------------------------------------ */
+
+@Composable
+fun DStars(rating: Double, size: androidx.compose.ui.unit.TextUnit = 12.sp) {
+    val full = rating.toInt().coerceIn(0, 5)
+    Text(
+        "★".repeat(full) + "☆".repeat(5 - full),
+        fontSize = size,
+        color = DColor.Star,
+    )
+}
+
+@Composable
+fun DAvatar(text: String, size: Dp = 40.dp, rounded: Boolean = true) {
+    Box(
+        Modifier.size(size).clip(if (rounded) DShape.Md else CircleShape)
+            .background(DColor.CoverGradient),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = DColor.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun DCover(text: String, width: Dp = 86.dp, height: Dp = 86.dp) {
+    Box(
+        Modifier.width(width).height(height).clip(DShape.Md).background(DColor.CoverGradient),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = DColor.White, fontSize = 12.sp, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+fun DImageBlock(text: String, height: Dp = 130.dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier.fillMaxWidth().height(height).clip(DShape.Md).background(DColor.ImageGradient),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = DColor.White, fontSize = 12.sp)
+    }
+}
+
+enum class DNodeState { Done, Current, Todo }
+
+@Composable
+fun DTimelineNode(
+    title: String,
+    sub: String = "",
+    state: DNodeState = DNodeState.Done,
+    last: Boolean = false,
+) {
+    Row(Modifier.fillMaxWidth()) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(12.dp).clip(CircleShape).background(
+                    when (state) {
+                        DNodeState.Done -> DColor.Ok
+                        DNodeState.Current -> DColor.Brand
+                        DNodeState.Todo -> DColor.Line2
+                    },
+                ),
+            )
+            if (!last) Box(Modifier.width(1.5.dp).height(38.dp).background(DColor.Line2))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (state == DNodeState.Todo) DColor.Ink3 else DColor.Ink,
+            )
+            if (sub.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(sub, fontSize = 11.sp, color = DColor.Ink3)
+            }
+        }
+    }
+}
+
+@Composable
+fun DEmpty(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 36.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(64.dp).clip(CircleShape).background(DColor.BrandSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(AppIcon.Paw, Modifier.size(30.dp), DColor.BrandInk)
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(text, fontSize = 13.sp, color = DColor.Ink3)
+        if (action != null) {
+            Spacer(Modifier.height(12.dp))
+            DSmallButton(action, { onAction?.invoke() }, filled = true)
+        }
+    }
+}
+
+@Composable
+fun DNotice(text: String) {
+    Box(
+        Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.BrandSoft)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(text, fontSize = 12.sp, color = DColor.BrandInk)
+    }
+}
+
+@Composable
+fun DSearchBar(hint: String, onClick: () -> Unit = {}) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp)
+            .clip(DShape.Md).background(DColor.Card)
+            .border(1.dp, DColor.Line, DShape.Md)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppIcon(AppIcon.Search, Modifier.size(17.dp), DColor.Ink3)
+        Spacer(Modifier.width(8.dp))
+        Text(hint, fontSize = 13.sp, color = DColor.Ink3)
+    }
+}
+
+/** 设计稿里常见的「底部结算栏」。 */
+@Composable
+fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(DColor.Card)
+            .border(1.dp, DColor.Line, DShape.Sm)
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(amountLabel, fontSize = 11.5.sp, color = DColor.Ink3)
+            Text(amount, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = DColor.BrandInk)
+        }
+        Spacer(Modifier.width(14.dp))
+        DButton(button, onAction, modifier = Modifier.weight(1f), height = 42.dp)
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 联网版新增：真实输入框、网络图片、加载 / 空 / 错误态
+ * ------------------------------------------------------------------ */
+
+/**
+ * 可编辑输入框（设计层样式）。
+ *
+ * 用新版状态式 BasicTextField(state: TextFieldState, ...)，对外仍是 value / onValueChange：
+ * 外部值变化同步进内部 state，内部输入再经 snapshotFlow 回传。
+ * secret 用 OutputTransformation 打码，不用已弃用的 VisualTransformation。
+ */
+@Composable
+fun DFieldInput(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    numeric: Boolean = false,
+    secret: Boolean = false,
+    multiline: Boolean = false,
+    enabled: Boolean = true,
+    onSubmit: (() -> Unit)? = null,
+) {
+    var reveal by remember { mutableStateOf(false) }
+    val state = rememberTextFieldState(initialText = value)
+    LaunchedEffect(value) {
+        if (state.text.toString() != value) {
+            state.edit { replace(0, length, value) }
+        }
+    }
+    // 回调用 rememberUpdatedState 取最新值：否则调用方每次重组换了 lambda 身份，
+    // 这个收集协程就要重启一次，输入过程中会白跑很多次。
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    LaunchedEffect(Unit) {
+        snapshotFlow { state.text.toString() }.collect { currentOnValueChange(it) }
+    }
+    Column(modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Text(label, fontSize = 12.sp, color = DColor.Ink2)
+        Spacer(Modifier.height(6.dp))
+        BasicTextField(
+            state = state,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+            textStyle = TextStyle(color = DColor.Ink, fontSize = 14.sp),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
+            ),
+            onKeyboardAction = onSubmit?.let { submit ->
+                KeyboardActionHandler { performDefaultAction ->
+                    submit()
+                    performDefaultAction()
+                }
+            },
+            lineLimits = if (multiline) {
+                TextFieldLineLimits.MultiLine(1, Int.MAX_VALUE)
+            } else {
+                TextFieldLineLimits.SingleLine
+            },
+            cursorBrush = SolidColor(DColor.Brand),
+            outputTransformation = if (secret && !reveal) DPasswordMask else null,
+            decorator = { inner ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = if (multiline) 88.dp else 46.dp)
+                        .clip(DShape.Md)
+                        .background(DColor.Card)
+                        .border(1.dp, DColor.Line, DShape.Md)
+                        .padding(
+                            start = 14.dp,
+                            end = if (secret) 8.dp else 14.dp,
+                            top = if (multiline) 12.dp else 0.dp,
+                            bottom = if (multiline) 12.dp else 0.dp,
+                        ),
+                    verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1f)) {
+                        if (state.text.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
+                        }
+                        inner()
+                    }
+                    if (secret) {
+                        Text(
+                            if (reveal) "隐藏" else "显示",
+                            fontSize = 12.sp,
+                            color = DColor.BrandInk,
+                            modifier = Modifier.clickable { reveal = !reveal }.padding(start = 8.dp),
+                        )
+                    }
+                }
+            },
+        )
+    }
+}
+
+/** 密码掩码：把已有文本全部替换成等长圆点。 */
+private object DPasswordMask : OutputTransformation {
+    override fun TextFieldBuffer.transformOutput() {
+        if (length > 0) replace(0, length, "•".repeat(length))
+    }
+}
+
+/** 机构封面：有真实 URL 就加载，没有就退回设计稿的渐变占位。 */
+@Composable
+fun DCoverImage(url: String, fallback: String, width: Dp = 86.dp, height: Dp = 86.dp) {
+    if (url.isNotBlank()) {
+        MobileImage(
+            url = url,
+            modifier = Modifier.width(width).height(height),
+            shape = DShape.Md,
+            placeholderSize = 20.dp,
+        )
+    } else {
+        DCover(fallback, width, height)
+    }
+}
+
+/** 详情页大图：同样按 URL 有无切换。 */
+@Composable
+fun DImageUrl(url: String, fallback: String, height: Dp = 130.dp, modifier: Modifier = Modifier) {
+    if (url.isNotBlank()) {
+        MobileImage(
+            url = url,
+            modifier = modifier.fillMaxWidth().height(height),
+            shape = DShape.Md,
+            placeholderSize = 26.dp,
+        )
+    } else {
+        DImageBlock(fallback, height, modifier)
+    }
+}
+
+/** 统一加载态：不占位整屏，只在内容区给出轻提示。 */
+@Composable
+fun DLoading(text: String = "加载中…") {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 26.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, fontSize = 12.5.sp, color = DColor.Ink3)
+    }
+}
+
+/** 统一错误态：带重试按钮，避免接口挂了页面一片空白。 */
+@Composable
+fun DErrorBox(message: String, onRetry: (() -> Unit)? = null) {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 26.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(message, fontSize = 12.5.sp, color = DColor.Ink3)
+        if (onRetry != null) {
+            Spacer(Modifier.height(10.dp))
+            DSmallButton("重试", onRetry)
+        }
+    }
+}

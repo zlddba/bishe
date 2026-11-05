@@ -49,6 +49,7 @@ import team.wd.atnestapp.data.api.AuthResponseDto
 import team.wd.atnestapp.data.api.CreateOrderPayload
 import team.wd.atnestapp.data.api.CreateOrderPetPayload
 import team.wd.atnestapp.data.api.CreatePetPayload
+import team.wd.atnestapp.data.session.desktopSessionStore
 import team.wd.atnestapp.data.api.CouponListDto
 import team.wd.atnestapp.data.api.DynamicDto
 import team.wd.atnestapp.data.api.CapacityItemDto
@@ -63,6 +64,8 @@ import team.wd.atnestapp.data.api.RefundDto
 import team.wd.atnestapp.data.api.PetStayDto
 import team.wd.atnestapp.data.api.TicketDto
 import team.wd.atnestapp.data.api.ReceivedOrderDto
+import team.wd.atnestapp.data.api.WalletDto
+import team.wd.atnestapp.data.api.WalletTransactionDto
 import team.wd.atnestapp.data.api.SitterDto
 import team.wd.atnestapp.data.api.SitterReviewDto
 import team.wd.atnestapp.data.api.SitterCouponDto
@@ -79,6 +82,7 @@ import team.wd.atnestapp.data.api.PriceRuleDto
 import team.wd.atnestapp.data.api.PriceRulePayload
 import team.wd.atnestapp.ui.data.SbOrder
 import team.wd.atnestapp.data.api.NotificationDto
+import team.wd.atnestapp.data.NotificationCenter
 import team.wd.atnestapp.data.api.ReviewPayload
 import team.wd.atnestapp.data.api.UpdateProfilePayload
 import team.wd.atnestapp.data.api.UserDto
@@ -126,6 +130,7 @@ enum class AppPage(val title: String) {
     Favorites("我的收藏"),
     Coupons("优惠券"),
     Messages("消息通知"),
+    Wallet("我的钱包"),
     SbDash("经营概览"),
     SbOrders("接单管理"),
     SbCapacity("容量日历"),
@@ -184,11 +189,19 @@ sealed interface ModalKind {
 }
 
 class AppState {
+    /**
+     * 会话持久化（`~/.patnest/patnest_session.preferences_pb`）。
+     * 构造时同步读一次本地文件，冷启动就能知道「登录过没有」，不必等异步回调。
+     */
+    val sessionStore = desktopSessionStore()
+
     val api = ApiClient(runCatching { AppConfig.apiBaseUrl }.getOrDefault("")).also { client ->
         // 任意接口返回"用户不存在"（账号已被删除）→ 强制退出并清空本地会话数据
         client.onSessionInvalid = { forceLogoutOnMissingUser() }
         // 静默续期也换不到令牌（刷新令牌过期/被吊销）→ 退出登录，避免停在"看着已登录、请求全失败"的状态
         client.onAuthExpired = { forceLogoutExpired() }
+        // 续期成功 → 轮换后的访问/刷新令牌写回本地，否则下次启动会拿着作废的那张
+        client.onAuthRefreshed = { access, refresh -> sessionStore.setTokens(access, refresh) }
     }
     lateinit var scope: CoroutineScope
 
@@ -228,16 +241,9 @@ class AppState {
     var favoritesLoading by mutableStateOf(false)
     var favoritesError by mutableStateOf<String?>(null)
 
-    var notifications by mutableStateOf<List<NotificationDto>>(emptyList())
-    var notificationsLoading by mutableStateOf(false)
-    var notificationsError by mutableStateOf<String?>(null)
-
-    // 消息页按归属视角分开拉取；notifications（全部）只用于未读角标与新消息提示
-    var notificationScope by mutableStateOf("personal")
-    var personalNotifications by mutableStateOf<List<NotificationDto>>(emptyList())
-    var businessNotifications by mutableStateOf<List<NotificationDto>>(emptyList())
-    var scopedNotificationsLoading by mutableStateOf(false)
-    var scopedNotificationsError by mutableStateOf<String?>(null)
+    // 通知状态统一收敛到 shared 的 NotificationCenter，避免与 Android 端重复实现。
+    // toast 以回调注入（桌面 toast 机制见下方 toast() 定义）。
+    val notificationsCenter = NotificationCenter(api) { toast(it) }
 
     var profile by mutableStateOf<UserDto?>(null)
 
@@ -311,6 +317,14 @@ class AppState {
     // 下单页估价、积分、退款与工单
     var pointsBalance by mutableStateOf(0)
     var pointsHistory by mutableStateOf<List<PointsEntryDto>>(emptyList())
+
+    // 钱包（真实货币）：概览、余额、流水、加载/错误态
+    var wallet by mutableStateOf<WalletDto?>(null)
+    var walletBalance by mutableStateOf(0.0)
+    var walletTransactions by mutableStateOf<List<WalletTransactionDto>>(emptyList())
+    var walletLoading by mutableStateOf(false)
+    var walletError by mutableStateOf<String?>(null)
+
     var refunds by mutableStateOf<List<RefundDto>>(emptyList())
     var tickets by mutableStateOf<List<TicketDto>>(emptyList())
     var estimate by mutableStateOf<EstimateDto?>(null)
@@ -390,6 +404,14 @@ class AppState {
         role = AppRole.Owner
         loggedIn = true
         loginVisible = false
+        // 落盘：下次启动直接进登录态（令牌 + 账号快照，昵称/角色变了也会被下次 restore 校正）
+        sessionStore.saveAuth(
+            token = api.token.orEmpty(),
+            refreshToken = authResponse.refreshToken,
+            account = account,
+            nickname = nickname,
+            role = accountRole,
+        )
         val target = pendingPage
         pendingPage = null
         if (target != null) {
@@ -405,8 +427,55 @@ class AppState {
         if (isSitterAccount) loadMyShop()
         loadPets(force = true)
         loadOrders(force = true)
-        loadNotifications(force = true)
+        notificationsCenter.loadNotifications(force = true)
         loadFavorites(force = true)
+    }
+
+    /**
+     * 冷启动恢复登录态。
+     *
+     * 先用本地快照把界面点亮（避免每次启动闪一下未登录），再用 `/auth/me` 校正角色与昵称。
+     * 令牌真失效时 ApiClient 会先尝试静默续期，续不上会走 [forceLogoutExpired] 清盘退出，
+     * 因此这里失败只管「保留登录态」，不做额外判定。
+     */
+    fun restoreSession() {
+        val saved = sessionStore.current
+        if (!saved.isLoggedIn) return
+        api.applyAuth(saved.token, saved.refreshToken, 3600)
+        account = saved.account
+        nickname = saved.nickname.ifBlank { saved.account }
+        accountRole = saved.role
+        isSitterAccount = saved.role == "sitter"
+        loggedIn = true
+        scope.launch {
+            try {
+                val me = api.me()
+                if (me.role == "admin") {
+                    clearSession()
+                    toast("管理员账号请使用后台管理端登录")
+                    return@launch
+                }
+                account = me.username.ifBlank { account }
+                nickname = me.nickname?.takeIf { it.isNotBlank() } ?: account
+                accountRole = me.role
+                isSitterAccount = me.role == "sitter"
+                // 昵称 / 角色可能在服务端改过，把校正后的这一份写回本地
+                sessionStore.saveAuth(
+                    token = api.token.orEmpty(),
+                    refreshToken = saved.refreshToken,
+                    account = account,
+                    nickname = nickname,
+                    role = accountRole,
+                )
+            } catch (_: Exception) {
+                // 网络异常等临时问题：保留本地登录态，页面里各自的请求会提示失败
+            }
+            if (isSitterAccount) loadMyShop()
+            loadPets(force = true)
+            loadOrders(force = true)
+            notificationsCenter.loadNotifications(force = true)
+            loadFavorites(force = true)
+        }
     }
 
     fun logout() {
@@ -468,7 +537,7 @@ class AppState {
 
     /**
      * 清空登录态与所有按用户缓存的数据。
-     * 桌面端没有磁盘持久化（无本地令牌/凭据文件），内存里的这份状态就是全部"保存的数据"。
+     * 磁盘上的会话（~/.patnest）必须一并清掉，否则下次启动会被 restore 又恢复回来。
      */
     private fun clearSession() {
         // 登录态与令牌
@@ -479,6 +548,7 @@ class AppState {
         nickname = ""
         pendingPage = null
         api.clearAuth()
+        sessionStore.clear()
         authBusy = false
 
         // 主人端缓存
@@ -491,14 +561,7 @@ class AppState {
         favorites = emptyList()
         favoritesLoading = false
         favoritesError = null
-        notifications = emptyList()
-        notificationsLoading = false
-        notificationsError = null
-        personalNotifications = emptyList()
-        businessNotifications = emptyList()
-        scopedNotificationsLoading = false
-        scopedNotificationsError = null
-        notificationScope = "personal"
+        notificationsCenter.reset()
         profile = null
         ownerDynamics = emptyList()
         dynamicsLoading = false
@@ -521,6 +584,10 @@ class AppState {
         selectedPoints = 0
         pointsBalance = 0
         pointsHistory = emptyList()
+        wallet = null
+        walletBalance = 0.0
+        walletTransactions = emptyList()
+        walletError = null
         refunds = emptyList()
         tickets = emptyList()
         estimate = null
@@ -689,36 +756,44 @@ class AppState {
         }
     }
 
-    suspend fun createOrder(sitterId: Long, startDate: String, endDate: String, petId: Long) {
-        try {
-            val result = api.createOrder(
-                CreateOrderPayload(
-                    sitterId = sitterId,
-                    startDate = startDate,
-                    endDate = endDate,
-                    pets = listOf(CreateOrderPetPayload(petId)),
-                    userCouponId = selectedCouponId,
-                    pointsUsed = selectedPoints,
-                ),
-            )
-            selectedCouponId = 0L
-            selectedCouponTitle = ""
-            selectedCouponType = ""
-            selectedCouponValue = 0.0
-            selectedPoints = 0
-            estimate = null
-            loadOrders(force = true)
-            val index = orders.indexOfFirst { it.id == result.orderId }
-            if (index >= 0) orderIndex = index
-            toast("订单已创建，请在 30 分钟内完成支付")
-            go(AppPage.Pay)
-        } catch (e: Exception) {
-            toast(e.message ?: "下单失败")
-        }
+    /**
+     * 创建订单并返回订单 id（不负责导航）。
+     * 失败静默提示并返回 null；下单成功后清空已选优惠券/积分并刷新订单列表。
+     */
+    internal suspend fun createOrderRaw(sitterId: Long, startDate: String, endDate: String, petId: Long): Long? = try {
+        val result = api.createOrder(
+            CreateOrderPayload(
+                sitterId = sitterId,
+                startDate = startDate,
+                endDate = endDate,
+                pets = listOf(CreateOrderPetPayload(petId)),
+                userCouponId = selectedCouponId,
+                pointsUsed = selectedPoints,
+            ),
+        )
+        selectedCouponId = 0L
+        selectedCouponTitle = ""
+        selectedCouponType = ""
+        selectedCouponValue = 0.0
+        selectedPoints = 0
+        estimate = null
+        loadOrders(force = true)
+        val index = orders.indexOfFirst { it.id == result.orderId }
+        if (index >= 0) orderIndex = index
+        result.orderId
+    } catch (e: Exception) {
+        toast(e.message ?: "下单失败")
+        null
     }
 
-    suspend fun payOrder(orderId: Long): Boolean = try {
-        api.payOrder(orderId)
+    suspend fun createOrder(sitterId: Long, startDate: String, endDate: String, petId: Long) {
+        val orderId = createOrderRaw(sitterId, startDate, endDate, petId) ?: return
+        toast("订单已创建，请在 30 分钟内完成支付")
+        go(AppPage.Pay)
+    }
+
+    suspend fun payOrder(orderId: Long, method: String = "mock"): Boolean = try {
+        api.payOrder(orderId, method)
         loadOrders(force = true)
         toast("支付成功")
         true
@@ -821,6 +896,63 @@ class AppState {
         }
     }
 
+    /** 钱包概览与流水；失败时静默归零，避免页面被拖住（与积分一致） */
+    suspend fun loadWallet(force: Boolean = false) {
+        if (!loggedIn) return
+        if (!force && wallet != null && walletTransactions.isNotEmpty()) return
+        walletLoading = true
+        walletError = null
+        try {
+            val overview = api.walletOverview()
+            wallet = overview
+            walletBalance = overview.balance
+            val list = api.walletTransactions(page = 1)
+            walletTransactions = list.items
+        } catch (e: Exception) {
+            // 拉不到不阻塞：余额归零，保留错误文案供页面提示
+            walletError = e.message ?: "加载钱包失败"
+            walletBalance = 0.0
+        } finally {
+            walletLoading = false
+        }
+    }
+
+    /**
+     * 发起充值：先创建充值单，再模拟确认到账，最后刷新余额与流水。
+     * 返回是否成功，UI 据以关闭弹窗。
+     */
+    suspend fun recharge(amount: Double): Boolean {
+        if (amount <= 0.0) {
+            toast("请输入大于 0 的充值金额")
+            return false
+        }
+        return try {
+            val created = api.createRecharge(amount, "mock")
+            if (created.rechargeId <= 0L) {
+                toast("充值单创建失败")
+                false
+            } else {
+                confirmRecharge(created.rechargeId)
+            }
+        } catch (e: Exception) {
+            toast(e.message ?: "充值失败")
+            false
+        }
+    }
+
+    /** 确认一笔充值到账（演示阶段直接确认），成功后刷新钱包概览与流水 */
+    suspend fun confirmRecharge(rechargeId: Long): Boolean = try {
+        val result = api.confirmRecharge(rechargeId)
+        walletBalance = result.balance
+        wallet = (wallet ?: WalletDto()).copy(balance = result.balance)
+        loadWallet(force = true)
+        toast("充值成功，余额 ¥${money(result.balance)}")
+        true
+    } catch (e: Exception) {
+        toast(e.message ?: "确认充值失败")
+        false
+    }
+
     /** 下单前实时估价。参数不全或后端报错时清空，页面退回本地估算 */
     suspend fun refreshEstimate(
         sitterId: Long,
@@ -887,7 +1019,7 @@ class AppState {
      */
     suspend fun autoRefresh() {
         if (!loggedIn) return
-        loadNotifications(force = true)
+        notificationsCenter.loadNotifications(force = true)
         if (drawer != null || modal != null || loginVisible) return
 
         when (role) {
@@ -906,6 +1038,7 @@ class AppState {
         when (page) {
             AppPage.Pets -> loadPets(force = true)
             AppPage.Coupons -> loadCoupons(force = true)
+            AppPage.Wallet -> loadWallet(force = true)
             AppPage.SbDash -> loadEarnings(force = true)
             AppPage.SbReviews -> loadSitterReviews(force = true)
             AppPage.SbCoupons -> loadSitterCoupons(force = true)
@@ -921,7 +1054,7 @@ class AppState {
 
     /** 只有数量真的变多才提示，且不打断正在显示的提示 */
     private fun announceNewArrivals() {
-        val unread = notifications.count { !it.isRead }
+        val unread = notificationsCenter.notifications.count { !it.isRead }
         if (lastUnreadCount >= 0 && unread > lastUnreadCount && toastMessage == null) {
             toast("有 ${unread - lastUnreadCount} 条新消息")
         }
@@ -934,90 +1067,6 @@ class AppState {
             }
             lastPendingCount = pending
         }
-    }
-
-    suspend fun loadNotifications(force: Boolean = false) {
-        if (!loggedIn || notificationsLoading) return
-        if (!force && notifications.isNotEmpty()) return
-        notificationsLoading = true
-        notificationsError = null
-        try {
-            notifications = api.listNotifications()
-        } catch (e: Exception) {
-            notificationsError = e.message ?: "加载消息失败"
-        } finally {
-            notificationsLoading = false
-        }
-    }
-
-    suspend fun markNotificationRead(id: Long) {
-        runCatching { api.markNotificationRead(id) }
-        notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
-    }
-
-    /** 一键全部已读 */
-    suspend fun markAllNotificationsRead() {
-        runCatching { api.markAllNotificationsRead() }
-        if (notifications.any { !it.isRead }) {
-            notifications = notifications.map { it.copy(isRead = true) }
-            toast("已全部标为已读")
-        } else {
-            toast("没有未读消息")
-        }
-    }
-
-    /** 消息页：一次拉取两个视角；商家消息只有机构账号才有 */
-    suspend fun loadScopedNotifications(force: Boolean = false) {
-        if (!loggedIn || scopedNotificationsLoading) return
-        if (!force && (personalNotifications.isNotEmpty() || businessNotifications.isNotEmpty())) return
-        scopedNotificationsLoading = true
-        scopedNotificationsError = null
-        try {
-            personalNotifications = api.listPersonalNotifications()
-            businessNotifications = if (role == AppRole.Sitter) api.listBusinessNotifications() else emptyList()
-        } catch (e: Exception) {
-            scopedNotificationsError = e.message ?: "加载消息失败"
-        } finally {
-            scopedNotificationsLoading = false
-        }
-    }
-
-    /** 消息页当前展示的列表 */
-    fun visibleNotifications(): List<NotificationDto> =
-        if (notificationScope == "business") businessNotifications else personalNotifications
-
-    suspend fun markScopedNotificationRead(id: Long) {
-        runCatching {
-            if (notificationScope == "business") api.markBusinessNotificationRead(id)
-            else api.markPersonalNotificationRead(id)
-        }
-        if (notificationScope == "business") {
-            businessNotifications = businessNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
-        } else {
-            personalNotifications = personalNotifications.map { if (it.id == id) it.copy(isRead = true) else it }
-        }
-        notifications = notifications.map { if (it.id == id) it.copy(isRead = true) else it }
-    }
-
-    /** 一键已读只清当前视角，另一类消息的未读数不受影响 */
-    suspend fun markAllScopedNotificationsRead() {
-        val current = visibleNotifications()
-        if (current.none { !it.isRead }) {
-            toast("没有未读消息")
-            return
-        }
-        runCatching {
-            if (notificationScope == "business") api.markAllBusinessNotificationsRead()
-            else api.markAllPersonalNotificationsRead()
-        }
-        val ids = current.map { it.id }.toSet()
-        if (notificationScope == "business") {
-            businessNotifications = businessNotifications.map { it.copy(isRead = true) }
-        } else {
-            personalNotifications = personalNotifications.map { it.copy(isRead = true) }
-        }
-        notifications = notifications.map { if (it.id in ids) it.copy(isRead = true) else it }
-        toast("已全部标为已读")
     }
 
     suspend fun loadFavorites(force: Boolean = false) {
@@ -1291,17 +1340,6 @@ class AppState {
             loadCoupons(force = true)
         } catch (e: Exception) {
             toast(e.message ?: "领取失败")
-        }
-    }
-
-    /** 删除券包中的优惠券（已使用的由服务端拒绝）。 */
-    suspend fun deleteMyCoupon(userCouponId: Long) {
-        try {
-            api.deleteMyCoupon(userCouponId)
-            toast("优惠券已删除")
-            loadCoupons(force = true)
-        } catch (e: Exception) {
-            toast(e.message ?: "删除优惠券失败")
         }
     }
 
@@ -1774,7 +1812,7 @@ class AppState {
         private val gatedPages = setOf(
             AppPage.Pets, AppPage.PetEdit, AppPage.Booking, AppPage.Pay,
             AppPage.Orders, AppPage.Dynamics, AppPage.Review, AppPage.Profile,
-            AppPage.Favorites, AppPage.Coupons, AppPage.Messages,
+            AppPage.Favorites, AppPage.Coupons, AppPage.Messages, AppPage.Wallet,
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
             AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile,
         )
@@ -1799,6 +1837,9 @@ fun AppRoot(
     var screen by remember { mutableStateOf(Screen.Launch) }
     val scope = rememberCoroutineScope()
     val app = remember { AppState().also { it.scope = scope } }
+
+    // 冷启动先恢复会话：本地有令牌就直接进登录态，不用每次重新输密码
+    LaunchedEffect(Unit) { app.restoreSession() }
 
     LaunchedEffect(screen) {
         if (screen == Screen.Launch) {

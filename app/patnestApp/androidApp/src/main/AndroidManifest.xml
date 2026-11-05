@@ -3,25 +3,54 @@
 
     <!-- 后端是局域网 http 地址， cleartext 必须放开，否则 9 以上会直接拦掉请求 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 高德地图 SDK 用它判断网络状况、决定用在线瓦片还是离线缓存 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        「我的位置」用的系统定位（ui/app/DeviceLocation.kt）。
+        两个都声明：Android 12 起用户可以选择「大概位置」，只给 COARSE 时也要能用。
+        运行时由地图页按需申请，不在启动时就弹窗。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- Android 11+ 需要声明才能看到并叫起高德地图 App -->
+    <!--
+        导航跳转的目标 App。Android 11+ 起，应用默认看不到别的应用，
+        queries 里列出来才能在设置/分享等场景正确判断"装没装"。
+        startActivity 本身不受可见性限制，这里声明是为了让 Intent 解析结果与系统一致。
+    -->
     <queries>
         <package android:name="com.autonavi.minimap" />
+        <package android:name="com.baidu.BaiduMap" />
+        <package android:name="com.tencent.map" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="geo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
         </intent>
     </queries>
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="@string/app_name_zh"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.PatNest">
+
+        <!--
+            高德地图 SDK 只从 meta-data 读 Key（Web 服务 Key 在这里无效，会报 INVALID_USER_SCODE）。
+            值由构建期从 .env 的 PATNEST_AMAP_ANDROID_KEY 注入；为空时 App 自动改用后端瓦片底图。
+        -->
+        <meta-data
+            android:name="com.amap.api.v2.apikey"
+            android:value="${amapKey}" />
+
         <activity
             android:exported="true"
             android:windowSoftInputMode="adjustResize"

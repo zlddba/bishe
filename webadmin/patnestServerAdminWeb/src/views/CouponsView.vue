@@ -54,7 +54,13 @@
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button
+              type="danger"
+              size="small"
+              :disabled="row.claimed_qty > 0 || row.used_qty > 0"
+              :title="(row.claimed_qty > 0 || row.used_qty > 0) ? '已被用户领取或核销，无法删除，请改为停用' : '删除优惠券'"
+              @click="handleDelete(row)"
+            >删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -237,7 +243,7 @@ async function toggleEnabled(row) {
 async function handleDelete(row) {
   try {
     await ElMessageBox.confirm(
-      `确认删除优惠券「${row.title}」吗？已被订单核销的券无法删除；主人已领取但未使用的券会同时从券包移除。如需暂时下线，请使用状态开关停用。`,
+      `确认删除优惠券「${row.title}」吗？已被用户领取或已被订单核销的券无法删除。如需暂时下线，请使用状态开关停用。`,
       '删除确认',
       { type: 'warning' },
     )

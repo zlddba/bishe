@@ -1,6 +1,5 @@
-package team.wd.atnestapp.ui.mobile
+package team.wd.atnestapp.ui.app
 
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult

@@ -49,6 +49,8 @@ const labels = {
   'coupons.manage': '优惠券管理',
   'notifications.manage': '通知、模板与推送',
   'settlements.manage': '机构结算',
+  'wallet.view': '钱包查看',
+  'wallet.adjust': '钱包人工调账',
   'tickets.handle': '售后工单',
   'system.settings': '系统设置',
   'audit.read': '审计日志与导出',

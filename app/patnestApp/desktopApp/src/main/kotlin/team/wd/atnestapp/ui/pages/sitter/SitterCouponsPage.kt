@@ -103,10 +103,15 @@ private fun CouponAdminRow(app: AppState, coupon: SitterCouponDto) {
         )
         Spacer(Modifier.width(8.dp))
         GhostButton("删除", {
-            app.modal = ModalKind.Confirm(
-                "删除优惠券",
-                "删除「${coupon.title}」后，主人已领取但未使用的券将同时从券包移除；已被订单核销的券无法删除。",
-            ) { app.scope.launch { app.deleteSitterCoupon(coupon) } }
+            // 已被领取/核销的券不允许删除（服务端同样会拦），直接提示改为停用，避免白跑一次请求
+            if (coupon.claimedQty > 0 || coupon.usedQty > 0) {
+                app.toast("该优惠券已被主人领取或核销，无法删除；如需下线请改为停用")
+            } else {
+                app.modal = ModalKind.Confirm(
+                    "删除优惠券",
+                    "删除「${coupon.title}」后不可恢复；已被主人领取或已被订单核销的券无法删除，如需暂时下线请改为停用。",
+                ) { app.scope.launch { app.deleteSitterCoupon(coupon) } }
+            }
         }, height = 30.dp, textColor = PatNestColors.Danger)
     }
 }

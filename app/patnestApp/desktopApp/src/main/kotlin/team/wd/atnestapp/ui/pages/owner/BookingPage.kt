@@ -44,6 +44,7 @@ import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PetAvatar
 import team.wd.atnestapp.ui.components.PrimaryButton
+import team.wd.atnestapp.ui.components.RadioDot
 import team.wd.atnestapp.ui.components.SitterCard
 import team.wd.atnestapp.ui.components.SoftCheckbox
 import team.wd.atnestapp.ui.components.SoftTextField
@@ -67,6 +68,8 @@ fun BookingPage(app: AppState) {
     var agreed by remember { mutableStateOf(false) }
     // 积分输入框的文本态；真正参与下单的是 app.selectedPoints
     var pointsText by remember { mutableStateOf("0") }
+    // 支付方式：balance=钱包余额（优先推荐），mock=模拟支付通道
+    var payMethod by remember { mutableStateOf("balance") }
 
     val sitter = app.sitters.getOrNull(selectedSitter)
     if (sitter == null) {
@@ -93,8 +96,11 @@ fun BookingPage(app: AppState) {
         if (petIndex > app.pets.lastIndex) petIndex = 0
     }
 
-    // 进页面先取积分余额，再让后端按同一套口径算一遍价（含节假日上浮、券、积分）
-    LaunchedEffect(Unit) { app.loadPoints() }
+    // 进页面先取积分余额与钱包余额，再让后端按同一套口径算一遍价（含节假日上浮、券、积分）
+    LaunchedEffect(Unit) {
+        app.loadPoints()
+        app.loadWallet()
+    }
     LaunchedEffect(startDate, endDate, pet?.id, app.selectedCouponId, app.selectedPoints) {
         val chosen = pet
         if (chosen == null || sitter.id <= 0) {
@@ -104,6 +110,12 @@ fun BookingPage(app: AppState) {
         }
     }
     val quote = app.estimate
+
+    // 余额不足以钱包支付时，自动切回模拟支付，避免提交时才报错
+    LaunchedEffect(app.walletBalance, quote, payable) {
+        val need = quote?.totalAmount ?: payable
+        if (app.walletBalance < need && payMethod == "balance") payMethod = "mock"
+    }
 
     Column(
         Modifier
@@ -364,15 +376,86 @@ fun BookingPage(app: AppState) {
                                     !agreed -> app.toast("请先阅读并同意服务协议")
                                     pet == null -> app.toast("请选择寄养宠物")
                                     else -> app.scope.launch {
-                                        app.createOrder(sitter.id, startDate, endDate, pet.id)
+                                        val orderId = app.createOrderRaw(sitter.id, startDate, endDate, pet.id) ?: return@launch
+                                        if (payMethod == "balance") {
+                                            val ok = app.payOrder(orderId, "balance")
+                                            if (ok) app.go(AppPage.Orders)
+                                        } else {
+                                            app.toast("订单已创建，请在 30 分钟内完成支付")
+                                            app.go(AppPage.Pay)
+                                        }
                                     }
                                 }
                             }, Modifier.weight(1f))
                         }
                     }
                 }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 支付方式：钱包余额优先，余额不足时禁用并提示充值
+                val payableAmount = quote?.totalAmount ?: payable
+                val balanceEnough = app.walletBalance >= payableAmount
+                Panel(title = "支付方式", subtitle = "可用钱包余额直接支付订单") {
+                    PayOptionRow(
+                        title = "钱包余额",
+                        sub = if (balanceEnough) "可用余额 ¥${moneyOf(app.walletBalance)}" else "余额不足，请先充值",
+                        icon = AppIcon.Card,
+                        selected = payMethod == "balance",
+                        enabled = balanceEnough,
+                        onClick = { if (balanceEnough) payMethod = "balance" else app.go(AppPage.Wallet) },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PayOptionRow(
+                        title = "模拟支付通道",
+                        sub = "当前为模拟支付（微信支付资质待申请）",
+                        icon = AppIcon.CheckCircle,
+                        selected = payMethod == "mock",
+                        enabled = true,
+                        onClick = { payMethod = "mock" },
+                    )
+                }
             }
         }
+    }
+}
+
+/** 支付方式单选行：选中态用品牌粉描边，禁用态置灰 */
+@Composable
+private fun PayOptionRow(
+    title: String,
+    sub: String,
+    icon: AppIcon,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) PatNestColors.Brand50 else Color.White
+    val border = if (selected) PatNestColors.Brand else PatNestColors.Line
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(PatNestShape.Md)
+            .background(if (enabled) bg else PatNestColors.Soft)
+            .border(1.5.dp, if (enabled) border else PatNestColors.Line, PatNestShape.Md)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(9.dp))
+                .background(if (enabled) PatNestColors.Brand50 else PatNestColors.Line2),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(icon, Modifier.size(18.dp), if (enabled) PatNestColors.Brand else PatNestColors.Ink3)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, color = if (enabled) PatNestColors.Ink else PatNestColors.Ink3, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(sub, color = PatNestColors.Ink3, fontSize = 11.5.sp)
+        }
+        // 复用全局单选圆点
+        RadioDot(selected)
     }
 }
 

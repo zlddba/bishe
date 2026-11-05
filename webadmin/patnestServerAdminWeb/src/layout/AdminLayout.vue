@@ -46,6 +46,9 @@
         <div class="nav-item" :class="{active: route.path==='/settlements'}" @click="go('/settlements')">
           <el-icon><Wallet /></el-icon>机构结算
         </div>
+        <div class="nav-item" :class="{active: route.path==='/wallets'}" @click="go('/wallets')">
+          <el-icon><Wallet /></el-icon>钱包管理
+        </div>
         <div class="nav-cap">系统</div>
         <div class="nav-item" :class="{active: route.path==='/users'}" @click="go('/users')">
           <el-icon><User /></el-icon>用户管理
