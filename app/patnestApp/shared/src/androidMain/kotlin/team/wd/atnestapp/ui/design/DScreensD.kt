@@ -212,7 +212,7 @@ private fun DUploadRow(
                 )
             } else {
                 Text(
-                    if (uploading) "上传中…" else "+ 上传照片",
+                    if (uploading) "上传中…" else "＋ 拍照 / 选图",
                     fontSize = 12.5.sp,
                     color = DColor.Ink3,
                 )

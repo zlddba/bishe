@@ -57,6 +57,9 @@ import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.GeoPickPayload
+import team.wd.atnestapp.data.api.LiveMessageDto
+import team.wd.atnestapp.data.api.LiveRoomDto
+import team.wd.atnestapp.data.api.MyLiveDto
 import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.EstimateDto
 import team.wd.atnestapp.data.api.PointsEntryDto
@@ -139,6 +142,10 @@ enum class AppPage(val title: String) {
     SbIncome("收益结算"),
     SbProfile("机构资料"),
     SbCoupons("优惠券"),
+    // 直播（docs/18）：观看端两端共用，开播只有机构账号能进
+    Live("直播广场"),
+    LiveRoom("直播间"),
+    GoLive("开播"),
 }
 
 private enum class Screen { Launch, Main }
@@ -304,6 +311,24 @@ class AppState {
     // 机构自己的加购服务（含已下架）
     var myAddons by mutableStateOf<List<AddonDto>>(emptyList())
     var addonsLoading by mutableStateOf(false)
+
+    /* ---------- 商家直播（docs/18-商家直播功能.md） ---------- */
+    var liveRooms by mutableStateOf<List<LiveRoomDto>>(emptyList())
+    var liveRoomsLoading by mutableStateOf(false)
+    var liveRoomsError by mutableStateOf<String?>(null)
+    private var liveRoomsLoaded = false
+
+    /** 正在看的直播间；开播中的那一场单独放 [broadcastRoom]，两者别混用 */
+    var viewingLive by mutableStateOf<LiveRoomDto?>(null)
+    var liveMessages by mutableStateOf<List<LiveMessageDto>>(emptyList())
+    var liveViewerCount by mutableStateOf(0)
+    var liveMsgSending by mutableStateOf(false)
+
+    var myLive by mutableStateOf<MyLiveDto?>(null)
+    var myLiveLoading by mutableStateOf(false)
+    var broadcastRoom by mutableStateOf<LiveRoomDto?>(null)
+    var liveBusy by mutableStateOf(false)
+    var liveStreamStatus by mutableStateOf("")
 
     // 宠物详情抽屉里的历史寄养记录（列表接口不返回，按需单独取）
     var petStays by mutableStateOf<List<PetStayDto>>(emptyList())
@@ -1043,6 +1068,8 @@ class AppState {
             AppPage.SbReviews -> loadSitterReviews(force = true)
             AppPage.SbCoupons -> loadSitterCoupons(force = true)
             AppPage.SbPublish -> loadSitterDynamics(force = true)
+            // 直播广场的在线人数变化快，跟着这一轮刷新走
+            AppPage.Live -> loadLiveRooms(force = true)
             AppPage.SbIncome -> {
                 loadEarnings(force = true)
                 loadSettlements(force = true)
@@ -1260,6 +1287,142 @@ class AppState {
     } catch (e: Exception) {
         toast(e.message ?: "图片上传失败")
         null
+    }
+
+    /* ---------- 商家直播（docs/18-商家直播功能.md） ---------- */
+
+    /**
+     * 直播中列表。拉过一次就记着：没有直播时也是有效结果，
+     * 否则每次切回列表页都会重新请求一次。
+     */
+    suspend fun loadLiveRooms(force: Boolean = false) {
+        if (liveRoomsLoading) return
+        if (!force && liveRoomsLoaded) return
+        liveRoomsLoading = true
+        liveRoomsError = null
+        try {
+            liveRooms = api.listLiveRooms()
+            liveRoomsLoaded = true
+        } catch (e: Exception) {
+            liveRoomsError = e.message ?: "直播列表加载失败"
+        } finally {
+            liveRoomsLoading = false
+        }
+    }
+
+    /** 进直播间：先切页再补详情，避免点一下卡在列表上等半秒。 */
+    suspend fun openLive(room: LiveRoomDto) {
+        viewingLive = room
+        liveMessages = emptyList()
+        liveViewerCount = room.viewerCount
+        go(AppPage.LiveRoom)
+        if (page != AppPage.LiveRoom) return
+        try {
+            viewingLive = api.liveRoom(room.id)
+        } catch (e: Exception) {
+            toast(e.message ?: "直播间不存在或已结束")
+        }
+    }
+
+    /** 进房兼心跳：页面每 30 秒调一次（后端按 90 秒窗口算在线）。 */
+    suspend fun joinLive(roomId: Long) {
+        if (roomId <= 0L) return
+        try {
+            val res = api.joinLive(roomId)
+            liveViewerCount = res.viewerCount
+            if (res.room.id != 0L) viewingLive = res.room
+        } catch (_: Exception) {
+            // 心跳失败不打扰用户，下一轮再试
+        }
+    }
+
+    suspend fun leaveLive(roomId: Long) {
+        runCatching { api.leaveLive(roomId) }
+    }
+
+    suspend fun pollLiveMessages(roomId: Long) {
+        if (roomId <= 0L) return
+        val after = liveMessages.lastOrNull()?.id ?: 0L
+        try {
+            val items = api.liveMessages(roomId, after)
+            if (items.isNotEmpty()) {
+                liveMessages = (liveMessages + items).distinctBy { it.id }
+            }
+        } catch (_: Exception) {
+            // 弹幕轮询是锦上添花，失败静默
+        }
+    }
+
+    suspend fun sendLiveMessage(roomId: Long, content: String): Boolean {
+        val text = content.trim()
+        if (text.isEmpty() || liveMsgSending) return false
+        liveMsgSending = true
+        return try {
+            val msg = api.sendLiveMessage(roomId, text.take(200))
+            if (liveMessages.none { it.id == msg.id }) liveMessages = liveMessages + msg
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "弹幕发送失败")
+            false
+        } finally {
+            liveMsgSending = false
+        }
+    }
+
+    suspend fun loadMyLive(force: Boolean = false) {
+        if (!isSitterAccount) return
+        if (myLiveLoading) return
+        if (!force && myLive != null) return
+        myLiveLoading = true
+        try {
+            myLive = api.myLive()
+        } catch (e: Exception) {
+            toast(e.message ?: "直播状态加载失败")
+        } finally {
+            myLiveLoading = false
+        }
+    }
+
+    suspend fun startLive(title: String, coverUrl: String = ""): LiveRoomDto? {
+        val text = title.trim()
+        if (text.isEmpty()) {
+            toast("先给这场直播起个标题")
+            return null
+        }
+        if (liveBusy) return null
+        liveBusy = true
+        return try {
+            val room = api.startLive(text, coverUrl)
+            broadcastRoom = room
+            liveStreamStatus = "准备推流…"
+            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
+            room
+        } catch (e: Exception) {
+            toast(e.message ?: "开播失败")
+            null
+        } finally {
+            liveBusy = false
+        }
+    }
+
+    suspend fun stopLive(roomId: Long): Boolean {
+        if (roomId <= 0L || liveBusy) return false
+        liveBusy = true
+        return try {
+            api.stopLive(roomId)
+            liveStreamStatus = ""
+            broadcastRoom = null
+            if (viewingLive?.id == roomId) viewingLive = null
+            liveRooms = liveRooms.filterNot { it.id == roomId }
+            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
+            toast("已结束直播")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "结束直播失败")
+            false
+        } finally {
+            liveBusy = false
+        }
     }
 
     suspend fun updatePetVaccine(petId: Long, urls: List<String>) {
@@ -1815,12 +1978,15 @@ class AppState {
             AppPage.Favorites, AppPage.Coupons, AppPage.Messages, AppPage.Wallet,
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
             AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile,
+            // 看直播要登录：进房（join）和弹幕都带令牌，游客拿不到人数
+            AppPage.Live, AppPage.LiveRoom, AppPage.GoLive,
         )
 
         /** 只有机构账号才能进入的页面。 */
         private val sitterPages = setOf(
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
             AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile, AppPage.SbCoupons,
+            AppPage.GoLive,
         )
     }
 }

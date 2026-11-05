@@ -185,6 +185,15 @@ fun D18SitterWorkspace(nav: DNav) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 开播入口放在状态旁边，和真实商家版一致：一眼能看到「现在能不能播」
+                    Box(
+                        Modifier.clip(DShape.Pill).background(DColor.Danger)
+                            .clickable { nav.go(DScreen.GoLive) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Text("开播", fontSize = 10.5.sp, color = DColor.White, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.clip(DShape.Pill).background(DColor.White.copy(alpha = 0.2f))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
@@ -1316,38 +1325,82 @@ fun D25RoleSwitch(nav: DNav) {
         }
         DSection("我的身份")
         DPad {
-            DCard(padding = 0.dp) {
-                B_IdentityRow(
-                    title = "宠物主人",
-                    sub = "浏览机构 · 预约寄养 · 管理宠物",
-                    icon = AppIcon.Paw,
-                    iconBg = DColor.BrandSoft,
-                    iconTint = DColor.BrandInk,
-                    state = if (sitterMode) B_IdentityState.Available else B_IdentityState.Active,
-                ) { switchTo("owner") }
-                DDivider()
-                B_IdentityRow(
-                    title = shopName ?: "寄养机构",
-                    sub = if (store.canUseSitter) "接单履约 · 发布动态 · 收益结算"
-                    else "入驻后可接单，同一账号直接开通",
-                    icon = AppIcon.Shop,
-                    iconBg = Color(0xFF7BA383),
-                    iconTint = DColor.White,
-                    state = when {
-                        sitterMode -> B_IdentityState.Active
-                        store.canUseSitter -> B_IdentityState.Available
-                        else -> B_IdentityState.Locked
-                    },
+            // 单选语义：一个选择器 + 下拉菜单，而不是并排两行各点各的。
+            // 菜单里能标出当前身份，也不会出现「点一下才发现进错了身份」的误触。
+            val sitterLabel = if (store.canUseSitter) shopName ?: "寄养机构" else "寄养机构（未开通）"
+            DDropdown(
+                options = listOf("宠物主人", sitterLabel),
+                selectedIndex = if (sitterMode) 1 else 0,
+                enabled = !switching,
+                modifier = Modifier.fillMaxWidth(),
+                onSelect = { index ->
+                    if (index == 0) {
+                        if (sitterMode) switchTo("owner")
+                    } else if (store.canUseSitter) {
+                        if (!sitterMode) switchTo("sitter")
+                    } else {
+                        // 没入驻的账号选这一项不是「切换」，而是去开通 ——
+                        // 混为一谈会让人以为已经切过去了
+                        nav.go(DScreen.SitterOnboarding)
+                    }
+                },
+            ) { expanded ->
+                Row(
+                    Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.Card)
+                        .border(1.dp, DColor.Line, DShape.Lg)
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 没入驻的账号点这一行不是「切换」，而是去开通 —— 混为一谈会让人以为切过去了
-                    if (store.canUseSitter) switchTo("sitter") else nav.go(DScreen.SitterOnboarding)
+                    Box(
+                        Modifier.size(40.dp).clip(DShape.Md)
+                            .background(if (sitterMode) Color(0xFF7BA383) else DColor.BrandSoft),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIcon(
+                            if (sitterMode) AppIcon.Shop else AppIcon.Paw,
+                            Modifier.size(21.dp),
+                            if (sitterMode) DColor.White else DColor.BrandInk,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (sitterMode) sitterLabel else "宠物主人",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DColor.Ink,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            DTag("当前使用", DTagTone.Brand)
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            if (sitterMode) "接单履约 · 发布动态 · 收益结算"
+                            else "浏览机构 · 预约寄养 · 管理宠物",
+                            fontSize = 11.5.sp,
+                            color = DColor.Ink3,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(if (expanded) "▴" else "▾", fontSize = 12.sp, color = DColor.Ink3)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            if (switching) {
-                DLoading("正在切换身份…")
-            } else {
-                Text(
+            when {
+                switching -> DLoading("正在切换身份…")
+                !store.canUseSitter -> {
+                    Text(
+                        "这个账号还没开通机构身份。开通后同一账号就能接单，" +
+                            "订单、余额和优惠券依旧共用。",
+                        fontSize = 11.5.sp,
+                        color = DColor.Ink3,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    DSmallButton(text = "去开通机构身份", onClick = { nav.go(DScreen.SitterOnboarding) })
+                }
+
+                else -> Text(
                     "两个身份共用同一个账号，余额、优惠券和订单记录都会保留；" +
                         "切换后首页、订单和消息范围会换成对应身份的内容。",
                     fontSize = 11.5.sp,
@@ -2170,18 +2223,22 @@ private fun B_SelectField(
     Column(modifier.padding(bottom = 12.dp)) {
         Text(label, fontSize = 12.sp, color = DColor.Ink2)
         Spacer(Modifier.height(6.dp))
-        Box(
-            Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
-                .border(1.dp, DColor.Line, DShape.Md)
-                .clickable {
-                    val i = options.indexOf(value)
-                    onChange(options[(i + 1) % options.size])
-                }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        DDropdown(
+            options = options,
+            selectedIndex = options.indexOf(value).coerceAtLeast(0),
+            onSelect = { onChange(options[it]) },
+            modifier = Modifier.fillMaxWidth(),
+        ) { expanded ->
+            Row(
+                Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+                    .border(1.dp, DColor.Line, DShape.Md)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(value, fontSize = 13.sp, color = DColor.Ink, modifier = Modifier.weight(1f))
-                if (dropdown) Text("▾", fontSize = 12.sp, color = DColor.Ink3)
+                if (dropdown) {
+                    Text(if (expanded) "▴" else "▾", fontSize = 12.sp, color = DColor.Ink3)
+                }
             }
         }
     }
@@ -2197,78 +2254,6 @@ private fun B_ToggleTag(text: String, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(text, fontSize = 11.5.sp, color = if (selected) DColor.BrandInk else DColor.Ink2)
-    }
-}
-
-/** 身份行的三种状态：正在用 / 可以切 / 还没开通 */
-private enum class B_IdentityState { Active, Available, Locked }
-
-/**
- * 「我的身份」里的一行。
- *
- * 用列表行而不是大卡片：现实中这类页面是单选语义（只有一行是当前身份），
- * 卡片并排会让人以为是两个入口而不是一个选择。
- */
-@Composable
-private fun B_IdentityRow(
-    title: String,
-    sub: String,
-    icon: AppIcon,
-    iconBg: Color,
-    iconTint: Color,
-    state: B_IdentityState,
-    onClick: () -> Unit,
-) {
-    val locked = state == B_IdentityState.Locked
-    Row(
-        Modifier.fillMaxWidth()
-            // 当前身份不可再点：点了也只能弹一句「已经是了」，不如不给假反馈
-            .clickable(enabled = state != B_IdentityState.Active, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(40.dp).clip(DShape.Md)
-                .background(if (locked) DColor.NeutralSoft else iconBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            AppIcon(icon, Modifier.size(21.dp), if (locked) DColor.Ink3 else iconTint)
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    title,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (locked) DColor.Ink2 else DColor.Ink,
-                )
-                if (state == B_IdentityState.Active) {
-                    Spacer(Modifier.width(6.dp))
-                    DTag("当前使用", DTagTone.Brand)
-                }
-            }
-            Spacer(Modifier.height(3.dp))
-            Text(sub, fontSize = 11.5.sp, color = DColor.Ink3)
-        }
-        Spacer(Modifier.width(10.dp))
-        when (state) {
-            B_IdentityState.Active -> Box(
-                Modifier.size(22.dp).clip(CircleShape).background(DColor.Brand),
-                contentAlignment = Alignment.Center,
-            ) {
-                AppIcon(AppIcon.Check, Modifier.size(12.dp), DColor.White)
-            }
-
-            B_IdentityState.Available -> Text(
-                "切换",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = DColor.BrandInk,
-            )
-
-            B_IdentityState.Locked -> DTag("未开通", DTagTone.Line)
-        }
     }
 }
 

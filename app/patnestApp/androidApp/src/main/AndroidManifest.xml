@@ -14,6 +14,22 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!--
+        商家直播：软件内直接开播要采集摄像头与麦克风（RootEncoder → RTMP）。
+        运行时权限在 LiveBroadcaster 里按需申请，不在启动时弹窗。
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!--
+        「拍照上传」用的是系统相机（ACTION_IMAGE_CAPTURE），不申请 CAMERA 权限，
+        所以声明为非必需：没有摄像头的设备照样能装，届时选图面板里的「拍照」会置灰。
+    -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
+    <!--
         导航跳转的目标 App。Android 11+ 起，应用默认看不到别的应用，
         queries 里列出来才能在设置/分享等场景正确判断"装没装"。
         startActivity 本身不受可见性限制，这里声明是为了让 Intent 解析结果与系统一致。
@@ -31,6 +47,13 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="https" />
+        </intent>
+        <!--
+            「拍照」用的系统相机。Android 11 起不声明就拿不到解析结果，
+            应用会以为没装相机而退回相册。
+        -->
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
     </queries>
 
@@ -61,6 +84,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            拍照时把「写原图」的文件地址通过 content:// 授权给系统相机，
+            这样不用申请相机/存储权限，应用也只暴露自己缓存目录里的那一个文件。
+            authority 必须和 MobilePicker.kt 里的 "${packageName}.fileprovider" 一致。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

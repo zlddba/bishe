@@ -1,0 +1,21 @@
+# SRS 6 直播服务：RTMP 推流 + HLS/HTTP-FLV 播放
+# 端口：9201 RTMP、9202 HTTP(HLS/FLV)、1985 API（不对外）
+services:
+  srs:
+    image: ossrs/srs:6
+    container_name: patnest-srs
+    restart: unless-stopped
+    command: ./objs/srs -c conf/patnest.conf
+    volumes:
+      - ./srs.conf:/usr/local/srs/conf/patnest.conf:ro
+      - srs-hls:/usr/local/srs/objs/nginx/html
+    ports:
+      - "9201:9201"
+      - "9202:9202"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+volumes:
+  srs-hls:

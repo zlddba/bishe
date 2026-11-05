@@ -13,6 +13,13 @@ dependencies {
     // JetBrains 图标资源
     implementation(libs.jetbrains.icons)
 
+    // 商家直播：VLCJ 播放 HLS。运行机需要安装 VLC（libvlc），否则页面会显示"缺少 VLC"提示。
+    implementation(libs.vlcj)
+
+    // 商家直播：软件内开播——JavaCV 调 FFmpeg 采集摄像头/麦克风并推 RTMP。
+    // 这个依赖自带各平台原生库，体积较大（首次构建要下载几百 MB）；只用播放可不加。
+    implementation(libs.javacv)
+
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutinesSwing)
     implementation(libs.kotlinx.coroutines.core)

@@ -139,6 +139,15 @@ func Setup() *gin.Engine {
 			browse.GET("/sitters/:id/estimate", handler.EstimateOrder)
 		}
 
+		// --- 直播观看（任何登录用户：主人看机构直播；机构也能看别人的）---
+		// 推流由自建 SRS 承担，这里只做房间与弹幕；join 兼心跳，客户端 30s 一次。
+		protected.GET("/live", handler.ListLiveRooms)
+		protected.GET("/live/:id", handler.GetLiveRoom)
+		protected.POST("/live/:id/join", handler.JoinLiveRoom)
+		protected.POST("/live/:id/leave", handler.LeaveLiveRoom)
+		protected.GET("/live/:id/messages", handler.ListLiveMessages)
+		protected.POST("/live/:id/messages", handler.PostLiveMessage)
+
 		// --- 旧版统一通知接口（兼容保留：返回全部、不做视角过滤）---
 		// 新端请用 /pet-owner/notifications（个人）或 /sitter/notifications（商家）。
 		protected.GET("/notifications", handler.ListNotifications)
@@ -164,6 +173,11 @@ func Setup() *gin.Engine {
 
 			sitter.GET("/capacity", handler.MySitterCapacity)
 			sitter.PUT("/capacity", handler.SetSitterCapacity)
+
+			// --- 商家直播：开播 / 下播 / 我的直播记录 ---
+			sitter.GET("/live", handler.ListMyLiveRooms)
+			sitter.POST("/live", handler.StartLive)
+			sitter.PUT("/live/:id/stop", handler.StopLive)
 			sitter.GET("/reviews", handler.ListSitterReviews)
 			sitter.GET("/dynamics", handler.ListSitterDynamics)
 			sitter.DELETE("/dynamics/:id", handler.DeleteSitterDynamic)
@@ -237,6 +251,14 @@ func Setup() *gin.Engine {
 
 			admin.GET("/audit", handler.AdminAuditLogs)
 			admin.GET("/stats", handler.AdminStats)
+
+			// --- 直播管理：查看 / 强制下播 / 封禁机构 / 弹幕治理 ---
+			admin.GET("/live", handler.AdminListLive)
+			admin.GET("/live/:id", handler.AdminGetLive)
+			admin.PUT("/live/:id/stop", handler.AdminStopLive)
+			admin.PUT("/live/:id/ban", handler.AdminBanLive)
+			admin.PUT("/live-messages/:mid/hide", handler.AdminHideLiveMessage)
+			admin.PUT("/sitters/:id/live-ban", handler.AdminSetSitterLiveBan)
 			admin.GET("/system/info", handler.AdminSystemInfo)
 			admin.GET("/updates", handler.AdminUpdates)
 			admin.POST("/updates/scan", handler.AdminScanUpdates)

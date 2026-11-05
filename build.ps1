@@ -76,7 +76,8 @@ $dirs = @(
     (Join-Path $PkgDir "db\migrations"),
     (Join-Path $PkgDir "docker\nginx"),
     (Join-Path $PkgDir "nginx"),
-    (Join-Path $PkgDir "scripts")
+    (Join-Path $PkgDir "scripts"),
+    (Join-Path $PkgDir "live")
 )
 foreach ($d in $dirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
 
@@ -158,6 +159,8 @@ Copy-Item (Join-Path $TplDir "nginx\default.conf") (Join-Path $PkgDir "docker\ng
 Copy-Item (Join-Path $TplDir "nginx\upstream.conf") (Join-Path $PkgDir "nginx") -Force
 Copy-Item (Join-Path $TplDir "scripts\*.sh") (Join-Path $PkgDir "scripts") -Force
 Copy-Item (Join-Path $TplDir "scripts\*.ps1") (Join-Path $PkgDir "scripts") -Force
+# 商家直播：SRS 配置随包发布，compose 的 srs 服务挂载 live/srs.conf
+Copy-Item (Join-Path $RootDir "deploy\live\srs.conf") (Join-Path $PkgDir "live") -Force
 Copy-Item $distDir (Join-Path $PkgDir "web\dist") -Recurse -Force
 Copy-Item (Join-Path $SrcDir "serverdb\init.sql") (Join-Path $PkgDir "db") -Force
 Copy-Item (Join-Path $SrcDir "serverdb\migrations\*.sql") (Join-Path $PkgDir "db\migrations") -Force

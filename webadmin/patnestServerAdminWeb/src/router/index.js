@@ -18,6 +18,7 @@ const routes = [
       { path: 'orders', name: 'Orders', component: () => import('@/views/OrdersView.vue'), meta: { title: '订单管理' } },
       { path: 'pets', name: 'Pets', component: () => import('@/views/PetsView.vue'), meta: { title: '宠物管理' } },
       { path: 'dynamics', name: 'Dynamics', component: () => import('@/views/DynamicsView.vue'), meta: { title: '寄养动态' } },
+      { path: 'live', name: 'Live', component: () => import('@/views/LiveView.vue'), meta: { title: '直播管理' } },
       { path: 'reviews', name: 'Reviews', component: () => import('@/views/ReviewsView.vue'), meta: { title: '评价管理' } },
       { path: 'coupons', name: 'Coupons', component: () => import('@/views/CouponsView.vue'), meta: { title: '优惠券' } },
       { path: 'notifications', name: 'Notifications', component: () => import('@/views/NotificationsView.vue'), meta: { title: '通知公告' } },

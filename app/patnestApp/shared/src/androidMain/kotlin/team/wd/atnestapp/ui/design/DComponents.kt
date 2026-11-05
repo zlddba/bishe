@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,18 +55,25 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.view.WindowCompat
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.app.MobileImage
@@ -926,6 +934,108 @@ fun DErrorBox(message: String, onRetry: (() -> Unit)? = null) {
         if (onRetry != null) {
             Spacer(Modifier.height(10.dp))
             DSmallButton("重试", onRetry)
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 下拉选择：多个选项点开菜单挑一个
+ * ------------------------------------------------------------------ */
+
+/**
+ * 点触发器弹出菜单，选中后菜单自己收起。
+ *
+ * 这里刻意不做「点一下换成下一个值」：带着 ▾ 却不弹菜单是个伪下拉，
+ * 选项一多没人猜得到下一个是谁，也回不去上一个。
+ *
+ * 用 Popup 而不是 Material 的 DropdownMenu —— 后者容器底色、圆角、内边距全跟着
+ * Material 主题走，会在自绘皮肤里露出一块不协调的浅灰。focusable = true 保证
+ * 点空白处和按返回键都能关掉菜单。
+ *
+ * [trigger] 拿到的是「菜单是否展开」，用来把箭头翻过来。
+ */
+@Composable
+fun DDropdown(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    trigger: @Composable (Boolean) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var anchorWidth by remember { mutableStateOf(0) }
+    var anchorHeight by remember { mutableStateOf(0) }
+    var anchorBottom by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val view = LocalView.current
+
+    Box(modifier) {
+        Box(
+            Modifier
+                .onGloballyPositioned {
+                    anchorWidth = it.size.width
+                    anchorHeight = it.size.height
+                    // Compose 1.13 起 LayoutCoordinates 不再有 positionInWindow()，
+                    // 用 localToWindow(原点) 拿同一个窗口坐标
+                    anchorBottom = it.localToWindow(Offset.Zero).y.toInt() + it.size.height
+                }
+                .clickable(enabled = enabled) { open = true },
+        ) {
+            trigger(open)
+        }
+
+        if (open && enabled && anchorWidth > 0) {
+            val gap = with(density) { 6.dp.roundToPx() }
+            // 估算菜单高度（一行 46dp，封顶 292dp）：下方放不下就往上翻，
+            // 免得列表底部的选择器弹出一个被屏幕裁掉一半的菜单。
+            val rowPx = with(density) { 46.dp.roundToPx() }
+            val maxPx = with(density) { 292.dp.roundToPx() }
+            val menuPx = minOf(options.size * rowPx, maxPx)
+            val fitsBelow = anchorBottom + gap + menuPx <= view.height
+            val anchorDp = with(density) { anchorWidth.toDp() }
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = IntOffset(0, if (fitsBelow) anchorHeight + gap else -(menuPx + gap)),
+                onDismissRequest = { open = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Column(
+                    Modifier
+                        .widthIn(min = if (anchorDp < 132.dp) 132.dp else anchorDp)
+                        .heightIn(max = 292.dp)
+                        .clip(DShape.Md)
+                        .background(DColor.Card)
+                        .border(1.dp, DColor.Line, DShape.Md)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                ) {
+                    options.forEachIndexed { index, text ->
+                        val selected = index == selectedIndex
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    open = false
+                                    if (!selected) onSelect(index)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 13.5.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) DColor.BrandInk else DColor.Ink,
+                            )
+                            if (selected) {
+                                Spacer(Modifier.width(8.dp))
+                                AppIcon(AppIcon.Check, Modifier.size(14.dp), DColor.Brand)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

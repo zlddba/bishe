@@ -49,6 +49,9 @@ import team.wd.atnestapp.ui.components.RoleSwitch
 import team.wd.atnestapp.ui.components.Tag
 import team.wd.atnestapp.ui.components.TagKind
 import team.wd.atnestapp.ui.components.ThinDivider
+import team.wd.atnestapp.ui.pages.live.GoLivePage
+import team.wd.atnestapp.ui.pages.live.LiveListPage
+import team.wd.atnestapp.ui.pages.live.LiveRoomPage
 import team.wd.atnestapp.ui.pages.owner.BookingPage
 import team.wd.atnestapp.ui.pages.owner.CouponsPage
 import team.wd.atnestapp.ui.pages.owner.DynamicsPage
@@ -119,6 +122,7 @@ private val ownerNav = listOf(
     "寄养" to listOf(
         NavItem(AppPage.Orders, "我的订单", AppIcon.Orders),
         NavItem(AppPage.Dynamics, "寄养动态", AppIcon.Image),
+        NavItem(AppPage.Live, "直播广场", AppIcon.Eye),
     ),
     "账户" to listOf(
         NavItem(AppPage.Profile, "个人中心", AppIcon.User),
@@ -139,6 +143,8 @@ private val sitterNav = listOf(
         NavItem(AppPage.SbCapacity, "容量日历", AppIcon.Calendar),
         NavItem(AppPage.SbPublish, "发布动态", AppIcon.Plus),
         NavItem(AppPage.SbReviews, "评价管理", AppIcon.Star),
+        NavItem(AppPage.Live, "直播广场", AppIcon.Eye),
+        NavItem(AppPage.GoLive, "我要开播", AppIcon.Camera),
     ),
     "财务" to listOf(
         NavItem(AppPage.SbIncome, "收益结算", AppIcon.OrdersPlain),
@@ -486,5 +492,8 @@ private fun PageHost(app: AppState) {
         AppPage.SbIncome -> SitterIncomePage(app)
         AppPage.SbProfile -> SitterProfilePage(app)
         AppPage.SbCoupons -> SitterCouponsPage(app)
+        AppPage.Live -> LiveListPage(app)
+        AppPage.LiveRoom -> LiveRoomPage(app)
+        AppPage.GoLive -> GoLivePage(app)
     }
 }

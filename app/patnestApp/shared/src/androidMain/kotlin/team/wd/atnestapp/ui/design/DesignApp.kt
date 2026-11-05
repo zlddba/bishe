@@ -302,5 +302,8 @@ private fun DDispatcher(screen: DScreen, nav: DNav) {
         DScreen.ReviewDetail -> D59ReviewDetail(nav)
         DScreen.Wallet -> D60Wallet(nav)
         DScreen.SettingsDetail -> D61SettingsDetail(nav)
+        DScreen.LiveList -> D62LiveList(nav)
+        DScreen.LiveRoom -> D63LiveRoom(nav)
+        DScreen.GoLive -> D64GoLive(nav)
     }
 }

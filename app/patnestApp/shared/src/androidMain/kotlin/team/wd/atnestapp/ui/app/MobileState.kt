@@ -23,6 +23,9 @@ import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.EstimateDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
+import team.wd.atnestapp.data.api.LiveMessageDto
+import team.wd.atnestapp.data.api.LiveRoomDto
+import team.wd.atnestapp.data.api.MyLiveDto
 import team.wd.atnestapp.data.api.NotificationDto
 import team.wd.atnestapp.data.NotificationCenter
 import team.wd.atnestapp.data.api.PetStayDto
@@ -222,6 +225,49 @@ class MobileState(private val session: MobileSession) {
         private set
     var ticketReplying by mutableStateOf(false)
         private set
+
+    /* ---------- 商家直播（docs/18-商家直播功能.md） ---------- */
+    var liveRooms by mutableStateOf(listOf<LiveRoomDto>())
+        private set
+    var liveRoomsLoading by mutableStateOf(false)
+        private set
+    var liveRoomsError by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * 当前正在看（或正在推）的直播间。
+     *
+     * 页面之间靠它传递：把整段 JSON 塞进路由参数既难看又容易超长，
+     * 而直播间的状态变化又很频繁（人数、结束），放这里还能就地刷新。
+     */
+    var liveRoom by mutableStateOf<LiveRoomDto?>(null)
+    var liveMessages by mutableStateOf(listOf<LiveMessageDto>())
+        private set
+    var liveViewerCount by mutableStateOf(0)
+        private set
+    var liveMsgSending by mutableStateOf(false)
+        private set
+
+    /** 机构端「我的直播」：当前场 + 最近历史 + 封禁状态 */
+    var myLive by mutableStateOf<MyLiveDto?>(null)
+        private set
+    var myLiveLoading by mutableStateOf(false)
+        private set
+    /** 开播/下播请求进行中 */
+    var liveBusy by mutableStateOf(false)
+        private set
+    /**
+     * 自己正在推流的房间（带 push_url）。
+     *
+     * 和 [liveRoom] 分开：看完别人的直播再进开播页，liveRoom 里还躺着那一场，
+     * 用它判断「我正在播吗」会把用户当成主播。
+     */
+    var broadcastRoom by mutableStateOf<LiveRoomDto?>(null)
+        private set
+    /** 推流状态文案（LiveBroadcaster 回调过来），开播页顶部展示 */
+    var liveStreamStatus by mutableStateOf("")
+    /** 列表拉过一次就算数：没有直播时也是有效结果，别每次进页面都重拉 */
+    private var liveRoomsLoaded = false
 
     var coupons by mutableStateOf<CouponListDto?>(null)
         private set
@@ -699,6 +745,154 @@ class MobileState(private val session: MobileSession) {
             false
         } finally {
             commentSending = false
+        }
+    }
+
+    /* ---------- 商家直播 ---------- */
+
+    /** 直播中列表（观看端）。拉不到时记错误文案，页面显示重试而不是空白。 */
+    suspend fun loadLiveRooms(force: Boolean = false) {
+        if (liveRoomsLoading) return
+        if (!force && liveRoomsLoaded) return
+        liveRoomsLoading = true
+        liveRoomsError = null
+        try {
+            liveRooms = api.listLiveRooms()
+            liveRoomsLoaded = true
+        } catch (e: Exception) {
+            liveRoomsError = e.message ?: "直播列表加载失败"
+        } finally {
+            liveRoomsLoading = false
+        }
+    }
+
+    /**
+     * 进某个直播间：先把上一条的房间与弹幕清掉再拉。
+     *
+     * 清空是为了「A 房间返回立刻进 B」时不会先闪一屏 A 的弹幕和标题。
+     */
+    suspend fun openLiveRoom(roomId: Long) {
+        if (roomId <= 0L) return
+        liveRoom = null
+        liveMessages = emptyList()
+        liveViewerCount = 0
+        try {
+            liveRoom = api.liveRoom(roomId)
+        } catch (e: Exception) {
+            toast(e.message ?: "直播间不存在或已结束")
+        }
+    }
+
+    /** 进房兼心跳：页面每 30 秒调一次（后端按 90 秒窗口算在线人数）。 */
+    suspend fun joinLive(roomId: Long) {
+        try {
+            val res = api.joinLive(roomId)
+            liveViewerCount = res.viewerCount
+            // join 会带回房间最新状态：主播下播后这里能第一时间拿到 ended
+            if (res.room.id != 0L) liveRoom = res.room
+        } catch (_: Exception) {
+            // 心跳失败不打扰用户：画面还在，下一轮再试
+        }
+    }
+
+    suspend fun leaveLive(roomId: Long) {
+        runCatching { api.leaveLive(roomId) }
+    }
+
+    /** 增量拉弹幕（after_id）。按 id 去重，自己刚发的那条不会被轮询再插一遍。 */
+    suspend fun pollLiveMessages(roomId: Long) {
+        if (roomId <= 0L) return
+        val after = liveMessages.lastOrNull()?.id ?: 0L
+        try {
+            val items = api.liveMessages(roomId, after)
+            if (items.isNotEmpty()) {
+                liveMessages = (liveMessages + items).distinctBy { it.id }
+            }
+        } catch (_: Exception) {
+            // 弹幕是锦上添花，轮询失败静默跳过
+        }
+    }
+
+    suspend fun sendLiveMessage(roomId: Long, content: String): Boolean {
+        val text = content.trim()
+        if (text.isEmpty()) return false
+        if (liveMsgSending) return false
+        liveMsgSending = true
+        return try {
+            val msg = api.sendLiveMessage(roomId, text.take(200))
+            if (liveMessages.none { it.id == msg.id }) liveMessages = liveMessages + msg
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "弹幕发送失败")
+            false
+        } finally {
+            liveMsgSending = false
+        }
+    }
+
+    /** 机构端「我的直播」：当前场 + 历史 + 封禁状态。 */
+    suspend fun loadMyLive(force: Boolean = false) {
+        if (!canUseSitter) return
+        if (myLiveLoading) return
+        if (!force && myLive != null) return
+        myLiveLoading = true
+        try {
+            myLive = api.myLive()
+        } catch (e: Exception) {
+            toast(e.message ?: "直播状态加载失败")
+        } finally {
+            myLiveLoading = false
+        }
+    }
+
+    /**
+     * 开播：创建直播间并拿到推流地址。
+     *
+     * 后端同一机构只允许一场 living，重复点会回 409；错误文案直接显示给用户，
+     * 比「开播失败」这种笼统提示有用。
+     */
+    suspend fun startLive(title: String, coverUrl: String = ""): LiveRoomDto? {
+        val text = title.trim()
+        if (text.isEmpty()) {
+            toast("先给这场直播起个标题")
+            return null
+        }
+        if (liveBusy) return null
+        liveBusy = true
+        return try {
+            val room = api.startLive(text, coverUrl)
+            liveRoom = room
+            broadcastRoom = room
+            liveStreamStatus = "准备推流…"
+            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
+            room
+        } catch (e: Exception) {
+            toast(e.message ?: "开播失败")
+            null
+        } finally {
+            liveBusy = false
+        }
+    }
+
+    suspend fun stopLive(roomId: Long): Boolean {
+        if (roomId <= 0L) return false
+        if (liveBusy) return false
+        liveBusy = true
+        return try {
+            api.stopLive(roomId)
+            liveStreamStatus = ""
+            broadcastRoom = null
+            if (liveRoom?.id == roomId) liveRoom = null
+            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
+            // 自己这一场从列表里划掉，回到广场不该还看到它
+            liveRooms = liveRooms.filterNot { it.id == roomId }
+            toast("已结束直播")
+            true
+        } catch (e: Exception) {
+            toast(e.message ?: "结束直播失败")
+            false
+        } finally {
+            liveBusy = false
         }
     }
 

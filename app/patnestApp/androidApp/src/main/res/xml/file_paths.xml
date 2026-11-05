@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    只暴露缓存目录下的 camera/ 子目录：拍照的原图临时写在这里（MobilePicker.newCameraFile），
+    读完字节马上删。不放开 filesDir / external，避免把整个私有目录都授权出去。
+-->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

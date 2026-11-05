@@ -35,8 +35,8 @@ APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile tools run --rm updates-init
 echo "[install] 执行数据库迁移"
 APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile tools run --rm migrate
 
-echo "[install] 启动 redis / nginx / api-blue"
-APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile app up -d redis nginx api-blue
+echo "[install] 启动 redis / srs / nginx / api-blue"
+APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile app up -d redis srs nginx api-blue
 
 echo "[install] 等待 api-blue 健康检查"
 healthy=0

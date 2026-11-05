@@ -23,6 +23,9 @@
         <div class="nav-item" :class="{active: route.path==='/dynamics'}" @click="go('/dynamics')">
           <el-icon><Picture /></el-icon>寄养动态
         </div>
+        <div class="nav-item" :class="{active: route.path==='/live'}" @click="go('/live')">
+          <el-icon><VideoCamera /></el-icon>直播管理
+        </div>
         <div class="nav-item" :class="{active: route.path==='/reviews'}" @click="go('/reviews')">
           <el-icon><ChatDotRound /></el-icon>评价管理
         </div>
@@ -113,7 +116,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppVersion } from '@/composables/useAppVersion'
-import { Odometer, Shop, Document, Star, Picture, ChatDotRound, User, Notebook, UploadFilled, SwitchButton, Search, Bell, Refresh, CircleCheck, PriceTag, MessageBox, Promotion, Service, Wallet, Lock } from '@element-plus/icons-vue'
+import { Odometer, Shop, Document, Star, Picture, ChatDotRound, User, Notebook, UploadFilled, SwitchButton, Search, Bell, Refresh, CircleCheck, PriceTag, MessageBox, Promotion, Service, Wallet, Lock, VideoCamera } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

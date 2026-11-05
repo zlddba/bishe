@@ -33,6 +33,8 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.jetbrains.intellij.platform")
             }
         }
+        // RootEncoder（Android 端摄像头/麦克风直推 RTMP）发布在 JitPack
+        maven("https://jitpack.io")
         mavenCentral()
     }
 }

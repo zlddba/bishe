@@ -963,3 +963,89 @@ data class PriceRulePayload(
     @SerialName("end_date") val endDate: String,
     val multiplier: Double,
 )
+
+/* ------------------------------------------------------------------ *
+ * 商家直播（后端 /live 系列，见 docs/18-商家直播功能.md）
+ * ------------------------------------------------------------------ */
+
+@Serializable
+data class LiveRoomDto(
+    val id: Long = 0,
+    @SerialName("sitter_id") val sitterId: Long = 0,
+    @SerialName("sitter_name") val sitterName: String = "",
+    @SerialName("sitter_cover") val sitterCover: String? = null,
+    val title: String = "",
+    @SerialName("cover_url") val coverUrl: String? = null,
+    val status: String = "",
+    @SerialName("viewer_count") val viewerCount: Int = 0,
+    @SerialName("peak_viewers") val peakViewers: Int = 0,
+    @SerialName("total_views") val totalViews: Long = 0,
+    @SerialName("started_at") val startedAt: String = "",
+    @SerialName("ended_at") val endedAt: String? = null,
+    @SerialName("end_reason") val endReason: String? = null,
+    @SerialName("ban_reason") val banReason: String? = null,
+    // 推流钥匙只在「开播」响应里出现；观看端拿到的恒为 null
+    @SerialName("stream_key") val streamKey: String? = null,
+    @SerialName("push_url") val pushUrl: String? = null,
+    @SerialName("play_hls") val playHls: String? = null,
+    @SerialName("play_flv") val playFlv: String? = null,
+) {
+    val isLiving: Boolean get() = status == "living"
+
+    /** 播放地址优先 HLS（兼容性最好），没有就用 HTTP-FLV */
+    val playUrl: String?
+        get() = playHls?.takeIf { it.isNotBlank() } ?: playFlv?.takeIf { it.isNotBlank() }
+}
+
+@Serializable
+data class LiveRoomListDto(
+    val items: List<LiveRoomDto> = emptyList(),
+    val total: Int = 0,
+)
+
+@Serializable
+data class LiveRoomEnvelope(val room: LiveRoomDto = LiveRoomDto())
+
+@Serializable
+data class LiveJoinDto(
+    @SerialName("viewer_count") val viewerCount: Int = 0,
+    val room: LiveRoomDto = LiveRoomDto(),
+)
+
+@Serializable
+data class LiveMessageDto(
+    val id: Long = 0,
+    @SerialName("room_id") val roomId: Long = 0,
+    @SerialName("user_id") val userId: Long = 0,
+    val nickname: String = "",
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val content: String = "",
+    val status: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class LiveMessageListDto(val items: List<LiveMessageDto> = emptyList())
+
+/** 机构端的「我的直播」：当前场 + 最近历史 + 封禁状态 */
+@Serializable
+data class MyLiveDto(
+    val items: List<LiveRoomDto> = emptyList(),
+    val current: LiveRoomDto? = null,
+    @SerialName("live_banned") val liveBanned: Boolean = false,
+    @SerialName("ban_reason") val banReason: String? = null,
+    @SerialName("banned_at") val bannedAt: String? = null,
+)
+
+@Serializable
+data class StartLivePayload(
+    val title: String,
+    @SerialName("cover_url") val coverUrl: String = "",
+)
+
+@Serializable
+data class LiveMessagePayload(val content: String)
+
+@Serializable
+data class LiveReactionDto(@SerialName("viewer_count") val viewerCount: Int = 0)
+

@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 enum class AppIcon {
     Home, Shop, Paw, Calendar, Orders, OrdersPlain, Image, User,
     Heart, Ticket, Bell, Search, Plus, Back, Check, CheckCircle,
-    Star, Close, Card, Bank, Logout, Eye, EyeOff,
+    Star, Close, Card, Bank, Logout, Eye, EyeOff, Camera,
 }
 
 /**
@@ -140,6 +140,20 @@ private fun DrawScope.drawAppIcon(icon: AppIcon, tint: Color) {
                 close()
             }
             drawPath(hills, sub)
+        }
+
+        AppIcon.Camera -> {
+            // 机身 + 顶部取景凸起 + 镜头，和同组图标的发丝描边保持一致
+            drawRoundRect(
+                tint, topLeft = Offset(2.2f, 5.3f), size = Size(11.6f, 7.4f),
+                cornerRadius = CornerRadius(1.6f, 1.6f), style = hairline(),
+            )
+            drawPath(
+                Path().polyline(5.4f, 5.3f, 6.2f, 3.7f, 9.8f, 3.7f, 10.6f, 5.3f),
+                tint, style = hairline(),
+            )
+            drawCircle(tint, radius = 2.15f, center = Offset(8f, 9f), style = hairline())
+            drawCircle(sub, radius = 0.8f, center = Offset(8f, 9f))
         }
 
         AppIcon.User -> {

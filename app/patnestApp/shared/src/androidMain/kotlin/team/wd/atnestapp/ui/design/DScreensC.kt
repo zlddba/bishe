@@ -906,12 +906,21 @@ fun D38SearchResults(nav: DNav) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("找到 ${results.size} 家机构", fontSize = 12.5.sp, color = DColor.Ink3)
-                Text(
-                    "排序：${sorts[sort]} ▾",
-                    fontSize = 12.5.sp,
-                    color = DColor.Ink3,
-                    modifier = Modifier.clickable { sort = (sort + 1) % sorts.size },
-                )
+                DDropdown(
+                    options = sorts,
+                    selectedIndex = sort,
+                    onSelect = { sort = it },
+                ) { expanded ->
+                    Row(
+                        // 文字本身只有十几 dp 高，不加内边距点击区域太窄
+                        Modifier.padding(horizontal = 2.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("排序：${sorts[sort]}", fontSize = 12.5.sp, color = DColor.Ink3)
+                        Spacer(Modifier.width(3.dp))
+                        Text(if (expanded) "▴" else "▾", fontSize = 12.sp, color = DColor.Ink3)
+                    }
+                }
             }
             Spacer(Modifier.height(10.dp))
             when {
