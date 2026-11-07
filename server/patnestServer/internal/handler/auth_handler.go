@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"patnestServer/internal/cache"
+	"patnestServer/internal/clientinfo"
 	"patnestServer/internal/db"
 	"patnestServer/internal/middleware"
 	"patnestServer/internal/model"
@@ -112,6 +113,11 @@ func Register(c *gin.Context) {
 
 	storeRefreshToken(user.ID, refreshToken)
 
+	// 记住这次登录来自哪个客户端：Redis 里按令牌哈希存一份，刷新令牌时沿用
+	client := clientinfo.Detect("app", c.Request.UserAgent(), user.Role)
+	client.IP = c.ClientIP()
+	saveClientSession(accessToken, refreshToken, user.ID, client)
+
 	nickname := ""
 	if user.Nickname != nil {
 		nickname = *user.Nickname
@@ -126,9 +132,11 @@ func Register(c *gin.Context) {
 			Phone:      req.Phone,
 			PhoneBound: true,
 		},
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    int64(middleware.AccessTokenTTLSeconds()),
+		AccessToken:    accessToken,
+		RefreshToken:   refreshToken,
+		ExpiresIn:      int64(middleware.AccessTokenTTLSeconds()),
+		Client:         client.Client,
+		ClientPlatform: client.Platform,
 	})
 }
 
@@ -222,6 +230,11 @@ func Login(c *gin.Context) {
 
 	storeRefreshToken(user.ID, refreshToken)
 
+	// 客户端识别：显式 client 字段优先，其次按 UA 推断；结果写 Redis 供后续请求/排查使用
+	client := clientinfo.Detect(req.Client, c.Request.UserAgent(), user.Role)
+	client.IP = c.ClientIP()
+	saveClientSession(accessToken, refreshToken, user.ID, client)
+
 	nickname := ""
 	if user.Nickname != nil {
 		nickname = *user.Nickname
@@ -246,6 +259,8 @@ func Login(c *gin.Context) {
 		SingleSession:   user.Role == "admin",
 		CancelWithdrawn: cancelWithdrawn,
 		NeedBindPhone:   !phoneBound,
+		Client:          client.Client,
+		ClientPlatform:  client.Platform,
 	})
 }
 
@@ -332,10 +347,21 @@ func Refresh(c *gin.Context) {
 		log.Printf("[Refresh] 轮换后吊销旧刷新令牌失败: %v", err)
 	}
 
+	// 会话画像跟着轮换：优先沿用原刷新令牌记下的客户端，没有就按当前请求重新识别
+	client, ok := clientinfo.LoadRefresh(refreshToken)
+	if !ok {
+		client = clientinfo.Detect("", c.Request.UserAgent(), claims.Role)
+		client.IP = c.ClientIP()
+	}
+	clientinfo.DropRefresh(refreshToken)
+	saveClientSession(accessToken, newRefresh, claims.UserID, client)
+
 	OK(c, gin.H{
-		"access_token":  accessToken,
-		"refresh_token": newRefresh,
-		"expires_in":    middleware.AccessTokenTTLSeconds(),
+		"access_token":    accessToken,
+		"refresh_token":   newRefresh,
+		"expires_in":      middleware.AccessTokenTTLSeconds(),
+		"client":          client.Client,
+		"client_platform": client.Platform,
 	})
 }
 
@@ -345,6 +371,8 @@ func Logout(c *gin.Context) {
 
 	// 退出登录不只清客户端本地令牌：服务端也吊销刷新令牌，并让这次签发的访问令牌作废
 	revokeAllSessions(userID)
+	// Redis 里的会话画像一并清掉（拿不到刷新令牌，只清当前访问令牌这条）
+	clientinfo.DropAccess(c.GetString("token"))
 
 	if role, ok := c.Get("role"); ok && role == "admin" {
 		_, _ = db.Pool.Exec(context.Background(),
@@ -414,7 +442,20 @@ func GetProfile(c *gin.Context) {
 		"cancel_mode":        cancelMode,
 		"cancel_deadline":    cancelDeadlineStr,
 		"sitter_application": sitterApplication,
+		// 本次请求来自哪个客户端（登录时写 Redis，Redis 不可用时按 UA 现算）
+		"client":          c.GetString("client"),
+		"client_platform": c.GetString("client_platform"),
+		// 该账号最近一次登录的客户端画像（Redis，未启用时为空对象）
+		"last_client": lastClientInfo(user.ID),
 	})
+}
+
+// lastClientInfo 读 Redis 里该账号最近一次登录的客户端，读不到返回 nil（JSON 里省略）。
+func lastClientInfo(userID int64) interface{} {
+	if info, ok := clientinfo.LoadLast(userID); ok {
+		return info
+	}
+	return nil
 }
 
 // --- helpers ---
@@ -436,6 +477,15 @@ func storeRefreshToken(userID int64, token string) {
 	_, _ = db.Pool.Exec(context.Background(),
 		"INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
 		userID, sha256Hash(token), expiresAt)
+}
+
+// saveClientSession 把「这次登录来自哪个客户端」落到 Redis：
+// 访问令牌与刷新令牌各一条（按令牌哈希），外加该账号的最近一次登录客户端。
+// Redis 未启用时这些写入是 no-op，鉴权仍会按 UA 现算，不影响登录。
+func saveClientSession(accessToken, refreshToken string, userID int64, info clientinfo.Info) {
+	accessTTL := time.Duration(middleware.AccessTokenTTLSeconds()) * time.Second
+	clientinfo.Save(accessToken, refreshToken, info, accessTTL, 7*24*time.Hour)
+	clientinfo.SaveLast(userID, info)
 }
 
 func incrementLoginFail(userID int64, currentCount int16) {

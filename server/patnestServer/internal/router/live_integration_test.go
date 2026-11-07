@@ -87,6 +87,20 @@ func TestLiveFlow(t *testing.T) {
 		t.Fatalf("建店失败: %d %s", code, env.Message)
 	}
 
+	// 资料还在 pending 时不允许开播（小程序端就是靠这个提示「审核中」的）
+	code, env = sitter.do("POST", "/api/v1/sitter/live", map[string]any{"title": "审核中开播"})
+	if code != http.StatusForbidden {
+		t.Fatalf("pending 机构开播应 403，实际 %d %s", code, env.Message)
+	}
+	if !strings.Contains(env.Message, "审核") {
+		t.Fatalf("pending 开播提示应说明审核中，实际 %q", env.Message)
+	}
+	// 模拟后台审核通过
+	if _, err := db.Pool.Exec(context.Background(),
+		`UPDATE sitters SET status = 'active' WHERE user_id = $1`, sitterUserID); err != nil {
+		t.Fatalf("激活机构失败: %v", err)
+	}
+
 	code, env = sitter.do("POST", "/api/v1/sitter/live", map[string]any{"title": "探针直播"})
 	if code != http.StatusOK {
 		t.Fatalf("开播失败: %d %s", code, env.Message)
@@ -116,13 +130,21 @@ func TestLiveFlow(t *testing.T) {
 		Items []liveRoomDTO `json:"items"`
 		Total int           `json:"total"`
 	}](t, env)
-	if list.Total != 1 || len(list.Items) != 1 {
-		t.Fatalf("直播列表应有 1 场，实际 %d", list.Total)
+	// 演示库里可能还有其他人在播，这里只认我们刚开的那一场
+	var listed *liveRoomDTO
+	for i := range list.Items {
+		if list.Items[i].ID == room.ID {
+			listed = &list.Items[i]
+			break
+		}
 	}
-	if list.Items[0].StreamKey != "" || list.Items[0].PushURL != "" {
-		t.Fatalf("列表不能下发推流钥匙: %+v", list.Items[0])
+	if listed == nil {
+		t.Fatalf("直播列表里找不到刚开的场次 %d（total=%d）", room.ID, list.Total)
 	}
-	if list.Items[0].PlayHLS == "" {
+	if listed.StreamKey != "" || listed.PushURL != "" {
+		t.Fatalf("列表不能下发推流钥匙: %+v", *listed)
+	}
+	if listed.PlayHLS == "" {
 		t.Fatal("列表缺少 play_hls")
 	}
 
@@ -146,10 +168,19 @@ func TestLiveFlow(t *testing.T) {
 		t.Fatalf("进房失败: %d %s", code, env.Message)
 	}
 	joined := decode[struct {
-		ViewerCount int `json:"viewer_count"`
+		ViewerCount int         `json:"viewer_count"`
+		Room        liveRoomDTO `json:"room"`
 	}](t, env)
 	if joined.ViewerCount != 1 {
 		t.Fatalf("进房后在线人数 = %d，期望 1", joined.ViewerCount)
+	}
+	// 回归：join 兼心跳，返回的 room 必须仍带播放地址，但绝不能带推流钥匙。
+	// 曾经这里先 hide 再 fill，结果心跳一次客户端就把播放器拆了（画面闪没/错乱）。
+	if joined.Room.PlayHLS == "" || joined.Room.PlayFLV == "" {
+		t.Fatalf("join 返回的 room 缺少播放地址: %+v", joined.Room)
+	}
+	if joined.Room.StreamKey != "" || joined.Room.PushURL != "" {
+		t.Fatalf("join 返回的 room 不应带推流钥匙: %+v", joined.Room)
 	}
 	// 心跳（再次 join）不应把人数算成 2
 	code, env = owner.do("POST", roomPath+"/join", map[string]any{})
@@ -189,8 +220,15 @@ func TestLiveFlow(t *testing.T) {
 	adminList := decode[struct {
 		Items []liveRoomDTO `json:"items"`
 	}](t, env)
-	if len(adminList.Items) != 1 || adminList.Items[0].PushURL == "" {
-		t.Fatalf("后台应能看到推流地址: %+v", adminList.Items)
+	var adminRoom *liveRoomDTO
+	for i := range adminList.Items {
+		if adminList.Items[i].ID == room.ID {
+			adminRoom = &adminList.Items[i]
+			break
+		}
+	}
+	if adminRoom == nil || adminRoom.PushURL == "" {
+		t.Fatalf("后台应能看到这场直播的推流地址: %+v", adminList.Items)
 	}
 
 	code, env = admin.do("PUT", fmt.Sprintf("/api/v1/admin/live-messages/%d/hide", msg.ID),
@@ -266,4 +304,48 @@ func TestLiveFlow(t *testing.T) {
 	}
 	last := decode[liveRoomDTO](t, env)
 	_, _ = sitter.do("PUT", fmt.Sprintf("/api/v1/sitter/live/%d/stop", last.ID), map[string]any{})
+
+	// ---------- 回归：审核通过后旧 token 的 role 还是 owner，也必须能开播 ----------
+	// 小程序端常见场景：登录时是 owner → 后台审核把 users.role 改成 sitter，
+	// 手里那张 token 仍写着 owner。开播接口不能按 JWT role 卡，否则用户只看到"无法直播"。
+	if _, err := db.Pool.Exec(context.Background(),
+		`UPDATE users SET role = 'owner' WHERE id = $1`, sitterUserID); err != nil {
+		t.Fatalf("改回 owner 失败: %v", err)
+	}
+	ownerToken, _, _ := loginProbe(t, baseURL, usernameOf(t, sitterUserID), "Abc12345!")
+	code, env = ownerToken.do("POST", "/api/v1/sitter/live", map[string]any{"title": "owner token 开播"})
+	if code != http.StatusOK {
+		t.Fatalf("机构资料 active 时，owner 角色 token 也应能开播，实际 %d %s", code, env.Message)
+	}
+	reopened := decode[liveRoomDTO](t, env)
+	_, _ = ownerToken.do("PUT", fmt.Sprintf("/api/v1/sitter/live/%d/stop", reopened.ID), map[string]any{})
+}
+
+// usernameOf 取 user_id 对应的登录名，用于换角色后重新登录。
+func usernameOf(t *testing.T, userID int64) string {
+	t.Helper()
+	var name string
+	if err := db.Pool.QueryRow(context.Background(),
+		"SELECT username FROM users WHERE id = $1", userID).Scan(&name); err != nil {
+		t.Fatalf("取用户名失败: %v", err)
+	}
+	return name
+}
+
+// loginProbe 用已有账号登录，返回带令牌的客户端。
+func loginProbe(t *testing.T, baseURL, username, password string) (*apiClient, int64, string) {
+	t.Helper()
+	cl := &apiClient{t: t, base: baseURL}
+	code, env := cl.do("POST", "/api/v1/auth/login", map[string]any{
+		"username": username, "password": password, "client": "app",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("登录失败: %d %s", code, env.Message)
+	}
+	cl.tok = decode[struct {
+		AccessToken string `json:"access_token"`
+	}](t, env).AccessToken
+	var userID int64
+	_ = db.Pool.QueryRow(context.Background(), "SELECT id FROM users WHERE username = $1", username).Scan(&userID)
+	return cl, userID, username
 }

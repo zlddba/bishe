@@ -107,7 +107,7 @@ fun LiveBroadcaster(
             // RTMP 走 Java 原生 Socket。库默认用 Ktor，但它编译期的 Ktor 版本和本项目
             // 的 Ktor 3.6 不是同一套字节码，走 Ktor 会在 connect 时 NoSuchMethodError
             // （ByteWriteChannel.writeByte）。切到 JAVA 只影响这一条 TCP 连接。
-            runCatching { (c.getStreamClient() as? RtmpStreamClient)?.setSocketType(SocketType.JAVA) }
+            runCatching { c.getStreamClient().setSocketType(SocketType.JAVA) }
             val ready = runCatching {
                 // 5 个参数的重载是 (w,h,fps,bitrate,rotation)，没有 iFrameInterval 的位置，
                 // 想让关键帧 2 秒一个必须走 6 参重载，否则 2 会被当成旋转角度。

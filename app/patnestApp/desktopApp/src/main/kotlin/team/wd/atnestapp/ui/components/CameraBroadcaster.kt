@@ -96,8 +96,8 @@ class CameraRtmpBroadcaster(
                     videoCodec = avcodec.AV_CODEC_ID_H264
                     videoBitrate = videoBitrate
                     frameRate = fps.toDouble()
-                    // 让编码器尽量实时，缓冲区别攒太大
-                    gopSize = fps * 2.0
+                    // GOP = 1 秒：新观众最多等 1s 就能出画面，别攒 2s 的关键帧间隔
+                    gopSize = fps.toDouble()
                     audioCodec = avcodec.AV_CODEC_ID_AAC
                     audioBitrate = 128_000
                     audioChannels = 1

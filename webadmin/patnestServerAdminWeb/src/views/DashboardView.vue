@@ -223,20 +223,86 @@ function disposeCharts() {
 
 function renderRevenue() {
   if (!revenueChart.value) return
-  const data = stats.revenue_trend
+  const data = stats.revenue_trend || []
   const chart = echarts.init(revenueChart.value)
+  const money = (v) => Number(v || 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
   chart.setOption({
-    tooltip: { trigger: 'axis' },
-    grid: { left: 50, right: 20, top: 20, bottom: 30 },
+    // 收入（元）和订单数（单）量级差一两个数量级，共用一根轴时订单线会被压成 0，
+    // 所以拆成左右两条 y 轴：柱看左轴，线看右轴，tooltip 里各带各的单位。
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter(params) {
+        if (!params || !params.length) return ''
+        const revenue = params.find(p => p.seriesName === '收入')
+        const orders = params.find(p => p.seriesName === '订单数')
+        return [
+          `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValue}</div>`,
+          `${revenue ? revenue.marker : ''}收入：¥${money(revenue && revenue.value)}`,
+          `${orders ? orders.marker : ''}订单数：${Number((orders && orders.value) || 0)} 单`,
+        ].join('<br/>')
+      },
+    },
+    legend: {
+      top: 0,
+      right: 4,
+      itemWidth: 12,
+      itemHeight: 8,
+      textStyle: { fontSize: 11, color: '#5C6470' },
+      data: ['收入', '订单数'],
+    },
+    grid: { left: 64, right: 56, top: 34, bottom: 30 },
     xAxis: {
       type: 'category',
       data: data.map(d => d.date?.slice(5)),
       axisLabel: { fontSize: 11, color: '#9AA3AF' },
+      axisTick: { alignWithLabel: true },
     },
-    yAxis: { type: 'value', axisLabel: { fontSize: 11, color: '#9AA3AF' } },
+    yAxis: [
+      {
+        type: 'value',
+        name: '收入',
+        nameTextStyle: { fontSize: 10, color: '#9AA3AF', padding: [0, 0, 4, 0] },
+        axisLabel: {
+          fontSize: 11,
+          color: '#9AA3AF',
+          formatter: (v) => (v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v >= 1000 ? `${v / 1000}k` : v),
+        },
+        splitLine: { lineStyle: { color: '#F0F2F5' } },
+      },
+      {
+        type: 'value',
+        name: '订单数',
+        nameTextStyle: { fontSize: 10, color: '#9AA3AF', padding: [0, 0, 4, 0] },
+        // 订单数是整数，别出现 0.5 单的刻度
+        minInterval: 1,
+        axisLabel: { fontSize: 11, color: '#9AA3AF', formatter: '{value}' },
+        splitLine: { show: false },
+      },
+    ],
     series: [
-      { name: '收入', type: 'bar', data: data.map(d => d.revenue), itemStyle: { color: '#E0708A', borderRadius: [3,3,0,0] } },
-      { name: '订单数', type: 'line', data: data.map(d => d.orders), smooth: true, itemStyle: { color: '#3E7BFA' }, lineStyle: { width: 2 } },
+      {
+        name: '收入',
+        type: 'bar',
+        yAxisIndex: 0,
+        barMaxWidth: 18,
+        data: data.map(d => d.revenue),
+        itemStyle: { color: '#E0708A', borderRadius: [3, 3, 0, 0] },
+      },
+      {
+        name: '订单数',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        data: data.map(d => d.orders),
+        itemStyle: { color: '#3E7BFA' },
+        lineStyle: { width: 2 },
+      },
     ],
   })
   charts.push(chart)

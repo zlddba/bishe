@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
@@ -28,14 +29,36 @@ fun LivePlayer(
     url: String,
     modifier: Modifier = Modifier,
     playWhenReady: Boolean = true,
+    /** 直播追帧目标（毫秒）：越小越实时，网络差时更容易卡，建议 1000~2000 */
+    lowLatencyMs: Long = 1_200,
 ) {
     val context = LocalContext.current
     val player = remember(url) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(url))
-            prepare()
-            this.playWhenReady = playWhenReady
-        }
+        ExoPlayer.Builder(context)
+            // 直播缓冲：只留 1 秒左右，追帧靠播放器微调倍速，不靠停住等。
+            // setBufferDurationsMs 是 Java 方法，参数名不保留，必须按位置传；写命名参数会编译失败。
+            .setLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(1_000, 4_000, 500, 800)
+                    .build(),
+            )
+            .build()
+            .apply {
+                // HLS 直播的「追直播点」目标：默认 3 段，这里压到 1.2s
+                val item = MediaItem.Builder()
+                    .setUri(url)
+                    .setLiveConfiguration(
+                        MediaItem.LiveConfiguration.Builder()
+                            .setTargetOffsetMs(lowLatencyMs)
+                            .setMinPlaybackSpeed(0.95f)
+                            .setMaxPlaybackSpeed(1.08f)
+                            .build(),
+                    )
+                    .build()
+                setMediaItem(item)
+                prepare()
+                this.playWhenReady = playWhenReady
+            }
     }
     DisposableEffect(player) {
         onDispose { player.release() }

@@ -24,8 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +44,8 @@ import team.wd.atnestapp.ui.components.Tag
 import team.wd.atnestapp.ui.components.TagKind
 import team.wd.atnestapp.ui.theme.PatNestColors
 import team.wd.atnestapp.ui.util.chooseImageFile
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 
 /**
  * 开播（机构端）。
@@ -56,19 +56,23 @@ import team.wd.atnestapp.ui.util.chooseImageFile
  */
 @Composable
 fun GoLivePage(app: AppState) {
-    LaunchedEffect(Unit) { app.loadMyLive() }
+    // 每次进页面都和服务端对账：上一场已经被下播了的话，把本地这个幽灵房间清掉
+    LaunchedEffect(Unit) { app.reconcileLive() }
 
     var title by remember { mutableStateOf("") }
     var cover by remember { mutableStateOf("") }
     var uploading by remember { mutableStateOf(false) }
+    // 从别的页面回来时先问「继续上一场 / 结束它」，不自动接着推
+    var resumeConfirmed by remember { mutableStateOf(false) }
     // 摄像头设备名（Windows 的 dshow 名 / mac 的索引 / Linux 的 /dev/videoN）
     var cameraInput by remember { mutableStateOf("") }
-    val clipboard = LocalClipboardManager.current
 
-    val broadcasting = app.broadcastRoom
-    val pushUrl = broadcasting?.pushUrl?.takeIf { it.isNotBlank() }
+    val localRoom = app.broadcastRoom
+    val pushUrl = localRoom?.pushUrl?.takeIf { it.isNotBlank() }
+    val broadcasting = if (pushUrl != null) localRoom else null
     val banned = app.myLive?.liveBanned == true
-    val staleRoom = app.myLive?.current?.takeIf { it.id != broadcasting?.id }
+    val staleRoom = (app.myLive?.current?.takeIf { it.isLiving } ?: localRoom)
+        ?.takeIf { it.id != broadcasting?.id }
 
     Column(
         Modifier
@@ -85,6 +89,32 @@ fun GoLivePage(app: AppState) {
         }
 
         when {
+            // 上次离开页面时推流断了、直播间还开着：先让用户选，不静默复用旧房间
+            pushUrl != null && broadcasting != null && !resumeConfirmed -> {
+                Panel(
+                    title = "上一场直播还在进行",
+                    subtitle = broadcasting.title.ifBlank { "未命名直播" },
+                ) {
+                    Text(
+                        "离开本页会断开推流，但直播间不会自动结束。继续推流会接着这一场" +
+                            "（观众不用重新进房）；结束则彻底下播。",
+                        color = PatNestColors.Ink2,
+                        fontSize = 12.5.sp,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        PrimaryButton(
+                            if (app.liveBusy) "处理中…" else "继续推流",
+                            { resumeConfirmed = true },
+                        )
+                        GhostButton(
+                            if (app.liveBusy) "处理中…" else "结束这场直播",
+                            { app.scope.launch { app.stopLive(broadcasting.id) } },
+                        )
+                    }
+                }
+            }
+
             pushUrl != null && broadcasting != null -> {
                 Panel(
                     title = "直播预览",
@@ -127,10 +157,14 @@ fun GoLivePage(app: AppState) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         GhostButton("复制地址", {
-                            clipboard.setText(AnnotatedString(pushUrl))
+                            // 直接走 AWT 剪贴板：Compose 的 ClipboardManager 已废弃，
+                            // 新的 Clipboard.setClipEntry 是 suspend 且要自己包 Transferable
+                            runCatching {
+                                Toolkit.getDefaultToolkit().systemClipboard
+                                    .setContents(StringSelection(pushUrl), null)
+                            }
                             app.toast("推流地址已复制")
                         })
-                        GhostButton("看直播广场", { app.go(AppPage.Live) })
                         PrimaryButton(
                             if (app.liveBusy) "正在结束…" else "结束直播",
                             { app.scope.launch { app.stopLive(broadcasting.id) } },
@@ -139,7 +173,7 @@ fun GoLivePage(app: AppState) {
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "观众大约 4~10 秒后能看到画面（HLS 切片 2 秒）。离开本页会断开推流，" +
-                            "但直播间仍然存在，需要回来结束它才会真正下播。",
+                            "但直播间不会自动结束 —— 再进来时要选「继续推流」或「结束直播」。",
                         color = PatNestColors.Ink3,
                         fontSize = 11.sp,
                     )
@@ -238,7 +272,12 @@ fun GoLivePage(app: AppState) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrimaryButton(
                             if (app.liveBusy) "正在创建…" else "开始直播",
-                            { app.scope.launch { app.startLive(title, cover) } },
+                            {
+                                app.scope.launch {
+                                    // 本页开的这一场直接进推流界面，不必再确认「是否继续」
+                                    if (app.startLive(title, cover) != null) resumeConfirmed = true
+                                }
+                            },
                         )
                         GhostButton("去直播广场", { app.go(AppPage.Live) })
                     }

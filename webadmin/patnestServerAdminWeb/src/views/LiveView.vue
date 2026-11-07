@@ -66,7 +66,7 @@
       </div>
     </div>
 
-    <el-dialog v-model="detailVisible" title="直播详情" width="760px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="直播详情" width="760px" destroy-on-close @closed="onDialogClosed">
       <div v-if="detail" class="live-detail">
         <div class="live-player">
           <video ref="videoEl" controls playsinline style="width:100%;max-height:380px;background:#000" />
@@ -178,7 +178,19 @@ function destroyPlayer() {
     hls.destroy()
     hls = null
   }
+  const video = videoEl.value
+  if (video) {
+    video.pause()
+    video.removeAttribute('src')
+    video.load()
+  }
   hlsReady.value = false
+}
+
+/** 关弹窗就停流：否则上一场的 hls 实例还在后台拉流，下次打开先闪上一场的画面 */
+function onDialogClosed() {
+  destroyPlayer()
+  detail.value = null
 }
 
 async function openDetail(row) {
@@ -206,7 +218,14 @@ async function setupPlayer(url) {
     const mod = await import('hls.js')
     const Hls = mod.default || mod
     if (!Hls.isSupported()) return
-    hls = new Hls({ lowLatencyMode: true })
+    hls = new Hls({
+      lowLatencyMode: true,
+      // 只留 2 个目标切片、最多落后 4 个；追帧时允许 1.5 倍速，延迟能压到 2-3s
+      liveSyncDurationCount: 2,
+      liveMaxLatencyDurationCount: 4,
+      maxLiveSyncPlaybackRate: 1.5,
+      backBufferLength: 4,
+    })
     hls.loadSource(url)
     hls.attachMedia(video)
     hlsReady.value = true

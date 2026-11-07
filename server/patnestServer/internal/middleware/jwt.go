@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"patnestServer/internal/clientinfo"
 	"patnestServer/internal/db"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +132,19 @@ func JWTAuth() gin.HandlerFunc {
 		c.Set("session_key", claims.SessionKey)
 		// 供"改密码后保留当前会话"使用：把吊销点设在本次登录的签发时间
 		c.Set("token_issued_at", claims.IssuedAt.Time)
+
+		// 客户端画像：登录时写进 Redis，这里按令牌哈希取回；
+		// Redis 没启用或没命中就按 UA 现算，保证 c.GetString("client") 永远有值。
+		c.Set("token", tokenStr)
+		c.Set("token_hash", clientinfo.HashToken(tokenStr))
+		if info, ok := clientinfo.LoadAccess(tokenStr); ok {
+			c.Set("client", info.Client)
+			c.Set("client_platform", info.Platform)
+		} else {
+			info = clientinfo.Detect("", c.Request.UserAgent(), claims.Role)
+			c.Set("client", info.Client)
+			c.Set("client_platform", info.Platform)
+		}
 		c.Next()
 	}
 }

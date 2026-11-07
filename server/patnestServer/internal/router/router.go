@@ -95,15 +95,15 @@ func Setup() *gin.Engine {
 			owner.DELETE("/favorites/:sitter_id", handler.RemoveFavorite)
 			owner.GET("/favorites/compare", handler.CompareFavorites)
 
-		owner.GET("/points", handler.MyPoints)
+			owner.GET("/points", handler.MyPoints)
 
-		// --- 钱包（真实货币）---
-		owner.GET("/wallet", handler.WalletOverview)
-		owner.GET("/wallet/transactions", handler.WalletTransactions)
-		owner.POST("/wallet/recharge", handler.CreateRecharge)
-		owner.POST("/wallet/recharge/:id/pay", handler.ConfirmRecharge)
+			// --- 钱包（真实货币）---
+			owner.GET("/wallet", handler.WalletOverview)
+			owner.GET("/wallet/transactions", handler.WalletTransactions)
+			owner.POST("/wallet/recharge", handler.CreateRecharge)
+			owner.POST("/wallet/recharge/:id/pay", handler.ConfirmRecharge)
 
-		owner.GET("/coupons", handler.MyCoupons)
+			owner.GET("/coupons", handler.MyCoupons)
 			owner.POST("/coupons/:id/claim", handler.ClaimCoupon)
 
 			owner.POST("/dynamics/:id/like", handler.LikeDynamic)
@@ -174,10 +174,6 @@ func Setup() *gin.Engine {
 			sitter.GET("/capacity", handler.MySitterCapacity)
 			sitter.PUT("/capacity", handler.SetSitterCapacity)
 
-			// --- 商家直播：开播 / 下播 / 我的直播记录 ---
-			sitter.GET("/live", handler.ListMyLiveRooms)
-			sitter.POST("/live", handler.StartLive)
-			sitter.PUT("/live/:id/stop", handler.StopLive)
 			sitter.GET("/reviews", handler.ListSitterReviews)
 			sitter.GET("/dynamics", handler.ListSitterDynamics)
 			sitter.DELETE("/dynamics/:id", handler.DeleteSitterDynamic)
@@ -206,6 +202,18 @@ func Setup() *gin.Engine {
 			sitter.GET("/notifications", handler.ListBusinessNotifications)
 			sitter.PUT("/notifications/:id/read", handler.MarkBusinessNotificationRead)
 			sitter.PUT("/notifications/read-all", handler.MarkAllBusinessNotificationsRead)
+		}
+
+		// --- 商家直播（开播 / 下播 / 我的直播记录）---
+		// 不按 JWT 里的 role 卡：机构审核通过后，小程序里那张旧 token 的 role 可能还是 owner，
+		// 按 role 拦会让用户看到「无法直播」又查不出原因。
+		// 这里只要求「已登录」，能否开播由 handler 按 sitters.status / 直播封禁判断。
+		liveBroadcast := protected.Group("/sitter")
+		liveBroadcast.Use(middleware.RequireRole("owner", "sitter"))
+		{
+			liveBroadcast.GET("/live", handler.ListMyLiveRooms)
+			liveBroadcast.POST("/live", handler.StartLive)
+			liveBroadcast.PUT("/live/:id/stop", handler.StopLive)
 		}
 
 		// --- Admin namespace ---
@@ -295,15 +303,15 @@ func Setup() *gin.Engine {
 			admin.POST("/tickets/:id/reply", handler.AdminReplyTicket)
 			admin.PUT("/tickets/:id", handler.AdminUpdateTicket)
 
-		admin.GET("/settlements", handler.AdminListSettlements)
-		admin.PUT("/settlements/:id", handler.AdminPaySettlement)
+			admin.GET("/settlements", handler.AdminListSettlements)
+			admin.PUT("/settlements/:id", handler.AdminPaySettlement)
 
-		// --- 钱包管理 ---
-		admin.GET("/wallets", handler.AdminListWallets)
-		admin.GET("/wallets/:user_id", handler.AdminGetWallet)
-		admin.POST("/wallets/:user_id/adjust", handler.AdminAdjustWallet)
-		admin.GET("/wallet/recharges", handler.AdminListRecharges)
-		admin.POST("/wallet/recharges/:id/confirm", handler.AdminConfirmRecharge)
+			// --- 钱包管理 ---
+			admin.GET("/wallets", handler.AdminListWallets)
+			admin.GET("/wallets/:user_id", handler.AdminGetWallet)
+			admin.POST("/wallets/:user_id/adjust", handler.AdminAdjustWallet)
+			admin.GET("/wallet/recharges", handler.AdminListRecharges)
+			admin.POST("/wallet/recharges/:id/confirm", handler.AdminConfirmRecharge)
 
 			admin.GET("/push-tasks", handler.AdminListPushTasks)
 			admin.POST("/push-tasks", handler.AdminCreatePushTask)

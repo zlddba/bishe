@@ -1330,9 +1330,39 @@ class AppState {
         try {
             val res = api.joinLive(roomId)
             liveViewerCount = res.viewerCount
-            if (res.room.id != 0L) viewingLive = res.room
-        } catch (_: Exception) {
-            // 心跳失败不打扰用户，下一轮再试
+            val fresh = res.room
+            val current = viewingLive
+            when {
+                fresh.id == 0L -> Unit
+                current == null -> viewingLive = fresh
+                // 心跳回来的是另一场（用户已经切台）：不要顶掉当前画面
+                current.id != fresh.id -> Unit
+                else -> {
+                    // 只合并会变的字段，播放地址沿用本地这份。
+                    // 旧服务端的 join 可能不带 play_*，整份替换会把播放器直接拆掉（画面闪没/错乱）。
+                    viewingLive = current.copy(
+                        status = fresh.status,
+                        viewerCount = fresh.viewerCount,
+                        peakViewers = maxOf(current.peakViewers, fresh.peakViewers),
+                        endedAt = fresh.endedAt,
+                        endReason = fresh.endReason,
+                        banReason = fresh.banReason,
+                        playHls = fresh.playHls ?: current.playHls,
+                        playFlv = fresh.playFlv ?: current.playFlv,
+                        playRtmp = fresh.playRtmp ?: current.playRtmp,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // 心跳撞上 409/403：直播已结束或被封禁，及时停掉画面，别停在上一帧
+            val msg = e.message ?: ""
+            if (msg.contains("已结束") || msg.contains("封禁")) {
+                viewingLive = viewingLive?.copy(
+                    status = "ended",
+                    endReason = if (msg.contains("封禁")) "banned" else "host_stop",
+                    banReason = if (msg.contains("封禁")) msg else viewingLive?.banReason,
+                )
+            }
         }
     }
 
@@ -1405,24 +1435,64 @@ class AppState {
         }
     }
 
+    /**
+     * 进开播页时和服务端对账：本地 [broadcastRoom] 只在「这一场还 living」时才保留。
+     *
+     * 下播、被后台强制下播、或者在另一台设备上开播，都会让本地这个房间变成幽灵；
+     * 不清理的话再进页面会看到一个早就结束的直播间，还带着过期的推流地址。
+     * 拉取失败保持现状 —— 可能只是网络抖动，不能把正在推的现场清掉。
+     */
+    suspend fun reconcileLive(): LiveRoomDto? {
+        if (!isSitterAccount) return null
+        val live = runCatching { api.myLive() }.getOrNull() ?: return broadcastRoom
+        myLive = live
+        val current = live.current?.takeIf { it.isLiving }
+        val local = broadcastRoom
+        return when {
+            local == null -> current
+            current != null && current.id == local.id -> current.also { broadcastRoom = it }
+            else -> {
+                resetLiveState()
+                toast("上一场直播已经结束")
+                null
+            }
+        }
+    }
+
+    /** 收摊：清掉本机这一场的现场状态（推流地址、状态文案）。 */
+    fun resetLiveState(roomId: Long? = null) {
+        val id = roomId ?: broadcastRoom?.id
+        broadcastRoom = null
+        liveStreamStatus = ""
+        if (id != null && viewingLive?.id == id) viewingLive = null
+    }
+
     suspend fun stopLive(roomId: Long): Boolean {
         if (roomId <= 0L || liveBusy) return false
         liveBusy = true
-        return try {
+        var error: String? = null
+        try {
             api.stopLive(roomId)
-            liveStreamStatus = ""
-            broadcastRoom = null
-            if (viewingLive?.id == roomId) viewingLive = null
-            liveRooms = liveRooms.filterNot { it.id == roomId }
-            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
-            toast("已结束直播")
-            true
         } catch (e: Exception) {
-            toast(e.message ?: "结束直播失败")
-            false
-        } finally {
-            liveBusy = false
+            error = e.message ?: "结束直播失败"
         }
+        // 接口报错也要复核：后端对已结束的场次回 409，本地必须收摊，
+        // 否则页面会一直停在推流界面，重新进来还是上一场
+        val live = runCatching { api.myLive() }.getOrNull()
+        if (live != null) myLive = live
+        liveBusy = false
+        if (live?.current?.isLiving == true && live.current?.id == roomId) {
+            toast(error ?: "结束直播失败，请重试")
+            return false
+        }
+        if (error != null && live == null) {
+            toast(error)
+            return false
+        }
+        resetLiveState(roomId)
+        liveRooms = liveRooms.filterNot { it.id == roomId }
+        toast("已结束直播")
+        return true
     }
 
     suspend fun updatePetVaccine(petId: Long, urls: List<String>) {

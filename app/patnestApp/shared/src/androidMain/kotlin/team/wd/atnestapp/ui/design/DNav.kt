@@ -327,7 +327,7 @@ class DNav(
 
     /** 进直播间：房间交给数据层，直播间页直接读 store.liveRoom 并开始心跳。 */
     fun openLive(room: LiveRoomDto) {
-        store?.liveRoom = room
+        store?.enterLiveRoom(room)
         go(DScreen.LiveRoom)
     }
 

@@ -38,6 +38,8 @@ type apiClient struct {
 	t    *testing.T
 	base string
 	tok  string
+	// ua 用来模拟不同客户端（空则用 Go 默认 UA）
+	ua string
 }
 
 func (c *apiClient) do(method, path string, body any) (int, envelope) {
@@ -55,6 +57,9 @@ func (c *apiClient) do(method, path string, body any) (int, envelope) {
 		c.t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.ua != "" {
+		req.Header.Set("User-Agent", c.ua)
+	}
 	if c.tok != "" {
 		req.Header.Set("Authorization", "Bearer "+c.tok)
 	}

@@ -989,12 +989,17 @@ data class LiveRoomDto(
     @SerialName("push_url") val pushUrl: String? = null,
     @SerialName("play_hls") val playHls: String? = null,
     @SerialName("play_flv") val playFlv: String? = null,
+    @SerialName("play_rtmp") val playRtmp: String? = null,
 ) {
     val isLiving: Boolean get() = status == "living"
 
-    /** 播放地址优先 HLS（兼容性最好），没有就用 HTTP-FLV */
+    /** 兼容性优先：HLS（小程序 / 弱网 / 需要回退时用） */
     val playUrl: String?
         get() = playHls?.takeIf { it.isNotBlank() } ?: playFlv?.takeIf { it.isNotBlank() }
+
+    /** 低延迟优先：HTTP-FLV（约 1-2s），桌面端 VLC 建议用这个；没有则退回 HLS */
+    val lowLatencyUrl: String?
+        get() = playFlv?.takeIf { it.isNotBlank() } ?: playHls?.takeIf { it.isNotBlank() }
 }
 
 @Serializable

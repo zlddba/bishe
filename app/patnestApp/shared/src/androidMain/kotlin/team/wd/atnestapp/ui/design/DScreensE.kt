@@ -1,5 +1,8 @@
 package team.wd.atnestapp.ui.design
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,9 +38,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,10 +106,7 @@ fun D62LiveList(nav: DNav) {
                 }
                 store.liveRooms.forEach { room ->
                     DPad {
-                        E_LiveCard(room) {
-                            store.liveRoom = room
-                            nav.go(DScreen.LiveRoom)
-                        }
+                        E_LiveCard(room) { nav.openLive(room) }
                     }
                 }
                 DPad {
@@ -402,12 +401,23 @@ private fun E_MessageBar(
 fun D64GoLive(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { store.loadMyLive() }
 
     var title by remember { mutableStateOf("") }
     var cover by remember { mutableStateOf("") }
     var uploading by remember { mutableStateOf(false) }
-    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    // 从别的页面回来时，先让用户选「继续上一场 / 结束它」，不自动接着推
+    var resumeConfirmed by remember { mutableStateOf(false) }
+
+    // 每次进页面都跟服务端对一次账：上一场已经被下播的话，把本地这个幽灵房间清掉
+    LaunchedEffect(Unit) { store.reconcileLive() }
+    // 这一场收尾后清空表单，别把上一场的标题/封面带进下一场
+    LaunchedEffect(store.broadcastRoom?.id) {
+        if (store.broadcastRoom == null) {
+            title = ""
+            cover = ""
+        }
+    }
 
     val pickCover = rememberPhotoPicker { fileName, bytes ->
         if (bytes.isEmpty()) {
@@ -422,32 +432,46 @@ fun D64GoLive(nav: DNav) {
         }
     }
 
-    val broadcasting = store.broadcastRoom
+    // 只有带推流地址的才是「本机手上这一场」；没有地址的连不上，只能结束
+    val localRoom = store.broadcastRoom
+    val broadcasting = localRoom?.takeIf { !it.pushUrl.isNullOrBlank() }
     val myLive = store.myLive
     val banned = myLive?.liveBanned == true
-    // 在别的设备/上次会话开的直播：这里拿不到 push_url（后端只给开播接口），
-    // 所以只能提示先下播，不能假装能接着推
-    val staleRoom = myLive?.current?.takeIf { it.id != broadcasting?.id }
+    // 服务端还有一场 living，但不是本机手上这一场（换了设备 / 上次离开过）：
+    // 这里拿不到 push_url，所以只能提示先下播，不能假装能接着推
+    val staleRoom = (myLive?.current?.takeIf { it.isLiving } ?: localRoom)
+        ?.takeIf { it.id != broadcasting?.id }
 
     DFrame(
         nav = nav,
         title = "开播",
         actions = {
-            if (broadcasting != null) DTag("直播中", DTagTone.Ok)
+            if (broadcasting != null && resumeConfirmed) DTag("直播中", DTagTone.Ok)
         },
     ) {
         when {
-            broadcasting != null && !broadcasting.pushUrl.isNullOrBlank() -> {
+            // 上次离开页面时推流断了，但直播间还开着：给两个明确出口，不静默复用旧房间
+            broadcasting != null && !resumeConfirmed -> E_ResumeLive(
+                room = broadcasting,
+                busy = store.liveBusy,
+                onResume = { resumeConfirmed = true },
+                onStop = { scope.launch { store.stopLive(broadcasting.id) } },
+            )
+
+            broadcasting != null -> {
                 E_Broadcasting(
                     room = broadcasting,
                     status = store.liveStreamStatus,
                     onStatus = { store.liveStreamStatus = it },
                     busy = store.liveBusy,
                     onCopy = {
-                        clipboard.setText(AnnotatedString(broadcasting.pushUrl.orEmpty()))
+                        val manager =
+                            context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        manager?.setPrimaryClip(
+                            ClipData.newPlainText("推流地址", broadcasting.pushUrl.orEmpty()),
+                        )
                         nav.toast("推流地址已复制")
                     },
-                    onOpenList = { nav.go(DScreen.LiveList) },
                     onStop = { scope.launch { store.stopLive(broadcasting.id) } },
                 )
             }
@@ -525,7 +549,10 @@ fun D64GoLive(nav: DNav) {
                     DButton(
                         if (store.liveBusy) "正在创建直播间…" else "开始直播",
                         {
-                            scope.launch { store.startLive(title, cover) }
+                            scope.launch {
+                                // 本页开的这一场直接进推流界面，不用再确认「是否继续」
+                                if (store.startLive(title, cover) != null) resumeConfirmed = true
+                            }
                         },
                         enabled = !store.liveBusy && title.isNotBlank(),
                     )
@@ -552,7 +579,6 @@ private fun E_Broadcasting(
     onStatus: (String) -> Unit,
     busy: Boolean,
     onCopy: () -> Unit,
-    onOpenList: () -> Unit,
     onStop: () -> Unit,
 ) {
     Column {
@@ -600,7 +626,6 @@ private fun E_Broadcasting(
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 DSmallButton("复制地址", onCopy)
-                DSmallButton("看直播广场", onOpenList)
             }
             Spacer(Modifier.height(18.dp))
             DButton(
@@ -611,12 +636,53 @@ private fun E_Broadcasting(
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                "观众大约 4~10 秒后能看到画面（HLS 切片 2 秒）。结束推送后请点上面的「结束直播」，" +
-                    "否则列表里会一直显示这场直播。",
+                "观众大约 4~10 秒后能看到画面（HLS 切片 2 秒）。离开这一页会断开推流，" +
+                    "但直播间仍然存在 —— 再进来时需要选「继续推流」或「结束直播」。",
                 fontSize = 11.sp,
                 color = DColor.Ink3,
             )
         }
+    }
+}
+
+/**
+ * 上次离开页面时推流断了、直播间还开着：给「继续 / 结束」两个明确出口。
+ *
+ * 不在进页面时自动续推 —— 那样用户会以为这是一场新直播，实际接的还是上一场
+ * （标题、观看人数、弹幕都还是旧的）。
+ */
+@Composable
+private fun E_ResumeLive(
+    room: LiveRoomDto,
+    busy: Boolean,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+) {
+    DPad {
+        Spacer(Modifier.height(14.dp))
+        DNotice("你上次的直播「${room.title.ifBlank { "未命名直播" }}」还在进行，但画面已经断了。")
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "离开开播页会停止推流，直播间本身不会自动结束。继续推流会接着这一场" +
+                "（观众不用重新进房）；结束则彻底下播。",
+            fontSize = 11.5.sp,
+            color = DColor.Ink3,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            listOfNotNull(E_startedLabel(room.startedAt), "房间号 ${room.id}").joinToString(" · "),
+            fontSize = 11.sp,
+            color = DColor.Ink3,
+        )
+        Spacer(Modifier.height(16.dp))
+        DButton(if (busy) "处理中…" else "继续推流", onResume, enabled = !busy)
+        Spacer(Modifier.height(10.dp))
+        DButton(
+            if (busy) "处理中…" else "结束这场直播",
+            onStop,
+            style = DButtonStyle.Outline,
+            enabled = !busy,
+        )
     }
 }
 

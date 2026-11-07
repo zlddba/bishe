@@ -35,6 +35,8 @@ fun VlcVideoPlayer(
     url: String,
     modifier: Modifier = Modifier,
     onError: (String) -> Unit = {},
+    /** 网络缓存（毫秒）：直播建议 500~800，点播可以给大一些更抗抖动 */
+    cachingMs: Int = 600,
 ) {
     val canvas = remember { Canvas().apply { background = Color.BLACK } }
 
@@ -46,7 +48,17 @@ fun VlcVideoPlayer(
             player = factory.mediaPlayers().newEmbeddedMediaPlayer()
             // 把 libvlc 的画面画到 AWT Canvas 上，再由 SwingPanel 嵌进 Compose
             player.videoSurface().set(factory.videoSurfaces().newVideoSurface(canvas))
-            player.media().play(url)
+            // 低延迟播放参数：缓存压小、关掉时钟抖动补偿、丢晚到的帧、不做音画拉伸
+            player.media().play(
+                url,
+                "--network-caching=$cachingMs",
+                "--live-caching=$cachingMs",
+                "--clock-jitter=0",
+                "--clock-synchro=0",
+                "--drop-late-frames",
+                "--skip-frames",
+                "--no-audio-time-stretch",
+            )
         } catch (t: Throwable) {
             onError(t.message ?: "VLC 初始化失败，请先安装 VLC 后重试")
             runCatching { player?.release() }

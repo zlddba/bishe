@@ -93,17 +93,35 @@ func hideStreamKey(r *model.LiveRoom) {
 	r.PushURL = ""
 }
 
-// liveSitterGuard 返回机构 id；机构被封禁时直接把响应写完并返回 ok=false。
+// liveSitterGuard 返回机构 id；未通过审核 / 被封禁时直接把响应写完并返回 ok=false。
+//
+// 这里按「有没有机构资料 + 状态是否 active」鉴权，而不是看 JWT 里的 role：
+// 小程序端常见的情况是审核通过前就登录了，手里的 token 还是 owner，等审核通过后
+// 旧 token 仍能用到过期；如果按 role 卡，用户会看到「无法直播」却查不出原因。
 func liveSitterGuard(c *gin.Context) (sitterID int64, ok bool) {
 	uid := c.GetInt64("user_id")
+	var status string
 	var bannedAt *time.Time
 	var reason *string
 	err := db.Pool.QueryRow(context.Background(),
-		`SELECT id, live_banned_at, live_ban_reason FROM sitters
-		 WHERE user_id = $1 AND deleted_at IS NULL`, uid).Scan(&sitterID, &bannedAt, &reason)
+		`SELECT id, status::text, live_banned_at, live_ban_reason FROM sitters
+		 WHERE user_id = $1 AND deleted_at IS NULL`, uid).Scan(&sitterID, &status, &bannedAt, &reason)
 	if err != nil {
-		NotFound(c, "机构资料不存在")
+		NotFound(c, "机构资料不存在，请先在 App/桌面端提交入驻申请")
 		return 0, false
+	}
+	if status != "active" {
+		msg := "机构资料尚未通过审核，暂不能开播"
+		switch status {
+		case "pending":
+			msg = "机构资料正在审核中，通过后即可开播"
+		case "rejected":
+			msg = "机构资料未通过审核，请修改后重新提交"
+		case "banned":
+			msg = "机构已被下架，暂不能开播"
+		}
+		Forbidden(c, msg)
+		return sitterID, false
 	}
 	if bannedAt != nil {
 		msg := "直播权限已被封禁"
@@ -250,8 +268,10 @@ func JoinLiveRoom(c *gin.Context) {
 		InternalError(c, "提交失败")
 		return
 	}
-	hideStreamKey(&room)
+	// 顺序不能反：先按 stream_key 拼出 play_*，再抹掉推流钥匙。
+	// 反过来会得到一份"没有任何播放地址"的房间，客户端刚进房心跳一次就把播放器拆掉（画面闪没/错乱）。
 	fillLiveURLs(&room)
+	hideStreamKey(&room)
 	OK(c, gin.H{"room": room, "viewer_count": viewers})
 }
 
@@ -397,6 +417,10 @@ func ListMyLiveRooms(c *gin.Context) {
 		items = append(items, r)
 	}
 
+	var sitterStatus string
+	_ = db.Pool.QueryRow(context.Background(),
+		`SELECT status::text FROM sitters WHERE id = $1`, sitterID).Scan(&sitterStatus)
+
 	var current *model.LiveRoom
 	for i := range items {
 		if items[i].Status == "living" {
@@ -404,12 +428,16 @@ func ListMyLiveRooms(c *gin.Context) {
 			break
 		}
 	}
+	// can_broadcast 给客户端一个明确的开播门禁：资料未过审 / 被封禁都为 false，
+	// 小程序端不用自己去猜 403 的原因。
 	OK(c, gin.H{
-		"items":       items,
-		"current":     current,
-		"live_banned": bannedAt != nil,
-		"ban_reason":  banReason,
-		"banned_at":   bannedAt,
+		"items":         items,
+		"current":       current,
+		"sitter_status": sitterStatus,
+		"can_broadcast": sitterStatus == "active" && bannedAt == nil,
+		"live_banned":   bannedAt != nil,
+		"ban_reason":    banReason,
+		"banned_at":     bannedAt,
 	})
 }
 

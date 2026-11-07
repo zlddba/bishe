@@ -503,6 +503,15 @@ class MobileState(private val session: MobileSession) {
         myAddons = emptyList()
         priceRules = emptyList()
         sitterStats = null
+        // 直播状态是账号级的，换账号必须一起清：否则下一个账号进开播页会看到上一个人的场次
+        liveRooms = emptyList()
+        liveRoomsError = null
+        liveRoomsLoaded = false
+        liveRoom = null
+        liveMessages = emptyList()
+        liveViewerCount = 0
+        myLive = null
+        resetLiveState()
     }
 
     /**
@@ -783,15 +792,60 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
+    /**
+     * 从列表进房：先用列表里的房间立刻出画面，同时把上一场的弹幕/人数清掉，
+     * 再去拉一次最新状态。
+     *
+     * 不清的话「看完 A 再进 B」会先闪一屏 A 的弹幕和人数 —— 看起来就像复用了上一间。
+     */
+    fun enterLiveRoom(room: LiveRoomDto) {
+        if (room.id <= 0L) return
+        liveRoom = room
+        liveMessages = emptyList()
+        liveViewerCount = room.viewerCount
+        scope.launch {
+            runCatching { api.liveRoom(room.id) }.onSuccess { liveRoom = it }
+        }
+    }
+
     /** 进房兼心跳：页面每 30 秒调一次（后端按 90 秒窗口算在线人数）。 */
     suspend fun joinLive(roomId: Long) {
         try {
             val res = api.joinLive(roomId)
             liveViewerCount = res.viewerCount
-            // join 会带回房间最新状态：主播下播后这里能第一时间拿到 ended
-            if (res.room.id != 0L) liveRoom = res.room
-        } catch (_: Exception) {
-            // 心跳失败不打扰用户：画面还在，下一轮再试
+            val fresh = res.room
+            val current = liveRoom
+            when {
+                fresh.id == 0L -> Unit
+                current == null -> liveRoom = fresh
+                // 心跳回来的是另一场（已经切台）：不要顶掉当前画面
+                current.id != fresh.id -> Unit
+                else -> {
+                    // 只合并会变的字段，播放地址沿用本地这份：
+                    // 旧服务端的 join 可能不带 play_*，整份替换会让播放器闪没。
+                    liveRoom = current.copy(
+                        status = fresh.status,
+                        viewerCount = fresh.viewerCount,
+                        peakViewers = maxOf(current.peakViewers, fresh.peakViewers),
+                        endedAt = fresh.endedAt,
+                        endReason = fresh.endReason,
+                        banReason = fresh.banReason,
+                        playHls = fresh.playHls ?: current.playHls,
+                        playFlv = fresh.playFlv ?: current.playFlv,
+                        playRtmp = fresh.playRtmp ?: current.playRtmp,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // 409/403：直播已结束或被封禁，及时停掉画面，别停在上一帧
+            val msg = e.message ?: ""
+            if (msg.contains("已结束") || msg.contains("封禁")) {
+                liveRoom = liveRoom?.copy(
+                    status = "ended",
+                    endReason = if (msg.contains("封禁")) "banned" else "host_stop",
+                    banReason = if (msg.contains("封禁")) msg else liveRoom?.banReason,
+                )
+            }
         }
     }
 
@@ -864,6 +918,9 @@ class MobileState(private val session: MobileSession) {
             liveRoom = room
             broadcastRoom = room
             liveStreamStatus = "准备推流…"
+            // 新一场不带上一场的弹幕和人数
+            liveMessages = emptyList()
+            liveViewerCount = 0
             myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
             room
         } catch (e: Exception) {
@@ -874,26 +931,81 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
+    /**
+     * 下播。
+     *
+     * 接口报错也要再复核一次：后端对已经结束的场次回 409，用户可能是被后台强制下播，
+     * 或者上一次请求其实成功了只是响应丢了。这两种情况本地都必须收摊，
+     * 否则页面会一直停在推流界面 —— 重新进来看到的还是上一场，也就是「复用旧直播」。
+     */
     suspend fun stopLive(roomId: Long): Boolean {
         if (roomId <= 0L) return false
         if (liveBusy) return false
         liveBusy = true
-        return try {
+        var error: String? = null
+        try {
             api.stopLive(roomId)
-            liveStreamStatus = ""
-            broadcastRoom = null
-            if (liveRoom?.id == roomId) liveRoom = null
-            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
-            // 自己这一场从列表里划掉，回到广场不该还看到它
-            liveRooms = liveRooms.filterNot { it.id == roomId }
-            toast("已结束直播")
-            true
         } catch (e: Exception) {
-            toast(e.message ?: "结束直播失败")
-            false
-        } finally {
-            liveBusy = false
+            error = e.message ?: "结束直播失败"
         }
+        // 以服务端事实为准：还有没有这一场 living
+        val live = runCatching { api.myLive() }.getOrNull()
+        if (live != null) myLive = live
+        liveBusy = false
+
+        val stillLiving = live?.current?.takeIf { it.isLiving && it.id == roomId }
+        if (stillLiving != null) {
+            // 服务端说还在播：保留现场，让用户重试而不是假装成功
+            toast(error ?: "结束直播失败，请重试")
+            return false
+        }
+        if (error != null && live == null) {
+            // 下播请求失败、复核也失败：状态不明，不清本地，交给用户重试
+            toast(error)
+            return false
+        }
+        resetLiveState(roomId)
+        // 自己这一场从列表里划掉，回到广场不该还看到它
+        liveRooms = liveRooms.filterNot { it.id == roomId }
+        toast("已结束直播")
+        return true
+    }
+
+    /**
+     * 进开播页时和服务端对账。
+     *
+     * 本地 [broadcastRoom] 只在「这一场服务端还 living」时才保留：用户下播、被后台
+     * 强制下播、或在另一台设备上开播，都会让本地这个房间变成幽灵。不清理的话，
+     * 再进页面会看到一个早就结束的直播间，还带着过期的推流地址 —— 就是「复用旧的」。
+     *
+     * 拉取失败时保持现状：可能只是网络抖动，不能把正在推的现场清掉。
+     */
+    suspend fun reconcileLive(): LiveRoomDto? {
+        if (!canUseSitter) return null
+        val live = runCatching { api.myLive() }.getOrNull() ?: return broadcastRoom
+        myLive = live
+        val current = live.current?.takeIf { it.isLiving }
+        val local = broadcastRoom
+        return when {
+            local == null -> current
+            // 同一场：用服务端的最新数据刷一遍（标题/人数可能变了）
+            current != null && current.id == local.id -> current.also { broadcastRoom = it }
+            else -> {
+                resetLiveState()
+                toast("上一场直播已经结束")
+                null
+            }
+        }
+    }
+
+    /** 收摊：清掉本机这一场的现场状态（推流地址、状态文案、弹幕、人数）。 */
+    fun resetLiveState(roomId: Long? = null) {
+        val id = roomId ?: broadcastRoom?.id
+        broadcastRoom = null
+        liveStreamStatus = ""
+        liveMessages = emptyList()
+        liveViewerCount = 0
+        if (id != null && liveRoom?.id == id) liveRoom = null
     }
 
     suspend fun loadCoupons(force: Boolean = false) {

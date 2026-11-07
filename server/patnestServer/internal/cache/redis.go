@@ -141,6 +141,40 @@ func GetInt(key string) (int64, bool, error) {
 	return n, true, nil
 }
 
+// SetString 写入字符串并设置过期时间（会话/客户端信息这类短期数据用）。
+func SetString(key, value string, ttl time.Duration) error {
+	c := current()
+	if c == nil {
+		return errors.New("redis not initialized")
+	}
+	secs := int(ttl.Seconds())
+	if secs <= 0 {
+		secs = 60
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := c.do(ctx, "SET", key, value, "EX", strconv.Itoa(secs))
+	return err
+}
+
+// GetString 读字符串；key 不存在时 ok=false。
+func GetString(key string) (string, bool, error) {
+	c := current()
+	if c == nil {
+		return "", false, errors.New("redis not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	r, err := c.do(ctx, "GET", key)
+	if err != nil {
+		return "", false, err
+	}
+	if r.null {
+		return "", false, nil
+	}
+	return r.str, true, nil
+}
+
 // IncrWindow 计数 +1，首次计数时设置过期时间。
 func IncrWindow(key string, ttl time.Duration) (int64, error) {
 	c := current()

@@ -49,6 +49,10 @@ type AuthResponse struct {
 	CancelWithdrawn bool `json:"cancel_withdrawn,omitempty"`
 	// NeedBindPhone 登录成功但账号没有手机号：客户端应弹窗提示「请绑定手机号」。
 	NeedBindPhone bool `json:"need_bind_phone"`
+	// Client 本次登录识别出的客户端：admin / web / desktop / android / ios / miniprogram
+	Client string `json:"client,omitempty"`
+	// ClientPlatform windows / macos / linux / android / ios / wechat / unknown
+	ClientPlatform string `json:"client_platform,omitempty"`
 }
 
 type UserPublic struct {

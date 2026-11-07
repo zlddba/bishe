@@ -1090,7 +1090,6 @@ fun D60Wallet(nav: DNav) {
 
     val submitRecharge: () -> Unit = {
         if (recharging) {
-            Unit
         } else if (amount < 1.0) {
             nav.toast("充值金额至少 1 元")
         } else {
