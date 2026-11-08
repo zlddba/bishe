@@ -21,15 +21,6 @@ ktor = "3.6.1"
 kotlinx-serialization = "1.12.0"
 navigationCompose="2.10.2"
 datastore = "1.2.1"
-# 直播：Android 用 media3/ExoPlayer 播 HLS，桌面端用 VLCJ（需要本机安装 VLC）
-media3 = "1.8.0"
-vlcj = "4.8.2"
-# 软件内推流（不依赖 OBS）：Android 摄像头+麦克风直推 RTMP；桌面用 JavaCV/FFmpeg 采集摄像头
-# 必须 ≥ 2.6.0：2.5.x 的 common 是按 Ktor 2.3.13 编译的，和本项目 Ktor 3.6 二进制不兼容，
-# 连服务器时会 NoSuchMethodError（ByteWriteChannel.writeByte）。2.6.6 编译期 Ktor 3.3.2。
-rootencoder = "2.6.6"
-javacv = "1.5.11"
-ffmpeg = "7.1.1"
 # 高德地图 Android SDK（3D 地图）。服务端的 Web 服务 Key 不能用于它，
 # 需要在同一应用下另建一张「Android 平台」Key，绑定包名 + 签名 SHA1。
 #
@@ -72,14 +63,6 @@ amap-map3d = { module = "com.amap.api:3dmap", version.ref = "amap3dmap" }
 # 会话持久化：两端共用 commonMain 里的一套 SessionStore（KMP 版 DataStore，1.1.0+ 支持多平台）
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
 datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
-# 直播播放器
-androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
-androidx-media3-exoplayerHls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
-androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
-vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
-# 软件内推流：Android 用 RootEncoder（摄像头/麦克风 → RTMP），桌面用 JavaCV 调 FFmpeg 采集摄像头
-rootencoder-rtmp = { module = "com.github.pedroSG94.RootEncoder:library", version.ref = "rootencoder" }
-javacv = { module = "org.bytedeco:javacv-platform", version.ref = "javacv" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

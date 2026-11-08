@@ -15,15 +15,12 @@ patnest-docker/
 ├── artifacts/              # 已编译的 Linux amd64 二进制
 ├── web/dist/               # 已构建的管理页面（含 version.json）
 ├── nginx/upstream.conf     # 蓝绿 active 槽位
-├── live/srs.conf           # 直播推拉流（SRS 6）配置
 ├── db/                     # 建库脚本与增量迁移
 ├── data/updates/           # 运行时生成：tmp / manual / queue / status / logs
-├── data/live/hls/          # 运行时生成：HLS 切片（SRS 写入）
 └── scripts/                # 安装 / 发布 / 迁移（.sh 与 .ps1 两套等价脚本）
 ```
 
-> **端口**：`9200` 管理页面 + API；`9201` RTMP 推流；`9202` HLS / HTTP-FLV 拉流。
-> 云服务器要在安全组放行 9201、9202，否则直播开播后客户端连不上。
+> **端口**：对外只暴露 `PUBLIC_PORT`（默认 `9200`，管理页面 + API）；API 的 `9201` 只在容器网络内，不需要在安全组放行。
 
 ## 首次部署（Linux / macOS）
 
@@ -136,10 +133,10 @@ nohup bash scripts/update-agent.sh >> data/updates/agent.log 2>&1 &
 
 ## 说明
 
-- 对外只暴露 `PUBLIC_PORT`（默认 9200），API 的 9201 只在容器网络内；直播额外暴露 `9201`（RTMP）与 `9202`（HLS/FLV）。
+- 对外只暴露 `PUBLIC_PORT`（默认 9200），API 的 9201 只在容器网络内。
 - Redis 用于登录失败限流（同 IP + 用户名 10 分钟内 5 次），AOF 持久化。
-- 外部镜像统一使用最新标签：`alpine:latest`、`nginx:latest`、`redis:latest`、`ossrs/srs:6`；构建带 `--pull`，Redis/SRS 每次启动按 `pull_policy: always` 检查更新。
-- `srs` 与 `redis` 同属 `app` profile，`install.sh` / `install.ps1` 已把它加入 `up -d` 列表；配置在 `live/srs.conf`，HLS 切片落在 `data/live/hls`。
+- 外部镜像统一使用最新标签：`alpine:latest`、`nginx:latest`、`redis:latest`；构建带 `--pull`，Redis 每次启动按 `pull_policy: always` 检查更新。
+- `redis` 属 `app` profile，`install.sh` / `install.ps1` 已把它加入 `up -d` 列表。
 - `api-blue` / `api-green` 使用同一个镜像，发布时只替换其中一个，健康检查通过后切 Nginx upstream。
 - MySQL/PostgreSQL 与 MinIO 不在本 compose 内，由存储服务器单独提供。
 - `data/updates` 由 API 容器和宿主机代理共享，安装脚本会放开该目录的读写权限；不要把该目录暴露到公网。
@@ -155,6 +152,3 @@ nohup bash scripts/update-agent.sh >> data/updates/agent.log 2>&1 &
 | `api-blue health check failed` | 看 `docker logs patnest-api-blue`，重点检查 `.env` 的 `DB_HOST/DB_PASSWORD` 与存储服务器白名单 |
 | MinIO 警告 | `/health` 里 `minio=false`，检查 `MINIO_ENDPOINT`、密钥和 9000 端口连通性 |
 | 端口 9200 被占用 | 改 `.env` 的 `PUBLIC_PORT`，重新执行安装脚本 |
-| 直播开播后客户端连不上 | 检查 9201/9202 是否放行；`docker ps` 看 `patnest-srs` 是否 Up；`docker logs patnest-srs` |
-| 直播 m3u8 404 | 没有推流或 `LIVE_HLS_BASE` 写错（必须用客户端能访问的 IP，不能写 `srs`/`localhost`） |
-| `srs` 起不来提示 conf 不存在 | `live/srs.conf` 没随包解压，重新解压完整发布包，或用 `deploy/live/` 的配置补一份 |

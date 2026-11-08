@@ -185,15 +185,6 @@ fun D18SitterWorkspace(nav: DNav) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 开播入口放在状态旁边，和真实商家版一致：一眼能看到「现在能不能播」
-                    Box(
-                        Modifier.clip(DShape.Pill).background(DColor.Danger)
-                            .clickable { nav.go(DScreen.GoLive) }
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    ) {
-                        Text("开播", fontSize = 10.5.sp, color = DColor.White, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.width(8.dp))
                     Box(
                         Modifier.clip(DShape.Pill).background(DColor.White.copy(alpha = 0.2f))
                             .padding(horizontal = 8.dp, vertical = 3.dp),

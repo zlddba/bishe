@@ -1,7 +1,6 @@
 package team.wd.atnestapp.ui.design
 
 import androidx.navigation.NavHostController
-import team.wd.atnestapp.data.api.LiveRoomDto
 import team.wd.atnestapp.data.model.Order
 import team.wd.atnestapp.data.model.Pet
 import team.wd.atnestapp.data.model.Sitter
@@ -112,14 +111,6 @@ enum class DScreen(
     ReviewDetail("评价详情", "更多功能"),
     Wallet("钱包余额", "更多功能"),
     SettingsDetail("账号与安全", "账号与支付"),
-
-    /*
-     * 直播（docs/18-商家直播功能.md）：设计稿 61 屏之外的整块能力。
-     * 观看端三屏共用一套 API，机构端多一个「开播」。
-     */
-    LiveList("直播广场", "直播"),
-    LiveRoom("直播间", "直播"),
-    GoLive("开播", "直播"),
     ;
 
     /**
@@ -323,12 +314,6 @@ class DNav(
     fun openOrder(order: Order) {
         store?.selectedOrder = order
         go(DScreen.OrderDetail)
-    }
-
-    /** 进直播间：房间交给数据层，直播间页直接读 store.liveRoom 并开始心跳。 */
-    fun openLive(room: LiveRoomDto) {
-        store?.enterLiveRoom(room)
-        go(DScreen.LiveRoom)
     }
 
     /** 打开宠物详情 / 寄养历史。 */

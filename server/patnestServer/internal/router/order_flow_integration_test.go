@@ -140,7 +140,6 @@ func purgeProbeUser(t *testing.T, userID int64) {
 		`DELETE FROM order_pet WHERE order_id IN (SELECT id FROM orders WHERE owner_id = $1)`,
 		`DELETE FROM orders WHERE owner_id = $1`,
 		`DELETE FROM pets WHERE owner_id = $1`,
-		`DELETE FROM live_rooms WHERE sitter_id IN (SELECT id FROM sitters WHERE user_id = $1)`,
 		`DELETE FROM sitters WHERE user_id = $1`,
 		`DELETE FROM users WHERE id = $1`,
 	} {

@@ -61,12 +61,6 @@ kotlin {
             implementation(libs.compose.uiTooling)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.navigation.compose)
-            // 商家直播：ExoPlayer 播 HLS（media3-ui 提供 PlayerView 控制器）
-            implementation(libs.androidx.media3.exoplayer)
-            implementation(libs.androidx.media3.exoplayerHls)
-            implementation(libs.androidx.media3.ui)
-            // 商家直播：软件内直接开播（摄像头 + 麦克风 → RTMP，不依赖 OBS）
-            implementation(libs.rootencoder.rtmp)
             // 高德 3D 地图：只用于「看位置」，导航交给手机里已装的地图 App。
             // 用 implementation 而不是 api：MainActivity 不需要直接引用 SDK 类型。
             //

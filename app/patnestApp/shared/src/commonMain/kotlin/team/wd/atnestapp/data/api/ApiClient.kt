@@ -783,40 +783,6 @@ class ApiClient(rawBaseUrl: String) {
         putData<VaccinePayload, UpdatedResult>("/pet-owner/pets/$petId/vaccine", VaccinePayload(urls))
     }
 
-    /* ---------------- 商家直播 ----------------
-     * 观看端：listLiveRooms / liveRoom / joinLive(兼心跳) / leaveLive / liveMessages / sendLiveMessage
-     * 机构端：myLive / startLive / stopLive
-     * 推流地址只在 startLive 的返回里出现，其它接口拿不到 stream_key。
-     */
-
-    suspend fun listLiveRooms(): List<LiveRoomDto> {
-        val page: LiveRoomListDto = getData("/live", mapOf("page" to "1", "per_page" to "50"))
-        return page.items
-    }
-
-    suspend fun liveRoom(roomId: Long): LiveRoomDto =
-        getData<LiveRoomEnvelope>("/live/$roomId").room
-
-    /** 进房；客户端每 30 秒再调一次当心跳（后端按 90 秒窗口算在线） */
-    suspend fun joinLive(roomId: Long): LiveJoinDto = postNoBody("/live/$roomId/join")
-
-    suspend fun leaveLive(roomId: Long): LiveReactionDto = postNoBody("/live/$roomId/leave")
-
-    suspend fun liveMessages(roomId: Long, afterId: Long = 0): List<LiveMessageDto> =
-        getData<LiveMessageListDto>(
-            "/live/$roomId/messages",
-            mapOf("after_id" to afterId.toString()),
-        ).items
-
-    suspend fun sendLiveMessage(roomId: Long, content: String): LiveMessageDto =
-        postData("/live/$roomId/messages", LiveMessagePayload(content))
-
-    suspend fun myLive(): MyLiveDto = getData("/sitter/live")
-
-    suspend fun startLive(title: String, coverUrl: String = ""): LiveRoomDto =
-        postData("/sitter/live", StartLivePayload(title, coverUrl))
-
-    suspend fun stopLive(roomId: Long): UpdatedResult = putEmpty("/sitter/live/$roomId/stop")
 }
 
 private fun normalizeBaseUrl(raw: String): String {

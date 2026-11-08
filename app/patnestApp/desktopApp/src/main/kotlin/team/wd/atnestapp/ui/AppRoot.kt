@@ -57,9 +57,6 @@ import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.GeoPickPayload
-import team.wd.atnestapp.data.api.LiveMessageDto
-import team.wd.atnestapp.data.api.LiveRoomDto
-import team.wd.atnestapp.data.api.MyLiveDto
 import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.EstimateDto
 import team.wd.atnestapp.data.api.PointsEntryDto
@@ -142,10 +139,6 @@ enum class AppPage(val title: String) {
     SbIncome("收益结算"),
     SbProfile("机构资料"),
     SbCoupons("优惠券"),
-    // 直播（docs/18）：观看端两端共用，开播只有机构账号能进
-    Live("直播广场"),
-    LiveRoom("直播间"),
-    GoLive("开播"),
 }
 
 private enum class Screen { Launch, Main }
@@ -311,24 +304,6 @@ class AppState {
     // 机构自己的加购服务（含已下架）
     var myAddons by mutableStateOf<List<AddonDto>>(emptyList())
     var addonsLoading by mutableStateOf(false)
-
-    /* ---------- 商家直播（docs/18-商家直播功能.md） ---------- */
-    var liveRooms by mutableStateOf<List<LiveRoomDto>>(emptyList())
-    var liveRoomsLoading by mutableStateOf(false)
-    var liveRoomsError by mutableStateOf<String?>(null)
-    private var liveRoomsLoaded = false
-
-    /** 正在看的直播间；开播中的那一场单独放 [broadcastRoom]，两者别混用 */
-    var viewingLive by mutableStateOf<LiveRoomDto?>(null)
-    var liveMessages by mutableStateOf<List<LiveMessageDto>>(emptyList())
-    var liveViewerCount by mutableStateOf(0)
-    var liveMsgSending by mutableStateOf(false)
-
-    var myLive by mutableStateOf<MyLiveDto?>(null)
-    var myLiveLoading by mutableStateOf(false)
-    var broadcastRoom by mutableStateOf<LiveRoomDto?>(null)
-    var liveBusy by mutableStateOf(false)
-    var liveStreamStatus by mutableStateOf("")
 
     // 宠物详情抽屉里的历史寄养记录（列表接口不返回，按需单独取）
     var petStays by mutableStateOf<List<PetStayDto>>(emptyList())
@@ -1068,8 +1043,6 @@ class AppState {
             AppPage.SbReviews -> loadSitterReviews(force = true)
             AppPage.SbCoupons -> loadSitterCoupons(force = true)
             AppPage.SbPublish -> loadSitterDynamics(force = true)
-            // 直播广场的在线人数变化快，跟着这一轮刷新走
-            AppPage.Live -> loadLiveRooms(force = true)
             AppPage.SbIncome -> {
                 loadEarnings(force = true)
                 loadSettlements(force = true)
@@ -1289,211 +1262,6 @@ class AppState {
         null
     }
 
-    /* ---------- 商家直播（docs/18-商家直播功能.md） ---------- */
-
-    /**
-     * 直播中列表。拉过一次就记着：没有直播时也是有效结果，
-     * 否则每次切回列表页都会重新请求一次。
-     */
-    suspend fun loadLiveRooms(force: Boolean = false) {
-        if (liveRoomsLoading) return
-        if (!force && liveRoomsLoaded) return
-        liveRoomsLoading = true
-        liveRoomsError = null
-        try {
-            liveRooms = api.listLiveRooms()
-            liveRoomsLoaded = true
-        } catch (e: Exception) {
-            liveRoomsError = e.message ?: "直播列表加载失败"
-        } finally {
-            liveRoomsLoading = false
-        }
-    }
-
-    /** 进直播间：先切页再补详情，避免点一下卡在列表上等半秒。 */
-    suspend fun openLive(room: LiveRoomDto) {
-        viewingLive = room
-        liveMessages = emptyList()
-        liveViewerCount = room.viewerCount
-        go(AppPage.LiveRoom)
-        if (page != AppPage.LiveRoom) return
-        try {
-            viewingLive = api.liveRoom(room.id)
-        } catch (e: Exception) {
-            toast(e.message ?: "直播间不存在或已结束")
-        }
-    }
-
-    /** 进房兼心跳：页面每 30 秒调一次（后端按 90 秒窗口算在线）。 */
-    suspend fun joinLive(roomId: Long) {
-        if (roomId <= 0L) return
-        try {
-            val res = api.joinLive(roomId)
-            liveViewerCount = res.viewerCount
-            val fresh = res.room
-            val current = viewingLive
-            when {
-                fresh.id == 0L -> Unit
-                current == null -> viewingLive = fresh
-                // 心跳回来的是另一场（用户已经切台）：不要顶掉当前画面
-                current.id != fresh.id -> Unit
-                else -> {
-                    // 只合并会变的字段，播放地址沿用本地这份。
-                    // 旧服务端的 join 可能不带 play_*，整份替换会把播放器直接拆掉（画面闪没/错乱）。
-                    viewingLive = current.copy(
-                        status = fresh.status,
-                        viewerCount = fresh.viewerCount,
-                        peakViewers = maxOf(current.peakViewers, fresh.peakViewers),
-                        endedAt = fresh.endedAt,
-                        endReason = fresh.endReason,
-                        banReason = fresh.banReason,
-                        playHls = fresh.playHls ?: current.playHls,
-                        playFlv = fresh.playFlv ?: current.playFlv,
-                        playRtmp = fresh.playRtmp ?: current.playRtmp,
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            // 心跳撞上 409/403：直播已结束或被封禁，及时停掉画面，别停在上一帧
-            val msg = e.message ?: ""
-            if (msg.contains("已结束") || msg.contains("封禁")) {
-                viewingLive = viewingLive?.copy(
-                    status = "ended",
-                    endReason = if (msg.contains("封禁")) "banned" else "host_stop",
-                    banReason = if (msg.contains("封禁")) msg else viewingLive?.banReason,
-                )
-            }
-        }
-    }
-
-    suspend fun leaveLive(roomId: Long) {
-        runCatching { api.leaveLive(roomId) }
-    }
-
-    suspend fun pollLiveMessages(roomId: Long) {
-        if (roomId <= 0L) return
-        val after = liveMessages.lastOrNull()?.id ?: 0L
-        try {
-            val items = api.liveMessages(roomId, after)
-            if (items.isNotEmpty()) {
-                liveMessages = (liveMessages + items).distinctBy { it.id }
-            }
-        } catch (_: Exception) {
-            // 弹幕轮询是锦上添花，失败静默
-        }
-    }
-
-    suspend fun sendLiveMessage(roomId: Long, content: String): Boolean {
-        val text = content.trim()
-        if (text.isEmpty() || liveMsgSending) return false
-        liveMsgSending = true
-        return try {
-            val msg = api.sendLiveMessage(roomId, text.take(200))
-            if (liveMessages.none { it.id == msg.id }) liveMessages = liveMessages + msg
-            true
-        } catch (e: Exception) {
-            toast(e.message ?: "弹幕发送失败")
-            false
-        } finally {
-            liveMsgSending = false
-        }
-    }
-
-    suspend fun loadMyLive(force: Boolean = false) {
-        if (!isSitterAccount) return
-        if (myLiveLoading) return
-        if (!force && myLive != null) return
-        myLiveLoading = true
-        try {
-            myLive = api.myLive()
-        } catch (e: Exception) {
-            toast(e.message ?: "直播状态加载失败")
-        } finally {
-            myLiveLoading = false
-        }
-    }
-
-    suspend fun startLive(title: String, coverUrl: String = ""): LiveRoomDto? {
-        val text = title.trim()
-        if (text.isEmpty()) {
-            toast("先给这场直播起个标题")
-            return null
-        }
-        if (liveBusy) return null
-        liveBusy = true
-        return try {
-            val room = api.startLive(text, coverUrl)
-            broadcastRoom = room
-            liveStreamStatus = "准备推流…"
-            myLive = runCatching { api.myLive() }.getOrNull() ?: myLive
-            room
-        } catch (e: Exception) {
-            toast(e.message ?: "开播失败")
-            null
-        } finally {
-            liveBusy = false
-        }
-    }
-
-    /**
-     * 进开播页时和服务端对账：本地 [broadcastRoom] 只在「这一场还 living」时才保留。
-     *
-     * 下播、被后台强制下播、或者在另一台设备上开播，都会让本地这个房间变成幽灵；
-     * 不清理的话再进页面会看到一个早就结束的直播间，还带着过期的推流地址。
-     * 拉取失败保持现状 —— 可能只是网络抖动，不能把正在推的现场清掉。
-     */
-    suspend fun reconcileLive(): LiveRoomDto? {
-        if (!isSitterAccount) return null
-        val live = runCatching { api.myLive() }.getOrNull() ?: return broadcastRoom
-        myLive = live
-        val current = live.current?.takeIf { it.isLiving }
-        val local = broadcastRoom
-        return when {
-            local == null -> current
-            current != null && current.id == local.id -> current.also { broadcastRoom = it }
-            else -> {
-                resetLiveState()
-                toast("上一场直播已经结束")
-                null
-            }
-        }
-    }
-
-    /** 收摊：清掉本机这一场的现场状态（推流地址、状态文案）。 */
-    fun resetLiveState(roomId: Long? = null) {
-        val id = roomId ?: broadcastRoom?.id
-        broadcastRoom = null
-        liveStreamStatus = ""
-        if (id != null && viewingLive?.id == id) viewingLive = null
-    }
-
-    suspend fun stopLive(roomId: Long): Boolean {
-        if (roomId <= 0L || liveBusy) return false
-        liveBusy = true
-        var error: String? = null
-        try {
-            api.stopLive(roomId)
-        } catch (e: Exception) {
-            error = e.message ?: "结束直播失败"
-        }
-        // 接口报错也要复核：后端对已结束的场次回 409，本地必须收摊，
-        // 否则页面会一直停在推流界面，重新进来还是上一场
-        val live = runCatching { api.myLive() }.getOrNull()
-        if (live != null) myLive = live
-        liveBusy = false
-        if (live?.current?.isLiving == true && live.current?.id == roomId) {
-            toast(error ?: "结束直播失败，请重试")
-            return false
-        }
-        if (error != null && live == null) {
-            toast(error)
-            return false
-        }
-        resetLiveState(roomId)
-        liveRooms = liveRooms.filterNot { it.id == roomId }
-        toast("已结束直播")
-        return true
-    }
 
     suspend fun updatePetVaccine(petId: Long, urls: List<String>) {
         try {
@@ -2048,15 +1816,12 @@ class AppState {
             AppPage.Favorites, AppPage.Coupons, AppPage.Messages, AppPage.Wallet,
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
             AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile,
-            // 看直播要登录：进房（join）和弹幕都带令牌，游客拿不到人数
-            AppPage.Live, AppPage.LiveRoom, AppPage.GoLive,
         )
 
         /** 只有机构账号才能进入的页面。 */
         private val sitterPages = setOf(
             AppPage.SbDash, AppPage.SbOrders, AppPage.SbCapacity, AppPage.SbPublish,
             AppPage.SbReviews, AppPage.SbIncome, AppPage.SbProfile, AppPage.SbCoupons,
-            AppPage.GoLive,
         )
     }
 }

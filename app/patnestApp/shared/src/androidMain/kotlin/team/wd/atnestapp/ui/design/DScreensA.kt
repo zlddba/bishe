@@ -36,14 +36,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.data.model.Sitter
 import team.wd.atnestapp.ui.app.MapNavigation
-import team.wd.atnestapp.ui.app.MobileImage
 import team.wd.atnestapp.ui.components.AppIcon
 
 /* ================================================================== *
@@ -59,7 +57,6 @@ fun D01Home(nav: DNav) {
         store.loadSitters()
         store.loadPets()
         store.loadNotifications()
-        store.loadLiveRooms()
     }
     DFrame(
         nav = nav,
@@ -92,63 +89,6 @@ fun D01Home(nav: DNav) {
             },
         )
         DSearchBar("搜索机构 / 宠物 / 服务", onClick = { nav.go(DScreen.SearchResults) })
-        // 没有直播时不占位：空着一块会让人以为首页加载坏了
-        if (store.liveRooms.isNotEmpty()) {
-            DSection("正在直播", more = "全部 ›", onMore = { nav.go(DScreen.LiveList) })
-            DPad {
-                store.liveRooms.take(2).forEach { room ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 10.dp)
-                            .clip(DShape.Md).background(DColor.Card)
-                            .border(1.dp, DColor.Line, DShape.Md)
-                            .clickable { nav.openLive(room) }
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box {
-                            MobileImage(
-                                url = room.coverUrl?.takeIf { it.isNotBlank() }
-                                    ?: room.sitterCover.orEmpty(),
-                                modifier = Modifier.size(56.dp),
-                                shape = DShape.Md,
-                                placeholderSize = 18.dp,
-                            )
-                            Box(
-                                Modifier.align(Alignment.TopStart).padding(3.dp)
-                                    .clip(DShape.Sm).background(DColor.Danger)
-                                    .padding(horizontal = 4.dp, vertical = 1.dp),
-                            ) {
-                                Text(
-                                    "LIVE",
-                                    fontSize = 8.sp,
-                                    color = DColor.White,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                room.title.ifBlank { "正在直播" },
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DColor.Ink,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                "${room.sitterName.ifBlank { "寄养机构" }} · ${room.viewerCount} 人在看",
-                                fontSize = 11.5.sp,
-                                color = DColor.Ink3,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        DTag("进入", DTagTone.Brand)
-                    }
-                }
-            }
-        }
         DPad {
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth()) {

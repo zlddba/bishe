@@ -208,14 +208,6 @@ export const adminApi = {
   getRecharges: (params) => request.get('/admin/wallet/recharges', { params }),
   confirmRecharge: (id) => request.post(`/admin/wallet/recharges/${id}/confirm`),
 
-  // 直播管理
-  getLiveRooms: (params) => request.get('/admin/live', { params }),
-  getLiveDetail: (id) => request.get(`/admin/live/${id}`),
-  stopLive: (id, data) => request.put(`/admin/live/${id}/stop`, data),
-  banLive: (id, data) => request.put(`/admin/live/${id}/ban`, data),
-  setSitterLiveBan: (sitterId, data) => request.put(`/admin/sitters/${sitterId}/live-ban`, data),
-  hideLiveMessage: (id, data) => request.put(`/admin/live-messages/${id}/hide`, data),
-
   verifyPetVaccine: (id, data) => request.put(`/admin/pets/${id}/vaccine`, data),
 
   uploadImage: (file) => {

@@ -46,22 +46,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # 商家直播推拉流服务（SRS 6）：机构 App/桌面端推到 9201，观众从 9202 拉 HLS/HTTP-FLV。
-  # 与 API 一起由 install.sh / install.ps1 的 `up -d ... srs ...` 启动，无需另外部署。
-  srs:
-    profiles: ["app"]
-    image: ossrs/srs:6
-    pull_policy: always
-    container_name: patnest-srs
-    command: ./objs/srs -c conf/patnest.conf
-    volumes:
-      - ./live/srs.conf:/usr/local/srs/conf/patnest.conf:ro
-      - ./data/live/hls:/usr/local/srs/objs/nginx/html
-    ports:
-      - "9201:9201"   # RTMP 推流 / 播放
-      - "9202:9202"   # HLS(m3u8) 与 HTTP-FLV
-    restart: unless-stopped
-
   api-blue:
     <<: *api
     profiles: ["app"]

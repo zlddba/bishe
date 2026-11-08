@@ -14,14 +14,6 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!--
-        商家直播：软件内直接开播要采集摄像头与麦克风（RootEncoder → RTMP）。
-        运行时权限在 LiveBroadcaster 里按需申请，不在启动时弹窗。
-    -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
-    <!--
         「拍照上传」用的是系统相机（ACTION_IMAGE_CAPTURE），不申请 CAMERA 权限，
         所以声明为非必需：没有摄像头的设备照样能装，届时选图面板里的「拍照」会置灰。
     -->

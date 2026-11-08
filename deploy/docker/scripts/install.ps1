@@ -44,8 +44,8 @@ Invoke-Compose @("--profile", "tools", "run", "--rm", "updates-init")
 Write-Host "[install] Running database migrations" -ForegroundColor Cyan
 Invoke-Compose @("--profile", "tools", "run", "--rm", "migrate")
 
-Write-Host "[install] Starting redis / srs / nginx / api-blue" -ForegroundColor Cyan
-Invoke-Compose @("--profile", "app", "up", "-d", "redis", "srs", "nginx", "api-blue")
+Write-Host "[install] Starting redis / nginx / api-blue" -ForegroundColor Cyan
+Invoke-Compose @("--profile", "app", "up", "-d", "redis", "nginx", "api-blue")
 
 Write-Host "[install] Waiting for api-blue health check ..." -ForegroundColor Cyan
 if (-not (Wait-Healthy -Slot "blue" -Retries $HealthRetries)) {
