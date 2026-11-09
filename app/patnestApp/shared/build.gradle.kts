@@ -61,16 +61,6 @@ kotlin {
             implementation(libs.compose.uiTooling)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.navigation.compose)
-            // 高德 3D 地图：只用于「看位置」，导航交给手机里已装的地图 App。
-            // 用 implementation 而不是 api：MainActivity 不需要直接引用 SDK 类型。
-            //
-            // 本地 aar 是"胖包"，classes.jar / jni 各架构 .so / assets 样式表 / 自带混淆规则
-            // 都在里面，implementation(fileTree) 之后 AGP 会自动解包并合并，
-            // 不像 jar 那样还要自己配 jniLibs.srcDirs。
-            //
-            // 万一 Kotlin 这边不接受 FileCollection 形式的依赖（报
-            // "Unsupported dependency type"），改成按配置名加即可：
-            //   add("androidMainImplementation", amapLocalLibs)
             if (useLocalAmapAar) {
                 implementation(amapLocalLibs)
             } else {

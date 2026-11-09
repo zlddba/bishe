@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -94,6 +95,7 @@ fun DFrame(
     bottomBar: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val win = LocalDWindow.current
     Column(Modifier.fillMaxSize().background(DColor.Bg)) {
         if (title != null) {
             DTopBar(title = title, nav = nav, backable = backable, actions = actions)
@@ -102,7 +104,9 @@ fun DFrame(
             // 否则第一行内容会被状态栏压住。
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
-        Box(Modifier.weight(1f)) {
+        // 宽屏把正文限制在可读宽度并居中。手机下 dPageWidth 是空操作，
+        // 版式与改造前逐像素一致。
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             // 进场动效交给 NavHost 的转场统一处理，这里不再给整屏内容加 alpha 动画：
             // 整屏 alpha < 1 会让这一页整体离屏合成（整块 RenderNode 每帧重绘），
             // 页面里再有封面图时掉帧非常明显。转场本身已经足够顺，不需要二次淡入。
@@ -111,6 +115,7 @@ fun DFrame(
             val needBottomInset = bottomBar == null && activeTab == null
             Column(
                 Modifier
+                    .dPageWidth(win)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
@@ -118,10 +123,20 @@ fun DFrame(
                 content = content,
             )
         }
-        if (bottomBar != null) bottomBar()
-        if (activeTab != null) DBottomTabs(activeTab, nav)
+        if (bottomBar != null) {
+            // 底部结算栏同样限宽：否则宽屏下按钮会拉成一米长，和居中的正文脱节。
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.dPageWidth(win)) { bottomBar() }
+            }
+        }
+        // 宽屏的 Tab 由左侧常驻导航栏承担（见 DesignApp），底部不再重复画一条。
+        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }
+
+/** 正文限宽：只在 Medium / Expanded 生效，手机返回原 Modifier。 */
+private fun Modifier.dPageWidth(win: DWindow): Modifier =
+    if (win.hasContentLimit) this.widthIn(max = win.contentMaxWidth) else this
 
 /**
  * 与 [DFrame] 同构，但正文用 LazyColumn。
@@ -141,24 +156,30 @@ fun DLazyFrame(
     bottomBar: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
+    val win = LocalDWindow.current
     Column(Modifier.fillMaxSize().background(DColor.Bg)) {
         if (title != null) {
             DTopBar(title = title, nav = nav, backable = backable, actions = actions)
         } else if (!immersiveTop) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             val needBottomInset = bottomBar == null && activeTab == null
             LazyColumn(
                 Modifier
+                    .dPageWidth(win)
                     .fillMaxSize()
                     .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier),
                 contentPadding = PaddingValues(bottom = 14.dp),
                 content = content,
             )
         }
-        if (bottomBar != null) bottomBar()
-        if (activeTab != null) DBottomTabs(activeTab, nav)
+        if (bottomBar != null) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.dPageWidth(win)) { bottomBar() }
+            }
+        }
+        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }
 
@@ -193,24 +214,33 @@ fun DTopBar(
     backable: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    Row(
-        // statusBarsPadding 放在 height 之前：状态栏高度 + 48dp 才是顶栏实际占位，
-        // 这样沉浸式下标题栏不会被系统状态栏压住。
-        Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val win = LocalDWindow.current
+    // 外层只负责让开状态栏，内层 Row 与正文共用同一套限宽和边距：
+    // 宽屏下标题才不会贴在左边、正文却居中。
+    Box(
+        Modifier.fillMaxWidth().statusBarsPadding(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        if (backable) {
-            Box(
-                Modifier.size(30.dp).clip(CircleShape).clickable { nav.back() },
-                contentAlignment = Alignment.Center,
-            ) {
-                AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+        Row(
+            // statusBarsPadding 由外层处理，这里只管 48dp 的内容高度，
+            // 顶栏总占位仍是「状态栏 + 48dp」，与改造前一致。
+            Modifier.dPageWidth(win).fillMaxWidth().height(48.dp)
+                .padding(horizontal = win.gutter),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (backable) {
+                Box(
+                    Modifier.size(30.dp).clip(CircleShape).clickable { nav.back() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+                }
+                Spacer(Modifier.width(6.dp))
             }
-            Spacer(Modifier.width(6.dp))
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+            Spacer(Modifier.weight(1f))
+            actions()
         }
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
-        Spacer(Modifier.weight(1f))
-        actions()
     }
 }
 
@@ -230,13 +260,7 @@ fun DBottomTabs(active: DTab, nav: DNav) {
     ) {
         tabs.forEach { tab ->
             val on = tab == active
-            val icon = when (tab) {
-                DTab.Home, DTab.SitterHome -> AppIcon.Home
-                DTab.Sitters -> AppIcon.Search
-                DTab.Dynamics, DTab.SitterMoments -> AppIcon.Image
-                DTab.Profile, DTab.SitterProfile -> AppIcon.User
-                DTab.SitterOrders -> AppIcon.Orders
-            }
+            val icon = tab.dIcon
             Column(
                 Modifier.weight(1f).clickable { nav.tab(tab) },
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -270,14 +294,95 @@ fun DBottomTabs(active: DTab, nav: DNav) {
     }
 }
 
+/**
+ * Tab 图标。底部导航栏和左侧导航栏共用一份映射，
+ * 否则改图标要改两处，迟早会漏一个。
+ */
+internal val DTab.dIcon: AppIcon
+    get() = when (this) {
+        DTab.Home, DTab.SitterHome -> AppIcon.Home
+        DTab.Sitters -> AppIcon.Search
+        DTab.Dynamics, DTab.SitterMoments -> AppIcon.Image
+        DTab.Profile, DTab.SitterProfile -> AppIcon.User
+        DTab.SitterOrders -> AppIcon.Orders
+    }
+
+/**
+ * 宽屏左侧导航栏。与底部 [DBottomTabs] 是同一套 [DTab]（按身份过滤），只是形态不同：
+ * 手机竖屏横向铺 4 个 Tab 刚好在拇指区，宽屏下铺开会把图标拉到离手指很远的位置，
+ * 左栏则符合「导航在左、内容在右」的大屏习惯，也腾出了整块底部空间。
+ *
+ * [active] 为 null（二级页）时不高亮任何一项，但导航常驻：
+ * 平板上从详情页直接跳去别的 Tab 是常见操作，不该逼用户先返回。
+ */
+@Composable
+fun DNavigationRail(active: DTab?, nav: DNav) {
+    val win = LocalDWindow.current
+    val isSitter = DLocalStore.current.isSitterMode
+    val tabs = DTab.entries.filter { it.sitter == isSitter }
+    Row(Modifier.width(win.railWidth).fillMaxHeight().background(DColor.Card)) {
+        Column(
+            Modifier.weight(1f).fillMaxHeight()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // 顶部品牌位：没有它，第一项 Tab 会紧贴状态栏，看起来像被裁掉一截
+            Box(
+                Modifier.size(38.dp).clip(DShape.Lg).background(DColor.BrandSoft),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Paw, Modifier.size(21.dp), DColor.BrandInk)
+            }
+            Spacer(Modifier.height(18.dp))
+            tabs.forEach { tab ->
+                DNavRailItem(tab, tab == active) { nav.tab(tab) }
+                Spacer(Modifier.height(6.dp))
+            }
+            Spacer(Modifier.weight(1f))
+        }
+        // 白底栏与浅灰页面底之间需要一条边界，否则两列会糊在一起
+        Box(Modifier.width(1.dp).fillMaxHeight().background(DColor.Line))
+    }
+}
+
+@Composable
+private fun DNavRailItem(tab: DTab, selected: Boolean, onClick: () -> Unit) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) DColor.BrandInk else DColor.Ink3,
+        animationSpec = tween(180),
+    )
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 10.dp)
+            .clip(DShape.Lg)
+            .background(if (selected) DColor.BrandSoft else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AppIcon(tab.dIcon, Modifier.size(22.dp), tint)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            tab.label,
+            fontSize = 11.sp,
+            color = tint,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
+}
+
 /* ------------------------------------------------------------------ *
  * 基础块
  * ------------------------------------------------------------------ */
 
-/** 页面左右 18dp 安全边距。 */
+/** 页面左右安全边距。窄屏是设计稿的 18dp，宽屏逐档放大到 24 / 32dp。 */
 @Composable
 fun DPad(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), content = content)
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter),
+        content = content,
+    )
 }
 
 @Composable
@@ -300,7 +405,8 @@ fun DCard(
 @Composable
 fun DSection(text: String, more: String? = null, onMore: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth()
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
@@ -339,7 +445,7 @@ fun DHero(
     Column(
         Modifier.fillMaxWidth().background(DColor.HeroGradient)
             .then(if (insetTop) Modifier.statusBarsPadding() else Modifier)
-            .padding(horizontal = 18.dp, vertical = 20.dp),
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 20.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -459,7 +565,7 @@ fun DChip(text: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun DTabLine(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter)) {
         items.forEachIndexed { i, text ->
             Column(
                 Modifier.padding(end = 20.dp).clickable { onSelect(i) },
@@ -591,7 +697,7 @@ fun DOptionRow(
 @Composable
 fun DStepHeader(no: Int, text: String) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -744,7 +850,8 @@ fun DNotice(text: String) {
 @Composable
 fun DSearchBar(hint: String, onClick: () -> Unit = {}) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp)
+        Modifier.fillMaxWidth()
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 8.dp)
             .clip(DShape.Md).background(DColor.Card)
             .border(1.dp, DColor.Line, DShape.Md)
             .clickable(onClick = onClick)
@@ -764,7 +871,7 @@ fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () ->
         Modifier.fillMaxWidth().background(DColor.Card)
             .border(1.dp, DColor.Line, DShape.Sm)
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column {

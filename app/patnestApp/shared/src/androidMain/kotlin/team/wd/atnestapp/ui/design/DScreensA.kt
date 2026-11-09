@@ -171,6 +171,9 @@ fun D02FindSitters(nav: DNav) {
     val scope = rememberCoroutineScope()
     var chip by remember { mutableStateOf(0) }
     val chips = listOf("全部", "家庭寄养", "门店", "上门喂养", "评分优先", "有地图坐标")
+    // 列数在组合上下文里先算好：DLazyFrame 的 content 是普通 DSL lambda，
+    // 里面读不了 CompositionLocal。
+    val columns = dWindow().columns(320.dp)
     LaunchedEffect(Unit) { store.loadSitters() }
     // 筛选 / 排序结果按（数据, 选中项）缓存：否则每次重组都会重新过滤一遍列表，
     // 列表滚动、输入框联动时这些重复计算会直接反映成掉帧。
@@ -219,8 +222,22 @@ fun D02FindSitters(nav: DNav) {
             shown.isEmpty() ->
                 item { DPad { DEmpty("没有符合条件的机构", "查看全部") { chip = 0 } } }
 
-            else -> items(shown, key = { it.id }) { sitter ->
-                DPad { A_SitterCard(sitter.toACard()) { nav.openSitter(sitter) } }
+            // 宽屏按行分组：仍走 LazyColumn，只是每行放 2~3 张卡，
+            // 首屏组合量不变；chunked 之后 key 取每行第一张卡的 id，仍能稳定复用。
+            else -> items(shown.chunked(columns), key = { row -> row.first().id }) { row ->
+                DPad {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        row.forEach { sitter ->
+                            Box(Modifier.weight(1f)) {
+                                A_SitterCard(sitter.toACard()) { nav.openSitter(sitter) }
+                            }
+                        }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
@@ -256,7 +273,7 @@ fun D03SitterDetail(nav: DNav) {
         Box(Modifier.fillMaxWidth().height(180.dp)) {
             DImageUrl(sitter.coverPhoto, sitter.name, height = 180.dp)
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Box(
@@ -615,6 +632,8 @@ fun D05Orders(nav: DNav) {
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf(0) }
     val labels = listOf("全部", "待支付", "寄养中", "已完成", "已评价")
+    // 订单卡右侧有金额和按钮，比机构卡更吃宽度，最小列宽取 360dp
+    val columns = dWindow().columns(360.dp)
     LaunchedEffect(Unit) { store.loadOrders() }
     val statuses = remember(tab) {
         when (tab) {
@@ -652,17 +671,27 @@ fun D05Orders(nav: DNav) {
                     }
                 }
 
-            else -> items(shown, key = { it.id }) { order ->
-                val card = order.toAOrder()
+            else -> items(shown.chunked(columns), key = { row -> row.first().id }) { row ->
                 DPad {
-                    A_OrderCard(
-                        info = card,
-                        onCard = { nav.openOrder(order) },
-                        onAction = {
-                            store.selectedOrder = order
-                            nav.go(card.actionScreen)
-                        },
-                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        row.forEach { order ->
+                            val card = order.toAOrder()
+                            Box(Modifier.weight(1f)) {
+                                A_OrderCard(
+                                    info = card,
+                                    onCard = { nav.openOrder(order) },
+                                    onAction = {
+                                        store.selectedOrder = order
+                                        nav.go(card.actionScreen)
+                                    },
+                                )
+                            }
+                        }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
@@ -686,25 +715,28 @@ fun D06Dynamics(nav: DNav) {
                 Spacer(Modifier.height(24.dp))
                 DEmpty("还没有寄养动态", "去预约") { nav.tab(DTab.Sitters) }
             }
-            else -> store.ownerDynamics.forEach { dynamic ->
-                val liked = store.likedDynamics.contains(dynamic.id)
-                val openDetail = {
-                    store.selectedDynamic = dynamic
-                    nav.go(DScreen.DynamicDetail)
+            // 动态卡带大图，列宽给足：380dp 以下正文会缩成三四个字一行
+            else -> DPad {
+                DGrid(store.ownerDynamics, minItemWidth = 380.dp) { dynamic ->
+                    val liked = store.likedDynamics.contains(dynamic.id)
+                    val openDetail = {
+                        store.selectedDynamic = dynamic
+                        nav.go(DScreen.DynamicDetail)
+                    }
+                    A_DynamicCard(
+                        avatar = dInitial(dynamic.sitterName),
+                        org = dynamic.sitterName.ifBlank { "机构动态" },
+                        time = dynamic.createdAt.replace("T", " ").take(16),
+                        title = dynamic.orderNo.ifBlank { "订单动态" },
+                        body = dynamic.content,
+                        // 之前这里写死 DImageBlock("")，机构上传的照片在列表里永远看不到
+                        photoUrl = dynamic.photos.firstOrNull().orEmpty(),
+                        liked = liked,
+                        onLike = { scope.launch { store.toggleLike(dynamic.id) } },
+                        onComment = openDetail,
+                        onClick = openDetail,
+                    )
                 }
-                A_DynamicCard(
-                    avatar = dInitial(dynamic.sitterName),
-                    org = dynamic.sitterName.ifBlank { "机构动态" },
-                    time = dynamic.createdAt.replace("T", " ").take(16),
-                    title = dynamic.orderNo.ifBlank { "订单动态" },
-                    body = dynamic.content,
-                    // 之前这里写死 DImageBlock("")，机构上传的照片在列表里永远看不到
-                    photoUrl = dynamic.photos.firstOrNull().orEmpty(),
-                    liked = liked,
-                    onLike = { scope.launch { store.toggleLike(dynamic.id) } },
-                    onComment = openDetail,
-                    onClick = openDetail,
-                )
             }
         }
     }
@@ -727,7 +759,7 @@ fun D07Profile(nav: DNav) {
     ) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
-                .padding(horizontal = 18.dp, vertical = 22.dp),
+                .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -892,7 +924,7 @@ fun D08Pets(nav: DNav) {
                     DEmpty("还没有宠物档案", "添加宠物") { nav.go(DScreen.PetAdd) }
                 }
                 else -> {
-                    store.pets.forEach { pet ->
+                    DGrid(store.pets, minItemWidth = 340.dp) { pet ->
                         A_PetCard(
                             avatar = dInitial(pet.name),
                             name = pet.name,
@@ -914,6 +946,7 @@ fun D08Pets(nav: DNav) {
                             },
                         )
                     }
+                    Spacer(Modifier.height(12.dp))
                     DButton(
                         "+ 继续添加宠物",
                         { nav.go(DScreen.PetAdd) },
@@ -1248,7 +1281,7 @@ fun D13Favorites(nav: DNav) {
             when {
                 store.favoritesLoading && store.favorites.isEmpty() -> DLoading("正在加载收藏…")
                 store.favorites.isEmpty() -> DEmpty("还没有收藏的机构", "去找机构") { nav.tab(DTab.Sitters) }
-                else -> store.favorites.forEach { sitter ->
+                else -> DGrid(store.favorites) { sitter ->
                     A_SitterCard(sitter.toACard()) { nav.openSitter(sitter) }
                 }
             }
@@ -1289,20 +1322,22 @@ fun D14Coupons(nav: DNav) {
                 ) { nav.go(DScreen.ClaimCenter) }
             }
         } else {
-            shown.forEach { coupon ->
-                A_CouponCard(
-                    amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
-                    threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
-                    title = coupon.title,
-                    sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
-                    expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",
-                    grayed = coupon.status != "unused",
-                ) {
-                    if (coupon.status == "unused" && store.selectedSitter != null) {
-                        store.selectBookingCoupon(coupon)
-                        nav.back()
-                    } else {
-                        nav.go(DScreen.CouponDetail)
+            DPad {
+                DGrid(shown, minItemWidth = 320.dp) { coupon ->
+                    A_CouponCard(
+                        amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
+                        threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
+                        title = coupon.title,
+                        sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
+                        expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",
+                        grayed = coupon.status != "unused",
+                    ) {
+                        if (coupon.status == "unused" && store.selectedSitter != null) {
+                            store.selectBookingCoupon(coupon)
+                            nav.back()
+                        } else {
+                            nav.go(DScreen.CouponDetail)
+                        }
                     }
                 }
             }
@@ -1333,7 +1368,7 @@ fun D15Messages(nav: DNav) {
             if (shown.isEmpty()) {
                 DEmpty("暂无${labels[tab]}消息")
             } else {
-                shown.forEach { notice ->
+                DGrid(shown, minItemWidth = 340.dp) { notice ->
                     A_MessageCard(notice.toAMessage()) {
                         scope.launch {
                             store.markScopedRead(notice.id)
@@ -1508,7 +1543,7 @@ private fun A_SitterCard(info: A_SitterInfo, onClick: () -> Unit) {
 private fun A_ChipRow(items: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 8.dp),
     ) {
         items.forEachIndexed { i, text ->
             DChip(text, i == selected) { onSelect(i) }
@@ -1595,7 +1630,8 @@ private fun A_DynamicCard(
     onClick: () -> Unit,
 ) {
     DCard(
-        modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp).clickable(onClick = onClick),
+        // 左右边距交给外层 DPad：两列时卡片自己再带一份 gutter，列间距会翻倍
+        modifier = Modifier.padding(vertical = 6.dp).clickable(onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             DAvatar(avatar, size = 28.dp, rounded = false)
@@ -1796,7 +1832,8 @@ private fun A_CouponCard(
     onClick: () -> Unit,
 ) {
     DCard(
-        modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp).clickable(onClick = onClick),
+        // 左右边距交给外层 DPad：两列时卡片自己再带一份 gutter，列间距会翻倍
+        modifier = Modifier.padding(vertical = 6.dp).clickable(onClick = onClick),
         padding = 0.dp,
     ) {
         Row(Modifier.fillMaxWidth().height(96.dp)) {

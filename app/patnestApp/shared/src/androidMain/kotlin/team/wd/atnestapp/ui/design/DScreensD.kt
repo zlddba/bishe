@@ -1356,7 +1356,7 @@ private fun D_HeroBlock(
         Modifier.fillMaxWidth()
     }
     Column(
-        base.background(background).padding(horizontal = 18.dp, vertical = 22.dp),
+        base.background(background).padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         content = content,
     )
 }

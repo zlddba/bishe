@@ -85,7 +85,7 @@ fun D31SitterReviews(nav: DNav) {
             if (reviews.isEmpty()) {
                 DEmpty("还没有主人评价")
             } else {
-                reviews.forEach { review ->
+                DGrid(reviews, minItemWidth = 400.dp) { review ->
                     C_ReviewCard(
                         avatar = dInitial("主人"),
                         avatarBg = DColor.BrandSoft,
@@ -928,7 +928,7 @@ fun D38SearchResults(nav: DNav) {
                 store.sittersError != null && results.isEmpty() ->
                     DErrorBox(store.sittersError ?: "加载失败") { store.reloadSittersByType() }
                 results.isEmpty() -> DEmpty("没有匹配的机构", "清空筛选") { chips = emptySet() }
-                else -> results.forEach { sitter ->
+                else -> DGrid(results, minItemWidth = 340.dp) { sitter ->
                     DCard(
                         modifier = Modifier.padding(bottom = 12.dp)
                             .clickable { nav.openSitter(sitter) },
@@ -1005,7 +1005,7 @@ fun D39Announcements(nav: DNav) {
             if (announcements.isEmpty()) {
                 DEmpty("暂无平台公告")
             } else {
-                announcements.forEach { notice ->
+                DGrid(announcements, minItemWidth = 360.dp) { notice ->
                     val open = expanded == notice.id
                     DCard(modifier = Modifier.padding(bottom = 12.dp)) {
                         Row(
@@ -1246,18 +1246,20 @@ fun D43ClaimCenter(nav: DNav) {
         if (claimable.isEmpty()) {
             DPad { DEmpty("暂无可领取的优惠券") }
         } else {
-            claimable.forEach { coupon ->
-                C_CouponCard(
-                    amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
-                    threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
-                    title = coupon.title,
-                    sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
-                    expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",
-                    grayed = false,
-                ) {
-                    scope.launch {
-                        store.claimCoupon(coupon.couponId)
-                        store.loadCoupons(force = true)
+            DPad {
+                DGrid(claimable, minItemWidth = 320.dp) { coupon ->
+                    C_CouponCard(
+                        amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
+                        threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
+                        title = coupon.title,
+                        sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
+                        expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",
+                        grayed = false,
+                    ) {
+                        scope.launch {
+                            store.claimCoupon(coupon.couponId)
+                            store.loadCoupons(force = true)
+                        }
                     }
                 }
             }
@@ -1565,7 +1567,8 @@ private fun C_CouponCard(
     onClick: () -> Unit,
 ) {
     DCard(
-        modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp).clickable(onClick = onClick),
+        // 左右边距交给外层 DPad：两列时卡片自己再带一份 gutter，列间距会翻倍
+        modifier = Modifier.padding(vertical = 6.dp).clickable(onClick = onClick),
         padding = 0.dp,
     ) {
         Row(Modifier.fillMaxWidth().height(96.dp)) {

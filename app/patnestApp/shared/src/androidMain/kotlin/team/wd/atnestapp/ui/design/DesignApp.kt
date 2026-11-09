@@ -16,6 +16,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -39,6 +42,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -129,30 +133,50 @@ fun DesignApp(apiBase: String) {
 
     CompositionLocalProvider(DLocalStore provides store) {
         DTheme(darkTheme = dark) {
+            // 窗口尺寸在这里实测，而不是读 Configuration：
+            // 分屏拖拽、折叠屏开合、自由窗口缩放都会即时改变 maxWidth，
+            // 页面按新档位重排，不依赖 Activity 重建，导航栈也不会丢。
+            //
             // 不再整块 safeContentPadding：背景铺满全屏（状态栏 / 导航条下方也是页面底色），
             // 各屏由 DFrame 自己用 statusBarsPadding / navigationBarsPadding 避让系统栏。
-            Box(Modifier.fillMaxSize().background(DColor.Bg)) {
-                NavHost(
-                    navController = navController,
-                    startDestination = startRoute,
-                    modifier = Modifier.fillMaxSize(),
-                    // 二级页：新页从右侧推入、旧页向左退出 1/4（视差），像原生页面栈。
-                    // 例外：无论 Tab 切回还是返回，首页（导航栏第一页）本身不做进入动画，直接出现。
-                    enterTransition = {
-                        if (screenOf(targetState) == DScreen.Home) EnterTransition.None
-                        else if (isTabSwitch()) fadeIn(tween(220)) else pushIn()
-                    },
-                    exitTransition = { if (isTabSwitch()) fadeOut(tween(220)) else pushOut() },
-                    popEnterTransition = {
-                        if (screenOf(targetState) == DScreen.Home) EnterTransition.None else popIn()
-                    },
-                    popExitTransition = { popOut() },
-                    // 各页高度一致，关掉尺寸过渡，避免切换瞬间的高度插值抖动。
-                    sizeTransform = null,
-                    builder = graphBuilder,
-                )
-
-                DToastHost(store, Modifier.align(Alignment.BottomCenter))
+            BoxWithConstraints(Modifier.fillMaxSize().background(DColor.Bg)) {
+                val window = remember(maxWidth, maxHeight) { DWindow.of(maxWidth, maxHeight) }
+                CompositionLocalProvider(LocalDWindow provides window) {
+                    // 宽屏导航栏常驻，需要知道该高亮哪一项：二级页的 tab 为 null，
+                    // 栏内不高亮任何一项，但仍可一键跳到别的 Tab。
+                    val backStackEntry by navController.currentBackStackEntryAsState()
+                    val activeTab = remember(backStackEntry) {
+                        backStackEntry?.destination?.route
+                            ?.let { route -> DScreen.entries.firstOrNull { it.name == route }?.tab }
+                    }
+                    Row(Modifier.fillMaxSize()) {
+                        if (window.showRail) DNavigationRail(activeTab, nav)
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            NavHost(
+                                navController = navController,
+                                startDestination = startRoute,
+                                modifier = Modifier.fillMaxSize(),
+                                // 二级页：新页从右侧推入、旧页向左退出 1/4（视差），像原生页面栈。
+                                // 例外：无论 Tab 切回还是返回，首页（导航栏第一页）本身不做进入动画，直接出现。
+                                enterTransition = {
+                                    if (screenOf(targetState) == DScreen.Home) EnterTransition.None
+                                    else if (isTabSwitch()) fadeIn(tween(220)) else pushIn()
+                                },
+                                exitTransition = { if (isTabSwitch()) fadeOut(tween(220)) else pushOut() },
+                                popEnterTransition = {
+                                    if (screenOf(targetState) == DScreen.Home) EnterTransition.None else popIn()
+                                },
+                                popExitTransition = { popOut() },
+                                // 各页高度一致，关掉尺寸过渡，避免切换瞬间的高度插值抖动。
+                                sizeTransform = null,
+                                builder = graphBuilder,
+                            )
+                        }
+                    }
+                    // 提示条按窗口居中，而不是内容区居中：宽屏下它要落在大屏的视觉中心，
+                    // 而不是缩在限宽后的正文中间。
+                    DToastHost(store, Modifier.align(Alignment.BottomCenter))
+                }
             }
         }
     }
@@ -190,7 +214,8 @@ private fun DToastHost(store: MobileState, modifier: Modifier = Modifier) {
         modifier = modifier,
     ) {
         Box(
-            Modifier.padding(bottom = 88.dp)
+            // 手机要避开底部 Tab；宽屏没有 Tab，贴近底部即可
+            Modifier.padding(bottom = LocalDWindow.current.toastBottom)
                 .navigationBarsPadding()
                 .clip(DShape.Pill).background(DColor.Toast)
                 .padding(horizontal = 18.dp, vertical = 10.dp),

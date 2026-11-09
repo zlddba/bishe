@@ -66,8 +66,20 @@
             android:name="com.amap.api.v2.apikey"
             android:value="${amapKey}" />
 
+        <!--
+            平板 / 折叠屏适配要点：
+            1. resizeableActivity 显式打开，允许分屏、自由窗口、桌面模式；
+               窗口尺寸变化由 Compose 的 BoxWithConstraints 实时响应（见 DWindow.kt）。
+            2. configChanges 覆盖旋转与窗口尺寸变化：页面状态（导航栈、已加载列表）都在
+               remember 里而不是 ViewModel 里，不接管这些变化就会在旋转后整栈重建、
+               重新拉一遍数据。Compose 会在 onConfigurationChanged 后更新
+               LocalConfiguration，深色模式与尺寸档位仍会正确切换。
+            3. 不锁定 screenOrientation：平板横竖屏都是正常形态，锁死会直接让大屏适配失效。
+        -->
         <activity
             android:exported="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:name=".MainActivity">
             <intent-filter>

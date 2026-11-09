@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.design
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -30,8 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +51,7 @@ import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.app.MobileImage
 import team.wd.atnestapp.ui.app.rememberPhotoPicker
+import kotlin.time.Duration.Companion.milliseconds
 
 /* ================================================================== *
  * 第 2 组：⑯~㉚ 屏。版式按 docs/KMP-Android端UI设计稿.html 还原，
@@ -167,7 +173,7 @@ fun D18SitterWorkspace(nav: DNav) {
     DFrame(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = LocalDWindow.current.gutter, vertical = 16.dp),
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -351,7 +357,7 @@ fun DSitterOrders(nav: DNav) {
                     "刷新",
                 ) { scope.launch { store.loadReceivedOrders(force = true) } }
 
-                else -> shown.forEach { order ->
+                else -> DGrid(shown, minItemWidth = 360.dp) { order ->
                     B_ReceivedOrderCard(
                         order = order,
                         onAccept = { scope.launch { store.acceptOrder(order) } },
@@ -449,7 +455,7 @@ fun DSitterProfile(nav: DNav) {
     DFrame(nav = nav, title = null, activeTab = DTab.SitterProfile, backable = false) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
-                .padding(horizontal = 18.dp, vertical = 22.dp),
+                .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -741,7 +747,7 @@ fun D20Tickets(nav: DNav) {
         } else {
             DPad {
                 Spacer(Modifier.height(14.dp))
-                store.tickets.forEach { ticket ->
+                DGrid(store.tickets, minItemWidth = 360.dp) { ticket ->
                     B_OrderCard(
                         title = ticket.title.ifBlank { ticket.category },
                         tag = when (ticket.status) {
@@ -921,7 +927,7 @@ fun D21Points(nav: DNav) {
     DFrame(nav = nav, title = null, backable = false) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
-                .padding(horizontal = 18.dp, vertical = 22.dp),
+                .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text("我的积分", fontSize = 12.sp, color = DColor.White.copy(alpha = 0.85f))
             Spacer(Modifier.height(6.dp))
@@ -984,7 +990,7 @@ fun D22PaySuccess(nav: DNav) {
         bottomBar = {
             Row(
                 Modifier.fillMaxWidth().background(DColor.Card)
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(horizontal = LocalDWindow.current.gutter, vertical = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 DButton("返回首页", { nav.tab(DTab.Home) }, Modifier.weight(1f), DButtonStyle.Ghost)
@@ -1102,7 +1108,37 @@ fun D23SitterCompare(nav: DNav) {
 private const val MAP_DEFAULT_LAT = 40.821365
 private const val MAP_DEFAULT_LNG = 111.772564
 
-/* ㉔ 地图选点（内嵌地图拖动对准位置，地址由后端逆地理编码回填） */
+/**
+ * 选点页屏幕正中的准心。
+ *
+ * 语义是「准心指着哪里就选哪里」，所以它不挂在任何地理坐标上，只是一层固定浮层。
+ * 用自绘而不是复用 AppIcon：图标集里没有图钉，为这一个按钮加一条路径不划算，
+ * 而圆头 + 尖尾的形状用三个绘制指令就够。
+ */
+@Composable
+private fun DMapCenterPin(modifier: Modifier = Modifier) {
+    // DColor.Brand 是 @Composable getter（读主题调色板），只能在组合期取值；
+    // Canvas 的绘制 lambda 是 DrawScope，不是 @Composable，所以先取到局部变量再画
+    val pinColor = DColor.Brand
+    Canvas(modifier.size(width = 30.dp, height = 42.dp)) {
+        val w = size.width
+        val h = size.height
+        val r = w / 2f
+        val head = Offset(w / 2f, r)
+        // 尖尾：从圆心下方收成一点，尖端落在画布底边，也就是地图中心
+        val tail = Path().apply {
+            moveTo(w / 2f, h)
+            lineTo(w / 2f - r * 0.46f, r * 1.42f)
+            lineTo(w / 2f + r * 0.46f, r * 1.42f)
+            close()
+        }
+        drawPath(tail, pinColor)
+        drawCircle(pinColor, radius = r, center = head)
+        drawCircle(Color.White, radius = r * 0.34f, center = head)
+    }
+}
+
+/* ㉔ 地图选点（全屏地图，拖动准心对准位置，地址由后端逆地理编码回填） */
 @Composable
 fun D24MapPicker(nav: DNav) {
     val store = DLocalStore.current
@@ -1124,12 +1160,14 @@ fun D24MapPicker(nav: DNav) {
     // 已有坐标（这次选过 / 机构资料里存过）就直接可确认；什么都没有时要求用户先动一下地图，
     // 免得把默认视野当成机构位置
     var touched by remember { mutableStateOf(store.pickedLatitude != null) }
+    // 地址编辑表单默认收起，把区域全留给地图；需要精确输入时再展开
+    var formOpen by remember { mutableStateOf(false) }
     val picked = result
 
     // 拖动停稳 400ms 再反查地址：拖动中连着请求既慢又吵
     LaunchedEffect(centerLat, centerLng) {
         if (!touched) return@LaunchedEffect
-        delay(400)
+        delay(400.milliseconds)
         val geo = store.reverseAddress(centerLat, centerLng) ?: return@LaunchedEffect
         if (geo.formattedAddress.isNotBlank()) {
             address = geo.formattedAddress
@@ -1138,106 +1176,188 @@ fun D24MapPicker(nav: DNav) {
         result = geo
     }
 
-    DFrame(nav = nav, title = "选择地址位置") {
-        DPad {
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.fillMaxWidth().height(240.dp)) {
-                DMapView(
-                    latitude = centerLat,
-                    longitude = centerLng,
-                    modifier = Modifier.fillMaxSize(),
-                    zoom = zoom,
-                    interactive = true,
-                    onCenterChange = { newLat, newLng ->
-                        centerLat = newLat
-                        centerLng = newLng
-                        store.pickedLatitude = newLat
-                        store.pickedLongitude = newLng
-                        touched = true
-                    },
-                    // 手势缩放后把级别同步回来，缩放按钮的基准才跟得上真实视野
-                    onZoomChange = { zoom = it },
-                    corner = {
-                        DMapZoomPad(
-                            zoom = zoom,
-                            onZoomChange = { zoom = it },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                        )
-                        // 右上角显示当前落在哪个区，代替原来那块假地图上的白标签
-                        Box(
-                            Modifier.align(Alignment.TopStart).padding(10.dp)
-                                .clip(DShape.Md).background(DColor.Card)
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) {
-                            Text(
-                                picked?.district?.takeIf { it.isNotBlank() }
-                                    ?: picked?.resolvedCity?.takeIf { it.isNotBlank() }
-                                    ?: "拖动地图对准位置",
-                                fontSize = 11.5.sp,
-                                color = DColor.Ink2,
-                            )
-                        }
-                    },
+    // 全屏地图选点：和「机构位置」页保持同一套交互——地图铺满整屏，
+    // 返回与位置说明浮在上方，地址编辑区浮在下方，任何浮层都不占地图面积。
+    // 之前是 240dp 的小地图加一整列表单，既看不清位置，拖动也只剩一小块可用。
+    Box(Modifier.fillMaxSize().background(DColor.MapWash)) {
+        DMapView(
+            latitude = centerLat,
+            longitude = centerLng,
+            modifier = Modifier.fillMaxSize(),
+            zoom = zoom,
+            interactive = true,
+            // 铺满整屏时不能要圆角描边，否则四角会露出页面底色
+            rounded = false,
+            // 准心自己画：marker 钉的是坐标，红点必须钉在屏幕正中，
+            // 否则拖动时标记跟着瓦片滑，看起来像没对准
+            showMarker = false,
+            onCenterChange = { newLat, newLng ->
+                centerLat = newLat
+                centerLng = newLng
+                store.pickedLatitude = newLat
+                store.pickedLongitude = newLng
+                touched = true
+            },
+            // 手势缩放后把级别同步回来，缩放按钮的基准才跟得上真实视野
+            onZoomChange = { zoom = it },
+            corner = {
+                // 控件贴右侧中部，避开顶部信息条和底部面板
+                Column(
+                    Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    DMapZoomPad(zoom = zoom, onZoomChange = { zoom = it })
+                }
+            },
+        )
+
+        // 屏幕正中的准心：尖端对准地图中心，所以整体上移半个高度
+        DMapCenterPin(Modifier.align(Alignment.Center).offset(y = (-21).dp))
+
+        // 顶部浮层：返回 + 标题与当前所在区
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(DColor.Scrim)
+                    .clickable { nav.back() },
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Back, Modifier.size(19.dp), DColor.White)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(
+                Modifier.weight(1f).clip(DShape.Md).background(DColor.Card)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    "选择地址位置",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DColor.Ink,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    picked?.district?.takeIf { it.isNotBlank() }
+                        ?: picked?.resolvedCity?.takeIf { it.isNotBlank() }
+                        ?: "拖动地图把准心对准位置",
+                    fontSize = 11.sp,
+                    color = DColor.Ink3,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            DFieldInput(
-                "详细地址",
-                address,
-                { address = it },
-                placeholder = "省市区 + 街道门牌，至少 4 个字",
-            )
-            DFieldInput("城市（可选）", city, { city = it }, placeholder = "如：呼和浩特")
-            DButton(
-                if (resolving) "解析中…" else "按地址定位",
-                {
-                    scope.launch {
-                        resolving = true
-                        val geo = store.resolveAddress(address, city)
-                        resolving = false
-                        if (geo != null) {
-                            result = geo
-                            // 解析出来的坐标直接当成地图中心，缩放拉近到街道级
-                            centerLat = geo.latitude
-                            centerLng = geo.longitude
-                            zoom = 16
-                            touched = true
-                            store.pickedLatitude = geo.latitude
-                            store.pickedLongitude = geo.longitude
-                            if (geo.formattedAddress.isNotBlank()) {
-                                address = geo.formattedAddress
-                                store.pickedAddress = geo.formattedAddress
-                            }
-                        }
+
+        // 底部浮层：选中的地址 + 编辑区 + 确认
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .widthIn(max = LocalDWindow.current.contentMaxWidth)
+                .navigationBarsPadding().padding(12.dp),
+        ) {
+            DCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (resolving) "正在解析地址…" else "选中的位置",
+                            fontSize = 10.5.sp,
+                            color = DColor.Ink3,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            address.ifBlank { "还没有地址，可展开「改地址」手动填写" },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DColor.Ink,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "${centerLat.formatCoord()}, ${centerLng.formatCoord()} · " +
+                                when {
+                                    picked == null -> "拖动地图选取"
+                                    picked.fromCache -> "后端缓存"
+                                    else -> "逆地理编码"
+                                },
+                            fontSize = 10.5.sp,
+                            color = DColor.Ink3,
+                        )
                     }
-                },
-                style = DButtonStyle.Outline,
-                height = 44.dp,
-                enabled = !resolving,
-            )
-            if (touched) {
-                Spacer(Modifier.height(12.dp))
-                DCard {
-                    DKeyValue("标准地址", address.ifBlank { "—" })
-                    DKeyValue("坐标", "${centerLat.formatCoord()}, ${centerLng.formatCoord()}")
-                    DKeyValue(
-                        "坐标来源",
-                        when {
-                            picked == null -> "拖动地图选取"
-                            picked.fromCache -> "后端缓存"
-                            else -> "逆地理编码"
-                        },
+                    Spacer(Modifier.width(10.dp))
+                    // DSmallButton 的最后一个参数是 filled，尾随 lambda 会被当成 filled 传进去，
+                    // 所以这里必须用命名参数指定 onClick
+                    DSmallButton(
+                        if (formOpen) "收起" else "改地址",
+                        onClick = { formOpen = !formOpen },
+                        filled = formOpen,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
-                DButton("确认并回填", {
-                    if (store.pickedAddress.isBlank()) store.pickedAddress = address
-                    store.pickedLatitude = centerLat
-                    store.pickedLongitude = centerLng
-                    nav.back()
-                })
+
+                // 表单默认收起：进这一页最常见的动作是拖地图，不是打字。
+                // 需要精确输入时再展开，省下的高度全给地图。
+                if (formOpen) {
+                    Spacer(Modifier.height(10.dp))
+                    DFieldInput(
+                        "详细地址",
+                        address,
+                        { address = it },
+                        placeholder = "省市区 + 街道门牌，至少 4 个字",
+                    )
+                    DFieldInput("城市（可选）", city, { city = it }, placeholder = "如：呼和浩特")
+                    Spacer(Modifier.height(4.dp))
+                    DButton(
+                        if (resolving) "解析中…" else "按地址定位",
+                        {
+                            scope.launch {
+                                resolving = true
+                                val geo = store.resolveAddress(address, city)
+                                resolving = false
+                                if (geo != null) {
+                                    result = geo
+                                    // 解析出来的坐标直接当成地图中心，缩放拉近到街道级
+                                    centerLat = geo.latitude
+                                    centerLng = geo.longitude
+                                    zoom = 16
+                                    touched = true
+                                    store.pickedLatitude = geo.latitude
+                                    store.pickedLongitude = geo.longitude
+                                    if (geo.formattedAddress.isNotBlank()) {
+                                        address = geo.formattedAddress
+                                        store.pickedAddress = geo.formattedAddress
+                                    }
+                                }
+                            }
+                        },
+                        style = DButtonStyle.Outline,
+                        height = 42.dp,
+                        enabled = !resolving,
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                DButton(
+                    "确认并回填",
+                    {
+                        if (store.pickedAddress.isBlank()) store.pickedAddress = address
+                        store.pickedLatitude = centerLat
+                        store.pickedLongitude = centerLng
+                        nav.back()
+                    },
+                    // 没动过地图就不给确认：默认视野不是用户选的位置，
+                    // 直接确认会把呼和浩特市中心写进机构资料
+                    enabled = touched,
+                )
+                if (!touched) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "拖动地图或按地址定位后才能确认",
+                        fontSize = 10.5.sp,
+                        color = DColor.Ink3,
+                    )
+                }
             }
         }
     }
@@ -1826,7 +1946,7 @@ fun D29SitterIncome(nav: DNav) {
     DFrame(nav = nav, title = null, backable = false) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
-                .padding(horizontal = 18.dp, vertical = 22.dp),
+                .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text(
                 "近 30 天净收入" + (earnings?.period?.let { " · ${it.from} ~ ${it.to}" } ?: ""),
@@ -2011,7 +2131,7 @@ fun D30SitterCoupons(nav: DNav) {
                 visible.isEmpty() -> DEmpty(
                     if (tab == 0) "还没有发布优惠券" else "这个分类下没有券",
                 )
-                else -> visible.forEach { coupon ->
+                else -> DGrid(visible, minItemWidth = 360.dp) { coupon ->
                     B_OrderCard(
                         title = coupon.title.ifBlank { coupon.code },
                         tag = if (coupon.enabled) "进行中" else "已停用",
@@ -2111,7 +2231,7 @@ private fun B_OrderCard(
 @Composable
 private fun B_MessageBubble(text: String, time: String, fromMe: Boolean) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
+        Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter, vertical = 5.dp),
         horizontalArrangement = if (fromMe) Arrangement.End else Arrangement.Start,
     ) {
         Column(
