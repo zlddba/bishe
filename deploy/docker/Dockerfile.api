@@ -9,6 +9,8 @@ WORKDIR /app
 COPY artifacts/patnest-api /app/patnest-api
 COPY artifacts/patnest-migrate /app/patnest-migrate
 COPY db/migrations /app/migrations
+# 全新库的基线结构：patnest-migrate 检测到 users 表不存在时会执行它。
+COPY db/init.sql /app/init.sql
 
 RUN chmod +x /app/patnest-api /app/patnest-migrate \
     && chown -R patnest:patnest /app

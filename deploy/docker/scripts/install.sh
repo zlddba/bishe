@@ -55,13 +55,115 @@ fi
 "$ENGINE" exec patnest-nginx wget -qO- http://api-blue:9201/health || true
 echo
 
-if [[ -f scripts/update-agent.sh ]]; then
-  if [[ -f data/updates/agent.pid ]] && kill -0 "$(cat data/updates/agent.pid 2>/dev/null)" 2>/dev/null; then
-    echo "[install] 更新代理已在运行"
+# ---- 更新代理 ----------------------------------------------------------
+# AGENT_MODE:
+#   container（默认）  容器化，compose 的 agent profile。挂 docker.sock，不碰宿主机进程
+#   host              宿主机 nohup 脚本（仅在明确要求时使用）
+#   none               不启动（系统更新页会显示离线，仅做文件上传与扫描）
+# 两种模式互斥：切换时先停掉另一侧，避免两个消费者抢同一个 queue。
+# 默认值刻意选 container：宿主机进程会随 shell/重启消失，容器有 restart 策略兜底。
+
+set_env() {
+  local key="$1" value="$2"
+  if grep -q "^${key}=" .env 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${value}|" .env
   else
-    nohup bash scripts/update-agent.sh >> data/updates/agent.log 2>&1 &
-    echo "[install] 更新代理已启动（PID $!）"
+    printf '%s=%s\n' "$key" "$value" >> .env
   fi
-fi
+}
+
+stop_host_agent() {
+  local pid_file="data/updates/agent.pid" old=""
+  if [[ -f "$pid_file" ]]; then
+    old="$(cat "$pid_file" 2>/dev/null || true)"
+    if [[ -n "$old" && -r "/proc/$old/cmdline" ]] &&
+       tr '\0' ' ' < "/proc/$old/cmdline" | grep -q "update-agent"; then
+      kill "$old" 2>/dev/null || true
+      sleep 1
+    fi
+    rm -f "$pid_file"
+  fi
+  rmdir data/updates/agent.lock 2>/dev/null || true
+}
+
+stop_container_agent() {
+  "${COMPOSE[@]}" --profile agent stop update-agent >/dev/null 2>&1 || true
+}
+
+start_host_agent() {
+  if [[ ! -f scripts/update-agent.sh ]]; then
+    echo "[install] 缺少 scripts/update-agent.sh，跳过更新代理" >&2
+    return 0
+  fi
+  if [[ -f data/updates/agent.pid ]] &&
+     kill -0 "$(cat data/updates/agent.pid 2>/dev/null)" 2>/dev/null; then
+    echo "[install] 宿主机更新代理已在运行"
+    return 0
+  fi
+  nohup bash scripts/update-agent.sh >> data/updates/agent.log 2>&1 &
+  echo "[install] 宿主机更新代理已启动（PID $!）"
+}
+
+start_container_agent() {
+  local pkg_path
+  pkg_path="$(pwd -P)"
+  if [[ "$pkg_path" == *" "* ]]; then
+    echo "[install] 部署路径含空格（$pkg_path），compose 的 bind mount 解析不可靠，请换目录" >&2
+    return 1
+  fi
+  if [[ "$ENGINE" != "docker" ]]; then
+    echo "[install] 警告：容器化代理内部用 docker CLI，当前宿主机引擎是 $ENGINE；需要兼容的 docker.sock" >&2
+  fi
+
+  # 容器内固定挂在 /pkg，宿主机路径写进 .env 供 compose 做 bind mount；
+  # 代理启动后会自己 docker inspect 反查 daemon 侧真实路径，不再要求同路径挂载。
+  set_env PACKAGE_HOST_PATH "$pkg_path"
+
+  echo "[install] 先停止可能存在的宿主机更新代理"
+  stop_host_agent
+
+  echo "[install] 打包更新代理镜像 patnest-update-agent:$VERSION"
+  APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile agent build --pull update-agent || return 1
+
+  echo "[install] 启动容器化更新代理"
+  APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile agent up -d update-agent || return 1
+
+  # 容器起得来不代表代理活着（挂载缺失会在 entrypoint 直接退出），这里做一次存活确认。
+  sleep 2
+  if ! "$ENGINE" ps --format '{{.Names}}\t{{.Status}}' | grep -q "^patnest-update-agent"; then
+    echo "[install] 容器未保持运行，最近日志：" >&2
+    "$ENGINE" logs --tail 40 patnest-update-agent >&2 || true
+    return 1
+  fi
+  echo "[install] 容器化更新代理已启动（$ENGINE logs -f patnest-update-agent）"
+}
+
+AGENT_MODE="${AGENT_MODE:-$(env_value AGENT_MODE)}"
+AGENT_MODE="${AGENT_MODE:-container}"
+
+case "$AGENT_MODE" in
+  container|auto)
+    if ! start_container_agent; then
+      stop_container_agent
+      echo "[install] 容器化更新代理启动失败。请按上面的日志修正后重跑：" >&2
+      echo "[install]   bash scripts/install.sh" >&2
+      echo "[install] 确实无法挂 docker.sock 时，可显式使用 AGENT_MODE=host（会回到宿主机进程）。" >&2
+      exit 1
+    fi
+    ;;
+  host)
+    stop_container_agent
+    start_host_agent
+    ;;
+  none)
+    stop_container_agent
+    stop_host_agent
+    echo "[install] AGENT_MODE=none：未启动更新代理，系统更新页将显示离线"
+    ;;
+  *)
+    echo "[install] 未知 AGENT_MODE='$AGENT_MODE'（container/host/none）" >&2
+    exit 1
+    ;;
+esac
 
 echo "[install] 完成，访问 http://<服务器IP>:${PUBLIC_PORT}/"

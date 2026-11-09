@@ -115,7 +115,10 @@ fi
 
 log "Assembling container package ..."
 cp "$TPL_DIR/compose.yaml" "$TPL_DIR/.env.example" "$TPL_DIR/.dockerignore" "$TPL_DIR/README.md" "$PKG_DIR/"
-cp "$TPL_DIR/Dockerfile.api" "$TPL_DIR/Dockerfile.web" "$PKG_DIR/docker/"
+cp "$TPL_DIR/Dockerfile.api" "$TPL_DIR/Dockerfile.web" "$TPL_DIR/Dockerfile.agent" "$PKG_DIR/docker/"
+# 入口脚本必须落在包根：Dockerfile.agent 里的 COPY 路径相对构建上下文（部署包根目录），
+# 放进 docker/ 子目录会导致 build 时 "agent-entrypoint.sh: not found"。
+cp "$TPL_DIR/agent-entrypoint.sh" "$PKG_DIR/"
 cp "$TPL_DIR/nginx/default.conf" "$PKG_DIR/docker/nginx/"
 cp "$TPL_DIR/nginx/upstream.conf" "$PKG_DIR/nginx/"
 cp "$TPL_DIR"/scripts/*.sh "$PKG_DIR/scripts/"

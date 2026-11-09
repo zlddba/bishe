@@ -154,6 +154,9 @@ Copy-Item (Join-Path $TplDir ".dockerignore") $PkgDir -Force
 Copy-Item (Join-Path $TplDir "README.md") $PkgDir -Force
 Copy-Item (Join-Path $TplDir "Dockerfile.api") (Join-Path $PkgDir "docker") -Force
 Copy-Item (Join-Path $TplDir "Dockerfile.web") (Join-Path $PkgDir "docker") -Force
+Copy-Item (Join-Path $TplDir "Dockerfile.agent") (Join-Path $PkgDir "docker") -Force
+# 入口脚本必须落在包根：Dockerfile.agent 的 COPY 路径相对构建上下文（部署包根目录）。
+Copy-Item (Join-Path $TplDir "agent-entrypoint.sh") $PkgDir -Force
 Copy-Item (Join-Path $TplDir "nginx\default.conf") (Join-Path $PkgDir "docker\nginx") -Force
 Copy-Item (Join-Path $TplDir "nginx\upstream.conf") (Join-Path $PkgDir "nginx") -Force
 Copy-Item (Join-Path $TplDir "scripts\*.sh") (Join-Path $PkgDir "scripts") -Force

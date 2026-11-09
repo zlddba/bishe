@@ -71,32 +71,84 @@ foreach ($dir in @("tmp", "inbox", "manual", "queue", "processing", "failed", "s
     New-Item -ItemType Directory -Force -Path (Join-Path $updates $dir) | Out-Null
 }
 
-$agent = Join-Path $root "scripts\update-agent.ps1"
-if (Test-Path $agent) {
+# ---- 更新代理（容器化）--------------------------------------------------
+# 代理跑在容器里：挂 docker.sock + 把部署包挂到 /pkg，容器内的 entrypoint 会反查
+# daemon 侧真实路径，再以它作为 compose 项目目录，所以 Windows 不再需要同路径挂载。
+# 不在宿主机上启动任何常驻进程，也不再写开机启动快捷方式。
+$agentMode = Get-EnvValue "AGENT_MODE" "container"
+
+function Set-EnvValue {
+    param([string]$Key, [string]$Value)
+    $lines = @()
+    if (Test-Path ".env") { $lines = @(Get-Content ".env" -Encoding UTF8) }
+    $found = $false
+    $out = foreach ($line in $lines) {
+        if ($line -match "^\s*$([regex]::Escape($Key))\s*=") {
+            $found = $true
+            "$Key=$Value"
+        } else {
+            $line
+        }
+    }
+    if (-not $found) { $out = @($out) + "$Key=$Value" }
+    Set-Content -Path ".env" -Value $out -Encoding UTF8
+}
+
+function Stop-HostAgent {
+    # 清理上一版遗留在宿主机上的 PowerShell 代理，避免两个消费者抢同一个 queue。
     $pidFile = Join-Path $updates "agent.pid"
-    $running = $false
     if (Test-Path $pidFile) {
         $agentPid = Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($agentPid -and (Get-Process -Id $agentPid -ErrorAction SilentlyContinue)) { $running = $true }
+        if ($agentPid) { Stop-Process -Id $agentPid -ErrorAction SilentlyContinue }
+        Remove-Item $pidFile -ErrorAction SilentlyContinue
     }
-    if (-not $running) {
-        Start-Process -FilePath "powershell.exe" `
-            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$agent`"") `
-            -WindowStyle Hidden
-        Write-Host "[install] Update agent started in background." -ForegroundColor Cyan
+    $startup = [Environment]::GetFolderPath("Startup")
+    if ($startup) {
+        Remove-Item (Join-Path $startup "PatNestUpdateAgent.lnk") -ErrorAction SilentlyContinue
     }
-    if (-not $NoAgentAutostart) {
-        $startup = [Environment]::GetFolderPath("Startup")
-        if ($startup) {
-            $shortcut = Join-Path $startup "PatNestUpdateAgent.lnk"
-            $shell = New-Object -ComObject WScript.Shell
-            $link = $shell.CreateShortcut($shortcut)
-            $link.TargetPath = "powershell.exe"
-            $link.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$agent`""
-            $link.WorkingDirectory = $root
-            $link.Save()
-            Write-Host "[install] Update agent autostart: $shortcut" -ForegroundColor Cyan
+}
+
+switch ($agentMode) {
+    "none" {
+        Invoke-Compose @("--profile", "agent", "stop", "update-agent") -AllowFail
+        Stop-HostAgent
+        Write-Host "[install] AGENT_MODE=none: update agent not started." -ForegroundColor Yellow
+    }
+    "host" {
+        Invoke-Compose @("--profile", "agent", "stop", "update-agent") -AllowFail
+        $agent = Join-Path $root "scripts\update-agent.ps1"
+        if (Test-Path $agent) {
+            Start-Process -FilePath "powershell.exe" `
+                -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$agent`"") `
+                -WindowStyle Hidden
+            Write-Host "[install] Update agent started as host process." -ForegroundColor Yellow
         }
+    }
+    default {
+        # Windows 路径写进 .env 时统一用正斜杠，compose 才能正确拆出容器内目标路径。
+        $hostPath = ($root -replace '\\', '/')
+        Set-EnvValue "PACKAGE_HOST_PATH" $hostPath
+        Stop-HostAgent
+        Invoke-Compose @("--profile", "agent", "stop", "update-agent") -AllowFail
+
+        Write-Host "[install] Building update agent image" -ForegroundColor Cyan
+        Invoke-Compose @("--profile", "agent", "build", "--pull", "update-agent")
+
+        Write-Host "[install] Starting update agent container" -ForegroundColor Cyan
+        Invoke-Compose @("--profile", "agent", "up", "-d", "update-agent")
+
+        Start-Sleep -Seconds 2
+        $psOut = Invoke-NativeCommand -Command $script:Engine -Arguments @(
+            "ps", "--filter", "name=patnest-update-agent", "--format", "{{.Names}}"
+        ) -Quiet -AllowFail
+        $running = (@($psOut.Output | ForEach-Object { [string]$_ }) -join "`n")
+        if ($running -notmatch "patnest-update-agent") {
+            Invoke-NativeCommand -Command $script:Engine -Arguments @(
+                "logs", "--tail", "40", "patnest-update-agent"
+            ) -AllowFail | Out-Null
+            throw "Update agent container did not stay up. See logs above."
+        }
+        Write-Host "[install] Update agent container is running." -ForegroundColor Cyan
     }
 }
 

@@ -27,14 +27,19 @@ biyezuopin/
 ```powershell
 cd server/patnestServer
 copy .env.example .env      # 填数据库、MinIO、JWT_SECRET、高德 Key
-go run ./cmd/migrate -dir serverdb/migrations           # 应用迁移
+psql -U postgres -d patnest_db -f serverdb/init.sql   # 全新库：一次建好全部结构 + 种子数据
+go run ./cmd/migrate -dir serverdb/migrations           # 幂等确认（init.sql 已预写 0001 记录）
 go run ./cmd/migrate -dir serverdb/migrations -status   # 查看已应用版本
 go run ./cmd/api                                        # 默认监听 APP_PORT=9200
 ```
 
 直接依赖只有 Gin、pgx、jwt/v5、minio-go、godotenv、x/crypto 等几项。Redis 客户端（`internal/cache`）是手写的精简 RESP 实现，只覆盖本项目用到的命令，没有为它引入第三方库。
 
-入口分三个：`cmd/api` 常驻服务、`cmd/migrate` 在线迁移、`cmd/dbprobe` 连通性排查。迁移脚本在 `serverdb/migrations`，按 `00NN_名字.sql` 顺序执行，**已经上线的迁移不再改内容，只往后追加**。
+入口分三个：`cmd/api` 常驻服务、`cmd/migrate` 在线迁移、`cmd/dbprobe` 连通性排查。
+`serverdb/init.sql` 是唯一全量基线（已合并原 `0001`~`0021` 的净效果），新库执行它即可；
+`serverdb/migrations/` 主目录只留 `0001_baseline.sql` 占位，历史脚本在 `migrations/archive/`。
+后续结构变更从 `0022` 起按 `00NN_名字.sql` 往后追加，并同步更新 `init.sql`；
+**已归档脚本和 `0001` 的内容一律不再改动**（后者校验和被老库依赖）。
 
 ### 管理后台 webadmin
 

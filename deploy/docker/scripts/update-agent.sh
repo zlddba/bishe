@@ -19,6 +19,14 @@ POLL_SECONDS="${POLL_SECONDS:-3}"
 
 mkdir -p "$UPDATES" "$QUEUE" "$PROCESSING" "$FAILED" "$STATUS_DIR" "$LOGS" "$BACKUPS"
 
+# 容器化运行时：卷里残留的 agent.pid / agent.lock 属于上一代容器进程。
+# 容器内 PID 会复用（常为 1），直接沿用会误判「已在运行」而静默退出，
+# 表现为「容器 Up 但心跳不更新」。由 entrypoint 设置 PATNEST_AGENT_CONTAINER=1。
+if [[ "${PATNEST_AGENT_CONTAINER:-0}" == "1" ]]; then
+  rm -f "$PID_FILE"
+  rm -rf "$UPDATES/agent.lock"
+fi
+
 # mkdir is atomic and works without flock on minimal installations.
 if [[ -d "$UPDATES/agent.lock" ]]; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"

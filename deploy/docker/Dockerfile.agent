@@ -1,0 +1,26 @@
+# 更新代理容器：只提供 docker CLI + bash 运行时，脚本与数据全部来自挂载的部署包。
+#
+# 挂载约定：部署包挂到容器内固定路径 /pkg（不再要求与宿主机同路径）。
+# entrypoint 通过 docker inspect 反查该挂载在 daemon 侧的真实路径，
+# 再用它作为 compose 的 --project-directory，让 build context / bind mount
+# 在 daemon 眼里始终指向宿主机上的真实目录（Windows 的 Docker Desktop 也能用）。
+FROM alpine:3.20
+
+RUN apk add --no-cache \
+        bash \
+        coreutils \
+        findutils \
+        docker-cli \
+        ca-certificates \
+        tzdata \
+    && (apk add --no-cache docker-cli-compose || apk add --no-cache docker-compose)
+
+# 构建上下文是部署包根目录（compose 的 build.context: .），入口脚本就在根下。
+COPY agent-entrypoint.sh /usr/local/bin/agent-entrypoint.sh
+RUN chmod +x /usr/local/bin/agent-entrypoint.sh
+
+ENV TZ=Asia/Shanghai \
+    PATNEST_AGENT_CONTAINER=1 \
+    PACKAGE_ROOT=/pkg
+
+ENTRYPOINT ["/usr/local/bin/agent-entrypoint.sh"]

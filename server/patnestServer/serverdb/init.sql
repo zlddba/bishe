@@ -1,18 +1,47 @@
-﻿-- ==================================================================
--- PatNest Database Init Script (PostgreSQL 18)
--- Run: psql -U <user> -d <database> -f init.sql
 -- ==================================================================
+-- PatNest Database Init Script (PostgreSQL 16+)
+-- 唯一基线：已合并原迁移 0001~0021 的全部「净效果」，新库只需执行本文件。
+-- Run: psql -v ON_ERROR_STOP=1 -U <user> -d <database> -f init.sql
+--
+-- 幂等性：本脚本可重复执行 —— 建表/索引/视图/函数用 IF NOT EXISTS / OR REPLACE，
+--   触发器先 DROP IF EXISTS 再建，种子数据按唯一键判重。重跑不会报错、不会产生重复行。
+-- 编码：文件为 UTF-8（无 BOM）。下面的 SET client_encoding 必须在任何中文注释之前执行，
+--   否则 Windows 上 client_encoding=GBK 的 psql 会在读到中文时直接报 invalid byte sequence。
+--
+-- 合并口径（2026-11-09）：
+--   * 35 张在用的表全部内联定义；列、约束、索引、函数、触发器、视图均为最终状态。
+--   * 不再包含 live_rooms / live_viewers / live_messages（0020 建、0021 删，净效果为零）。
+--   * 不再包含 sitters.live_banned_at / live_ban_reason，也不含 lives.manage 权限行。
+--   * 不含只针对老库的一次性数据修复（0015 的容量账目重算、0016 的 scope 回填、
+--     0018 的脏值检查、0019 的约束替换）——新库没有历史数据，这些语句无对象可作用。
+--   * 补上了原本缺失的 fn_sync_capacity_rows 定义（旧文件创建了引用它的触发器却没定义函数，
+--     单独执行会在 CREATE TRIGGER 处失败）。
+--   * migrations/ 目录只保留 0001_baseline.sql（内容不得改动，老库依赖它的校验和）；
+--     0002~0021 已归档到 migrations/archive/，仅供追溯，不再被 cmd/migrate 加载。
+-- ==================================================================
+
+SET client_encoding = 'UTF8';
 
 BEGIN;
 
 SET timezone = 'Asia/Shanghai';
-SET client_encoding = 'UTF8';
 
 -- ==================================================================
 -- 1. Extensions
 -- ==================================================================
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- 托管型 PostgreSQL（云数据库）常不给普通账号建扩展的权限。这里捕获异常降级：
+-- pg_trgm 缺失只会跳过下面 3 个模糊搜索索引，其余对象照常创建，脚本不再整块回滚。
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pg_trgm 不可用（%），跳过模糊搜索索引', SQLERRM;
+END $$;
+
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'uuid-ossp 不可用（%），当前无对象依赖它，可忽略', SQLERRM;
+END $$;
 
 -- ==================================================================
 -- 2. Custom Types (ENUM)
@@ -88,11 +117,21 @@ CREATE TABLE IF NOT EXISTS users (
     status          SMALLINT        NOT NULL DEFAULT 1,
     login_fail_count SMALLINT       NOT NULL DEFAULT 0,
     locked_until    TIMESTAMPTZ,
+    -- 0003 / 0006 / 0013 净效果：管理员会话、积分、联系信息、注销冷静期、令牌吊销点
+    session_key     VARCHAR(64),
+    points          INT             NOT NULL DEFAULT 0 CHECK (points >= 0),
+    address         VARCHAR(255),
+    contact_name    VARCHAR(64),
+    contact_phone   VARCHAR(20),
+    cancel_mode         VARCHAR(16),
+    cancel_requested_at TIMESTAMPTZ,
+    cancel_deadline     TIMESTAMPTZ,
+    token_invalid_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ,
-    CONSTRAINT uq_users_username UNIQUE (username),
-    CONSTRAINT uq_users_phone    UNIQUE (phone)
+    -- 手机号全表唯一（含软删行）；用户名改由部分唯一索引约束，仅未删除行唯一（0005）
+    CONSTRAINT uq_users_phone UNIQUE (phone)
 );
 
 COMMENT ON TABLE users IS 'Platform users: pet owners, sitters, admins';
@@ -114,6 +153,13 @@ CREATE TABLE IF NOT EXISTS pets (
     photo_urls      TEXT[]          DEFAULT '{}',
     avatar_url      TEXT,
     notes           TEXT,
+    -- 0003 净效果：免疫证明上传与后台核验
+    vaccine_urls        TEXT[]      DEFAULT '{}',
+    vaccine_status      VARCHAR(16) NOT NULL DEFAULT 'missing'
+                        CHECK (vaccine_status IN ('missing','pending','verified','rejected')),
+    vaccine_note        VARCHAR(255),
+    vaccine_verified_by BIGINT      REFERENCES users(id) ON DELETE SET NULL,
+    vaccine_verified_at TIMESTAMPTZ,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ
@@ -182,6 +228,12 @@ CREATE TABLE IF NOT EXISTS orders (
     pet_count         SMALLINT        NOT NULL DEFAULT 1 CHECK (pet_count BETWEEN 1 AND 10),
     estimated_amount  NUMERIC(12,2)   NOT NULL DEFAULT 0,
     total_amount      NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    -- 0003 净效果：券 / 积分 / 加购的金额拆分与改期次数
+    coupon_id         BIGINT,
+    discount_amount   NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    points_used       INT             NOT NULL DEFAULT 0,
+    addon_amount      NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    rescheduled_count INT             NOT NULL DEFAULT 0,
     payment_status    payment_status  NOT NULL DEFAULT 'none',
     cancel_reason     VARCHAR(255),
     cancel_time       TIMESTAMPTZ,
@@ -255,7 +307,7 @@ COMMENT ON TABLE reviews IS 'One review per completed order';
 CREATE TABLE IF NOT EXISTS payments (
     id              BIGSERIAL       PRIMARY KEY,
     order_id        BIGINT          NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
-    amount          NUMERIC(12,2)   NOT NULL CHECK (amount >= 0), -- 允许 0：全额抵扣/免费订单
+    amount          NUMERIC(12,2)   NOT NULL CONSTRAINT payments_amount_check CHECK (amount >= 0), -- 允许 0：全额抵扣/免费订单（0010）
     method          pay_method      NOT NULL DEFAULT 'mock',
     transaction_id  VARCHAR(128),
     status          VARCHAR(20)     NOT NULL DEFAULT 'created' CHECK (status IN ('created','paid','failed','refunded')),
@@ -310,17 +362,306 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_refresh_token_hash ON refresh_tokens (token_hash);
 -- ==================================================================
+-- 3.13 ~ 3.32 原迁移 0002/0003/0004/0011/0012 建表语句的最终状态
+-- 依赖关系已排序：先被引用的表在前。全部定义放在函数/触发器之前，
+-- 否则 fn_restore_order_benefits 里的 coupons / user_coupons / points_ledger
+-- 会在 CREATE FUNCTION 的语法检查阶段报「表不存在」。
+-- ==================================================================
+
+-- 3.13 发布记录（0002）
+CREATE TABLE IF NOT EXISTS system_release (
+    id          BIGSERIAL    PRIMARY KEY,
+    app         VARCHAR(32)  NOT NULL,
+    version     VARCHAR(64)  NOT NULL,
+    commit_sha  VARCHAR(64)  DEFAULT '',
+    slot        VARCHAR(16)  DEFAULT '',
+    note        TEXT         DEFAULT '',
+    deployed_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_system_release_app_time ON system_release (app, deployed_at DESC);
+
+-- 3.14 优惠券模板（0003 + 0009 sitter_id + 0018 percent 范围）
+CREATE TABLE IF NOT EXISTS coupons (
+    id              BIGSERIAL       PRIMARY KEY,
+    code            VARCHAR(32)     NOT NULL,
+    sitter_id       BIGINT          REFERENCES sitters(id) ON DELETE CASCADE,
+    title           VARCHAR(128)    NOT NULL,
+    type            VARCHAR(16)     NOT NULL DEFAULT 'fixed' CHECK (type IN ('fixed','percent')),
+    value           NUMERIC(10,2)   NOT NULL CHECK (value > 0),
+    min_amount      NUMERIC(10,2)   NOT NULL DEFAULT 0 CHECK (min_amount >= 0),
+    total_qty       INT             NOT NULL DEFAULT 0 CHECK (total_qty >= 0),
+    claimed_qty     INT             NOT NULL DEFAULT 0 CHECK (claimed_qty >= 0),
+    used_qty        INT             NOT NULL DEFAULT 0 CHECK (used_qty >= 0),
+    per_user        INT             NOT NULL DEFAULT 1 CHECK (per_user >= 1),
+    starts_at       TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    ends_at         TIMESTAMPTZ,
+    enabled         BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    CONSTRAINT ck_coupons_percent_range
+        CHECK (type <> 'percent' OR (value > 0 AND value <= 100))
+);
+-- 0009 净效果：code 从全局唯一改为「同一发放主体内唯一」
+CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_platform_code ON coupons (code) WHERE sitter_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_coupons_sitter_code ON coupons (sitter_id, code);
+CREATE INDEX IF NOT EXISTS idx_coupons_sitter ON coupons (sitter_id, enabled) WHERE sitter_id IS NOT NULL;
+
+-- 3.15 用户持有的券（0003）
+CREATE TABLE IF NOT EXISTS user_coupons (
+    id              BIGSERIAL       PRIMARY KEY,
+    coupon_id       BIGINT          NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status          VARCHAR(16)     NOT NULL DEFAULT 'unused' CHECK (status IN ('unused','used','expired')),
+    order_id        BIGINT          REFERENCES orders(id) ON DELETE SET NULL,
+    claimed_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    used_at         TIMESTAMPTZ,
+    CONSTRAINT uq_user_coupon UNIQUE (coupon_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_coupons_user ON user_coupons (user_id, status);
+
+-- 3.16 积分流水（0003）
+CREATE TABLE IF NOT EXISTS points_ledger (
+    id              BIGSERIAL       PRIMARY KEY,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    change_amount   INT             NOT NULL,
+    balance         INT             NOT NULL,
+    reason          VARCHAR(64)     NOT NULL,
+    ref_type        VARCHAR(32),
+    ref_id          BIGINT,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_points_ledger_user ON points_ledger (user_id, created_at DESC);
+
+-- 3.17 收藏（0003）
+CREATE TABLE IF NOT EXISTS favorites (
+    id              BIGSERIAL       PRIMARY KEY,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    CONSTRAINT uq_favorite UNIQUE (user_id, sitter_id)
+);
+
+-- 3.18 节假日 / 旺季上浮规则（0003）
+CREATE TABLE IF NOT EXISTS sitter_price_rules (
+    id              BIGSERIAL       PRIMARY KEY,
+    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE CASCADE,
+    name            VARCHAR(64)     NOT NULL,
+    start_date      DATE            NOT NULL,
+    end_date        DATE            NOT NULL,
+    multiplier      NUMERIC(4,2)    NOT NULL DEFAULT 1.20 CHECK (multiplier BETWEEN 0.50 AND 5.00),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    CONSTRAINT chk_price_rule_dates CHECK (end_date >= start_date)
+);
+CREATE INDEX IF NOT EXISTS idx_price_rules_sitter ON sitter_price_rules (sitter_id, start_date);
+
+-- 3.19 加购服务与订单加购明细（0003）
+CREATE TABLE IF NOT EXISTS sitter_addons (
+    id              BIGSERIAL       PRIMARY KEY,
+    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE CASCADE,
+    name            VARCHAR(64)     NOT NULL,
+    price           NUMERIC(10,2)   NOT NULL CHECK (price >= 0),
+    unit            VARCHAR(16)     NOT NULL DEFAULT 'per_order',
+    enabled         BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS order_addons (
+    id              BIGSERIAL       PRIMARY KEY,
+    order_id        BIGINT          NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    addon_id        BIGINT          REFERENCES sitter_addons(id) ON DELETE SET NULL,
+    name            VARCHAR(64)     NOT NULL,
+    price           NUMERIC(10,2)   NOT NULL DEFAULT 0,
+    qty             INT             NOT NULL DEFAULT 1 CHECK (qty >= 1),
+    amount          NUMERIC(12,2)   NOT NULL DEFAULT 0
+);
+
+-- 3.20 动态点赞与留言（0003）
+CREATE TABLE IF NOT EXISTS dynamic_likes (
+    id              BIGSERIAL       PRIMARY KEY,
+    dynamic_id      BIGINT          NOT NULL REFERENCES dynamics(id) ON DELETE CASCADE,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    CONSTRAINT uq_dynamic_like UNIQUE (dynamic_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS dynamic_comments (
+    id              BIGSERIAL       PRIMARY KEY,
+    dynamic_id      BIGINT          NOT NULL REFERENCES dynamics(id) ON DELETE CASCADE,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content         VARCHAR(500)    NOT NULL,
+    status          VARCHAR(16)     NOT NULL DEFAULT 'visible' CHECK (status IN ('visible','hidden')),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_dynamic_comments ON dynamic_comments (dynamic_id, created_at);
+
+-- 3.21 追评（0003）
+CREATE TABLE IF NOT EXISTS review_followups (
+    id              BIGSERIAL       PRIMARY KEY,
+    review_id       BIGINT          NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    owner_id        BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content         VARCHAR(1000)   NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+
+-- 3.22 退款申请（0003）
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id              BIGSERIAL       PRIMARY KEY,
+    order_id        BIGINT          NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    owner_id        BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount          NUMERIC(12,2)   NOT NULL CHECK (amount > 0),
+    reason          VARCHAR(500)    NOT NULL,
+    status          VARCHAR(16)     NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','approved','rejected','cancelled')),
+    admin_id        BIGINT          REFERENCES users(id) ON DELETE SET NULL,
+    admin_note      VARCHAR(500),
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    handled_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_refund_requests_status ON refund_requests (status, created_at DESC);
+
+-- 3.23 售后工单与会话（0003）
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id              BIGSERIAL       PRIMARY KEY,
+    ticket_no       VARCHAR(32)     NOT NULL UNIQUE,
+    user_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category        VARCHAR(32)     NOT NULL DEFAULT 'other',
+    title           VARCHAR(128)    NOT NULL,
+    content         TEXT            NOT NULL,
+    status          VARCHAR(16)     NOT NULL DEFAULT 'open'
+                    CHECK (status IN ('open','processing','closed')),
+    priority        VARCHAR(16)     NOT NULL DEFAULT 'normal'
+                    CHECK (priority IN ('low','normal','high')),
+    assigned_admin_id BIGINT        REFERENCES users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ticket_messages (
+    id              BIGSERIAL       PRIMARY KEY,
+    ticket_id       BIGINT          NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    sender_id       BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_role     VARCHAR(16)     NOT NULL,
+    content         TEXT            NOT NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_messages ON ticket_messages (ticket_id, created_at);
+
+-- 3.24 机构结算（0003）
+CREATE TABLE IF NOT EXISTS sitter_settlements (
+    id              BIGSERIAL       PRIMARY KEY,
+    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE CASCADE,
+    period_start    DATE            NOT NULL,
+    period_end      DATE            NOT NULL,
+    order_count     INT             NOT NULL DEFAULT 0,
+    gross_amount    NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    net_amount      NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    status          VARCHAR(16)     NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','paid','rejected')),
+    applied_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    paid_at         TIMESTAMPTZ,
+    admin_id        BIGINT          REFERENCES users(id) ON DELETE SET NULL,
+    note            VARCHAR(500),
+    CONSTRAINT chk_settlement_dates CHECK (period_end >= period_start)
+);
+CREATE INDEX IF NOT EXISTS idx_settlements_status ON sitter_settlements (status, applied_at DESC);
+
+-- 3.25 通知模板（0003）
+CREATE TABLE IF NOT EXISTS notification_templates (
+    id              BIGSERIAL       PRIMARY KEY,
+    code            VARCHAR(64)     NOT NULL UNIQUE,
+    name            VARCHAR(64)     NOT NULL,
+    title           VARCHAR(128)    NOT NULL,
+    content         TEXT            NOT NULL,
+    channel         VARCHAR(16)     NOT NULL DEFAULT 'in_app'
+                    CHECK (channel IN ('in_app','sms','wechat')),
+    enabled         BOOLEAN         NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+
+-- 3.26 后台权限点（0003；不含已下线的 lives.manage）
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role            VARCHAR(16)     NOT NULL,
+    permission      VARCHAR(64)     NOT NULL,
+    allowed         BOOLEAN         NOT NULL DEFAULT FALSE,
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    PRIMARY KEY (role, permission)
+);
+
+-- 3.27 推送任务（0004）
+CREATE TABLE IF NOT EXISTS notification_push_tasks (
+    id              BIGSERIAL       PRIMARY KEY,
+    title           VARCHAR(128)    NOT NULL,
+    body            TEXT            NOT NULL,
+    target          VARCHAR(16)     NOT NULL DEFAULT 'all'
+                    CHECK (target IN ('all','owner','sitter')),
+    channel         VARCHAR(16)     NOT NULL DEFAULT 'in_app'
+                    CHECK (channel IN ('in_app','sms','wechat')),
+    status          VARCHAR(16)     NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','scheduled','sending','sent','cancelled','failed')),
+    scheduled_at    TIMESTAMPTZ,
+    sent_at         TIMESTAMPTZ,
+    sent_count      INT             NOT NULL DEFAULT 0,
+    error_message   VARCHAR(500),
+    creator_id      BIGINT          REFERENCES users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_push_tasks_due ON notification_push_tasks (status, scheduled_at);
+
+-- 3.28 地理编码缓存（0011）
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    cache_key         VARCHAR(64)    PRIMARY KEY,
+    city              VARCHAR(64)    NOT NULL DEFAULT '',
+    address           VARCHAR(512)   NOT NULL,
+    latitude          DOUBLE PRECISION NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+    longitude         DOUBLE PRECISION NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+    formatted_address VARCHAR(512)   NOT NULL DEFAULT '',
+    resolved_city     VARCHAR(64)    NOT NULL DEFAULT '',
+    adcode            VARCHAR(16)    NOT NULL DEFAULT '',
+    district          VARCHAR(64)    NOT NULL DEFAULT '',
+    level             VARCHAR(64)    NOT NULL DEFAULT '',
+    hit_count         INT            NOT NULL DEFAULT 1 CHECK (hit_count >= 1),
+    created_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ    NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_geocode_cache_updated ON geocode_cache (updated_at);
+
+-- 3.29 一次性地图选点会话（0012）
+CREATE TABLE IF NOT EXISTS geo_pick_sessions (
+    token_hash    VARCHAR(64)    PRIMARY KEY,
+    user_id       BIGINT         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    initial_lat   DOUBLE PRECISION NOT NULL DEFAULT 0,
+    initial_lng   DOUBLE PRECISION NOT NULL DEFAULT 0,
+    place_name    VARCHAR(128)   NOT NULL DEFAULT '',
+    latitude      DOUBLE PRECISION,
+    longitude     DOUBLE PRECISION,
+    address       VARCHAR(512)   NOT NULL DEFAULT '',
+    picked_at     TIMESTAMPTZ,
+    expires_at    TIMESTAMPTZ    NOT NULL,
+    created_at    TIMESTAMPTZ    NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_geo_pick_sessions_expires ON geo_pick_sessions (expires_at);
+
+-- ==================================================================
 -- 4. Indexes
 -- ==================================================================
 
--- users
+-- users（0005：用户名仅未删除行唯一；0006：注销冷静期扫描）
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_username
+    ON users (username) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_users_role       ON users (role) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_users_created    ON users (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_cancel_due ON users (cancel_deadline)
+    WHERE cancel_deadline IS NOT NULL;
 
 -- pets
 CREATE INDEX IF NOT EXISTS idx_pets_owner       ON pets (owner_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_pets_species     ON pets (species) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_pets_name_trgm   ON pets USING gin (name gin_trgm_ops);
+-- 模糊搜索索引依赖 pg_trgm，扩展没装上时跳过（脚本开头会打 NOTICE）
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+        CREATE INDEX IF NOT EXISTS idx_pets_name_trgm ON pets USING gin (name gin_trgm_ops);
+    END IF;
+END $$;
 
 -- sitters
 CREATE INDEX IF NOT EXISTS idx_sitters_user     ON sitters (user_id) WHERE deleted_at IS NULL;
@@ -328,8 +669,12 @@ CREATE INDEX IF NOT EXISTS idx_sitters_status   ON sitters (status) WHERE delete
 CREATE INDEX IF NOT EXISTS idx_sitters_type     ON sitters (type) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sitters_score    ON sitters (avg_score DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_sitters_price    ON sitters (daily_price) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_sitters_name_trgm ON sitters USING gin (name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_sitters_addr_trgm ON sitters USING gin (address gin_trgm_ops);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+        CREATE INDEX IF NOT EXISTS idx_sitters_name_trgm ON sitters USING gin (name gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS idx_sitters_addr_trgm ON sitters USING gin (address gin_trgm_ops);
+    END IF;
+END $$;
 
 -- sitter_daily_capacity
 CREATE INDEX IF NOT EXISTS idx_capacity_sitter_date ON sitter_daily_capacity (sitter_id, cap_date);
@@ -607,31 +952,63 @@ $fn$;
 -- 6. Triggers
 -- ==================================================================
 
+-- 6.0 机构默认容量变化时同步未覆盖的日容量行（0015 净效果）
+-- 旧 init.sql 只在 6.2 创建了引用本函数的触发器，却漏了函数定义，
+-- 导致单独执行本文件在 CREATE TRIGGER 处失败。这里补齐。
+CREATE OR REPLACE FUNCTION fn_sync_capacity_rows()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+    IF NEW.capacity IS DISTINCT FROM OLD.capacity THEN
+        UPDATE sitter_daily_capacity
+           SET capacity = NEW.capacity, updated_at = now()
+         WHERE sitter_id = NEW.id
+           AND NOT is_override
+           AND capacity IS DISTINCT FROM NEW.capacity;
+    END IF;
+    RETURN NEW;
+END;
+$fn$;
+
 -- 6.1 updated_at triggers (auto-maintain timestamp on UPDATE)
+-- PostgreSQL 没有 CREATE TRIGGER IF NOT EXISTS，只能先删后建，否则重跑直接报错。
+DROP TRIGGER IF EXISTS trg_users_updated ON users;
 CREATE TRIGGER trg_users_updated     BEFORE UPDATE ON users     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_pets_updated ON pets;
 CREATE TRIGGER trg_pets_updated      BEFORE UPDATE ON pets      FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_sitters_updated ON sitters;
 CREATE TRIGGER trg_sitters_updated   BEFORE UPDATE ON sitters   FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_orders_updated ON orders;
 CREATE TRIGGER trg_orders_updated    BEFORE UPDATE ON orders    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_order_pet_updated ON order_pet;
 CREATE TRIGGER trg_order_pet_updated BEFORE UPDATE ON order_pet FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_dynamics_updated ON dynamics;
 CREATE TRIGGER trg_dynamics_updated  BEFORE UPDATE ON dynamics  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_reviews_updated ON reviews;
 CREATE TRIGGER trg_reviews_updated   BEFORE UPDATE ON reviews   FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_capacity_updated ON sitter_daily_capacity;
 CREATE TRIGGER trg_capacity_updated  BEFORE UPDATE ON sitter_daily_capacity FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
 -- 6.2 机构默认容量变化时同步未覆盖的日容量行
+DROP TRIGGER IF EXISTS trg_sitter_capacity_sync ON sitters;
 CREATE TRIGGER trg_sitter_capacity_sync
     AFTER UPDATE OF capacity ON sitters
     FOR EACH ROW
     EXECUTE FUNCTION fn_sync_capacity_rows();
 
 -- 6.3 Review score aggregation triggers
+DROP TRIGGER IF EXISTS trg_review_score_insert ON reviews;
 CREATE TRIGGER trg_review_score_insert
     AFTER INSERT ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
 
+DROP TRIGGER IF EXISTS trg_review_score_update ON reviews;
 CREATE TRIGGER trg_review_score_update
     AFTER UPDATE OF is_visible, overall_score ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
 
+DROP TRIGGER IF EXISTS trg_review_score_delete ON reviews;
 CREATE TRIGGER trg_review_score_delete
     AFTER DELETE ON reviews
     FOR EACH ROW EXECUTE FUNCTION fn_update_sitter_score();
@@ -720,6 +1097,7 @@ CREATE TRIGGER trg_order_deleted_release
     WHEN (OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL)
     EXECUTE FUNCTION fn_order_deleted();
 
+DROP TRIGGER IF EXISTS trg_order_cancel_release ON orders;
 CREATE TRIGGER trg_order_cancel_release
     AFTER UPDATE OF status ON orders
     FOR EACH ROW
@@ -821,53 +1199,100 @@ FROM sitters s
                    ON c.sitter_id = s.id AND c.cap_date = d.cap_date
 WHERE s.status = 'active' AND s.deleted_at IS NULL;
 -- ==================================================================
--- 8. Seed Data
+-- 8. 种子数据
+-- 全部按业务唯一键判重，且不再写死自增 id（旧写法假设 users 从 1 开始，重跑或
+-- 在已有数据的库上执行会插错外键、或直接撞唯一约束把整个事务打回滚）。
 -- ==================================================================
 
 -- 8.1 Admin account
 -- Password: Admin@123456 (bcrypt cost=10)
--- Replace the hash below with a real bcrypt hash before production use
-INSERT INTO users (username, password_hash, nickname, role, status) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'System Admin', 'admin', 1);
+-- 注意：这里的哈希必须与上面注释的明文一一对应。旧版本三个账号共用同一个
+-- 占位哈希，既无法登录也不对应任何真实密码，换成按明文生成的独立哈希。
+INSERT INTO users (username, password_hash, nickname, role, status)
+SELECT 'admin', '$2a$10$b.GIPaOYUtKJ6Xvv850/9Ou5XWW7qVaTarxQUgbh1kJwrfbRIOljW',
+       'System Admin', 'admin'::user_role, 1
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin' AND deleted_at IS NULL);
 
--- 8.2 Demo pet owner
--- Password: Owner@123456
-INSERT INTO users (username, password_hash, nickname, phone, role, status) VALUES
-('petowner01', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Zhang San', '13800001111', 'owner', 1);
+-- 8.2 Demo pet owner（Password: Owner@123456）
+INSERT INTO users (username, password_hash, nickname, phone, role, status)
+SELECT 'petowner01', '$2a$10$78MbN6hn1tOduusslUkW2uMwzNYeWDJLkqd02WEhcxdHWQGnOJ4Za',
+       'Zhang San', '13800001111', 'owner'::user_role, 1
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'petowner01' AND deleted_at IS NULL);
 
--- 8.3 Demo sitter
--- Password: Sitter@123456
-INSERT INTO users (username, password_hash, nickname, phone, role, status) VALUES
-('sitter01', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Li Si', '13800002222', 'sitter', 1);
+-- 8.3 Demo sitter（Password: Sitter@123456）
+INSERT INTO users (username, password_hash, nickname, phone, role, status)
+SELECT 'sitter01', '$2a$10$h9WMBMNRScIKEjhXw62EpO8es/c2/HxNpYwF1isxQhkc0PCYukDeS',
+       'Li Si', '13800002222', 'sitter'::user_role, 1
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'sitter01' AND deleted_at IS NULL);
 
--- 8.4 Demo sitter facilities
-INSERT INTO sitters (user_id, name, type, description, daily_price, visit_price, price_mode, capacity, address, latitude, longitude, status) VALUES
-(3, 'Anxin Pet Home', 'home', 'Warm home boarding with garden and indoor play area. 24h care.', 50.00, 30.00, 'per_day', 5, 'Beijing Chaoyang District XX Street No.8', 39.9042000, 116.4074000, 'active');
+-- 8.4 Demo sitter facilities：owner 通过用户名取，不依赖 id=3
+INSERT INTO sitters (user_id, name, type, description, daily_price, visit_price, price_mode, capacity, address, latitude, longitude, status)
+SELECT u.id, 'Anxin Pet Home', 'home'::sitter_type,
+       'Warm home boarding with garden and indoor play area. 24h care.',
+       50.00, 30.00, 'per_day'::price_mode, 5,
+       'Beijing Chaoyang District XX Street No.8', 39.9042000, 116.4074000, 'active'::sitter_status
+FROM users u
+WHERE u.username = 'sitter01'
+  AND NOT EXISTS (SELECT 1 FROM sitters s WHERE s.name = 'Anxin Pet Home' AND s.deleted_at IS NULL);
 
-INSERT INTO sitters (user_id, name, type, description, daily_price, visit_price, price_mode, capacity, address, latitude, longitude, status) VALUES
-(3, 'Happy Paws Shop', 'shop', 'Professional pet boarding shop with 24h video monitoring and vet on call.', 80.00, 0, 'per_day', 10, 'Beijing Haidian District YY Road No.15', 39.9590000, 116.2980000, 'active');
+INSERT INTO sitters (user_id, name, type, description, daily_price, visit_price, price_mode, capacity, address, latitude, longitude, status)
+SELECT u.id, 'Happy Paws Shop', 'shop'::sitter_type,
+       'Professional pet boarding shop with 24h video monitoring and vet on call.',
+       80.00, 0, 'per_day'::price_mode, 10,
+       'Beijing Haidian District YY Road No.15', 39.9590000, 116.2980000, 'active'::sitter_status
+FROM users u
+WHERE u.username = 'sitter01'
+  AND NOT EXISTS (SELECT 1 FROM sitters s WHERE s.name = 'Happy Paws Shop' AND s.deleted_at IS NULL);
 
 -- 8.5 Demo pets
-INSERT INTO pets (owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, notes) VALUES
-(2, 'Doudou', 'dog', 'Golden Retriever', 'large', 18, 28.5, TRUE, TRUE, 'Allergic to peanuts'),
-(2, 'Mimi', 'cat', 'British Shorthair', 'small', 24, 4.2, TRUE, FALSE, NULL);
+INSERT INTO pets (owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, notes)
+SELECT u.id, 'Doudou', 'dog'::pet_species, 'Golden Retriever', 'large'::pet_size,
+       18, 28.5, TRUE, TRUE, 'Allergic to peanuts'
+FROM users u
+WHERE u.username = 'petowner01'
+  AND NOT EXISTS (SELECT 1 FROM pets p WHERE p.owner_id = u.id AND p.name = 'Doudou' AND p.deleted_at IS NULL);
+
+INSERT INTO pets (owner_id, name, species, breed, body_size, age_month, weight_kg, vaccinated, sterilized, notes)
+SELECT u.id, 'Mimi', 'cat'::pet_species, 'British Shorthair', 'small'::pet_size,
+       24, 4.2, TRUE, FALSE, NULL
+FROM users u
+WHERE u.username = 'petowner01'
+  AND NOT EXISTS (SELECT 1 FROM pets p WHERE p.owner_id = u.id AND p.name = 'Mimi' AND p.deleted_at IS NULL);
 
 -- 8.6 Demo order (pending_pay)
-INSERT INTO orders (order_no, owner_id, sitter_id, status, start_date, end_date, total_days, pet_count, estimated_amount, total_amount, payment_status) VALUES
-('PATN-20261029-000001', 2, 1, 'pending_pay', '2026-11-01', '2026-11-04', 3, 1, 150.00, 150.00, 'none');
+INSERT INTO orders (order_no, owner_id, sitter_id, status, start_date, end_date, total_days, pet_count, estimated_amount, total_amount, payment_status)
+SELECT 'PATN-20261029-000001', u.id, s.id, 'pending_pay'::order_status,
+       DATE '2026-11-01', DATE '2026-11-04', 3, 1, 150.00, 150.00, 'none'::payment_status
+FROM users u, sitters s
+WHERE u.username = 'petowner01'
+  AND s.name = 'Anxin Pet Home' AND s.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.order_no = 'PATN-20261029-000001');
 
-INSERT INTO order_pet (order_id, pet_id, stay_date) VALUES
-(1, 1, '2026-11-01');
+INSERT INTO order_pet (order_id, pet_id, stay_date)
+SELECT o.id, p.id, DATE '2026-11-01'
+FROM orders o
+JOIN pets p ON p.owner_id = o.owner_id AND p.name = 'Doudou' AND p.deleted_at IS NULL
+WHERE o.order_no = 'PATN-20261029-000001'
+ON CONFLICT DO NOTHING;
 
 -- 8.7 Pre-fill capacity for demo dates
-INSERT INTO sitter_daily_capacity (sitter_id, cap_date, used, capacity) VALUES
-(1, '2026-11-01', 1, 5),
-(1, '2026-11-02', 1, 5),
-(1, '2026-11-03', 1, 5);
+INSERT INTO sitter_daily_capacity (sitter_id, cap_date, used, capacity)
+SELECT s.id, d.cap_date, 1, 5
+FROM sitters s
+CROSS JOIN (VALUES (DATE '2026-11-01'), (DATE '2026-11-02'), (DATE '2026-11-03')) AS d(cap_date)
+WHERE s.name = 'Anxin Pet Home' AND s.deleted_at IS NULL
+ON CONFLICT (sitter_id, cap_date) DO NOTHING;
 
 -- 8.8 Demo notification
-INSERT INTO notifications (user_id, type, scope, title, body, extra) VALUES
-(3, 'order_created', 'business', 'New Order Received', 'Order PATN-20261029-000001 from Zhang San, 1 pet, Nov 1-4.', '{"order_id": 1}');
+INSERT INTO notifications (user_id, type, scope, title, body, extra)
+SELECT u.id, 'order_created'::notification_type, 'business'::notification_scope,
+       'New Order Received',
+       'Order PATN-20261029-000001 from Zhang San, 1 pet, Nov 1-4.',
+       '{"order_id": 1}'::jsonb
+FROM users u
+WHERE u.username = 'sitter01'
+  AND NOT EXISTS (SELECT 1 FROM notifications n
+                   WHERE n.user_id = u.id AND n.title = 'New Order Received');
 
 -- ==================================================================
 -- 9. Permissions (uncomment and adjust for your app DB user)
@@ -901,7 +1326,10 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
     amount         NUMERIC(12,2) NOT NULL CHECK (amount > 0),
     balance_after  NUMERIC(12,2) NOT NULL,
     status         TEXT         NOT NULL DEFAULT 'success' CHECK (status IN ('pending','success','failed')),
-    channel        TEXT         NOT NULL DEFAULT 'mock' CHECK (channel IN ('mock','wechat','alipay','bank','admin')),
+    -- 0019 净效果：订单余额支付写 channel='balance'，原 CHECK 漏掉它会导致支付事务回滚
+    channel        TEXT         NOT NULL DEFAULT 'mock'
+                   CONSTRAINT ck_wallet_transactions_channel
+                   CHECK (channel IN ('balance','mock','wechat','alipay','bank','admin')),
     ref_type       TEXT,
     ref_id         BIGINT,
     transaction_id TEXT,
@@ -927,20 +1355,86 @@ CREATE INDEX IF NOT EXISTS idx_recharge_user ON recharge_orders (user_id, id DES
 -- 为已存在用户补齐钱包记录（新注册用户由 ensureWallet 在访问时自动创建）
 INSERT INTO wallets (user_id) SELECT id FROM users ON CONFLICT DO NOTHING;
 
+-- ==================================================================
+-- 10. 原迁移脚本里的初始化数据（净效果）
+-- ==================================================================
+
+-- 0002：发布记录初始行
+INSERT INTO system_release (app, version, commit_sha, slot, note)
+SELECT 'db', 'migrations-enabled', '', '', '启用增量迁移与发布记录'
+WHERE NOT EXISTS (SELECT 1 FROM system_release
+                   WHERE app = 'db' AND version = 'migrations-enabled');
+
+-- 0003：默认权限矩阵（不含已下线的 lives.manage）
+INSERT INTO role_permissions (role, permission, allowed) VALUES
+  ('admin','users.read',TRUE),('admin','users.write',TRUE),
+  ('admin','sitters.manage',TRUE),('admin','orders.manage',TRUE),
+  ('admin','refunds.approve',TRUE),('admin','pets.verify',TRUE),
+  ('admin','dynamics.moderate',TRUE),('admin','reviews.moderate',TRUE),
+  ('admin','coupons.manage',TRUE),('admin','notifications.manage',TRUE),
+  ('admin','settlements.manage',TRUE),('admin','tickets.handle',TRUE),
+  ('admin','system.settings',TRUE),('admin','audit.read',TRUE),
+  ('owner','pets.manage',TRUE),('owner','orders.create',TRUE),
+  ('owner','reviews.write',TRUE),('owner','favorites.manage',TRUE),
+  ('sitter','shop.manage',TRUE),('sitter','orders.fulfill',TRUE),
+  ('sitter','dynamics.publish',TRUE),('sitter','settlements.apply',TRUE)
+ON CONFLICT (role, permission) DO NOTHING;
+
+-- 0003：默认通知模板
+INSERT INTO notification_templates (code, name, title, content, channel) VALUES
+  ('order_created','新订单提醒','收到新预约 {{order_no}}','宠物主人 {{owner}} 提交了 {{start}} 至 {{end}} 的预约，请尽快确认。','in_app'),
+  ('order_accepted','预约已确认','预约 {{order_no}} 已确认','机构已确认您的预约，请按时送宠入住。','in_app'),
+  ('order_completed','寄养已结束','预约 {{order_no}} 已完成','寄养服务已结束，欢迎对本次服务做出评价。','in_app'),
+  ('refund_approved','退款已通过','订单 {{order_no}} 退款已处理','退款 {{amount}} 元已原路退回，请注意查收。','in_app'),
+  ('settlement_paid','结算已打款','{{period}} 结算已完成','本期结算金额 {{amount}} 元已打款。','in_app'),
+  ('announcement','平台公告','{{title}}','{{content}}','in_app')
+ON CONFLICT (code) DO NOTHING;
+
+-- ==================================================================
+-- 11. 迁移基线记录
+-- 结构与 cmd/migrate 的 createMigrationsTable 完全一致；预写 0001 记录，
+-- 让新库跑 `migrate -status` 时显示 0001 已应用，且重复执行不会报错。
+-- 注意：0001_baseline.sql 的内容与校验和必须保持不变，老库依赖它做校验和比对。
+-- ==================================================================
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version      VARCHAR(32)  PRIMARY KEY,
+    name         TEXT         NOT NULL,
+    checksum     VARCHAR(64)  NOT NULL,
+    applied_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    execution_ms INTEGER      NOT NULL DEFAULT 0
+);
+COMMENT ON TABLE schema_migrations IS '已应用的数据库增量迁移记录，由 cmd/migrate 维护';
+
+INSERT INTO schema_migrations (version, name, checksum, execution_ms)
+VALUES ('0001', '0001_baseline.sql',
+        '18b884e99a89993ed8a10f354ccf4c261451c56eda944bcf64d969753793f783', 0)
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
 
 -- ==================================================================
 -- PatNest database initialization complete.
--- Tables: users, pets, sitters, sitter_daily_capacity, orders,
---         order_pet, dynamics, reviews, payments, notifications,
---         audit_logs, refresh_tokens
--- Functions: fn_set_updated_at, fn_generate_order_no,
---            fn_calculate_order_cost, fn_update_sitter_score,
---            fn_reserve_capacity, fn_release_capacity,
---            fn_check_pet_available, fn_notify, fn_audit, fn_soft_delete
--- Triggers: updated_at auto-maintain, review score aggregation,
---           order cancel capacity release
--- Views: v_active_sitters, v_order_detail, v_pending_orders,
---        v_sitter_reviews, v_unread_notifications, v_order_pets,
---        v_sitter_availability
+-- 36 张表 = 35 张业务表 + 迁移记录表 schema_migrations：
+--   users, pets, sitters, sitter_daily_capacity, orders, order_pet,
+--   dynamics, reviews, payments, notifications, audit_logs, refresh_tokens,
+--   wallets, wallet_transactions, recharge_orders,
+--   system_release, coupons, user_coupons, points_ledger, favorites,
+--   sitter_price_rules, sitter_addons, order_addons, dynamic_likes,
+--   dynamic_comments, review_followups, refund_requests, support_tickets,
+--   ticket_messages, sitter_settlements, notification_templates,
+--   role_permissions, notification_push_tasks, geocode_cache, geo_pick_sessions,
+--   schema_migrations
+-- 函数：fn_set_updated_at, fn_generate_order_no, fn_calculate_order_cost,
+--   fn_update_sitter_score, fn_reserve_capacity, fn_release_capacity,
+--   fn_check_pet_available, fn_notify, fn_audit, fn_soft_delete,
+--   fn_restore_order_benefits, fn_order_status_changed, fn_order_deleted,
+--   fn_sync_capacity_rows
+-- 触发器：updated_at 自动维护、机构默认容量同步、评分聚合、
+--   订单取消/拒单释放容量并退回券积分、完成/评价归还夜间、软删释放容量
+-- 视图：v_active_sitters, v_order_detail, v_pending_orders,
+--   v_sitter_reviews, v_unread_notifications, v_order_pets, v_sitter_availability
+--
+-- 本脚本重复执行是安全的（对象幂等 + 种子判重），可以拿来修“脚本跑到一半失败”
+-- 留下的半成品库；但它只负责“新库基线”，不会给旧库补列 —— 旧库请走
+-- cmd/migrate 的增量迁移，或直接删库重建。
 -- ==================================================================

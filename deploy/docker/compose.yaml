@@ -91,7 +91,9 @@ services:
     image: patnest-api:${APP_VERSION:-1.0.0}
     env_file: .env
     entrypoint: ["/app/patnest-migrate"]
-    command: ["-dir", "/app/migrations"]
+    # -init：库结构为空时自动执行基线（建库 + 建表 + seed），
+    # 已存在的库直接跳过，只走增量迁移。
+    command: ["-dir", "/app/migrations", "-init", "/app/init.sql"]
     restart: "no"
 
   updates-init:
@@ -109,3 +111,36 @@ services:
         /updates/failed /updates/status /updates/staging /updates/logs /updates/backups
         && chmod -R a+rwX /updates
     restart: "no"
+
+  # 容器化的更新代理（AGENT_MODE=container，默认）。
+  #
+  # 安全提示：挂载 docker.sock 等于把宿主机容器引擎的控制权交给这个容器，
+  # 因为它要执行 `docker compose build/up` 来发布新版本。
+  #
+  # 路径说明：部署包挂到容器内固定路径 /pkg，不要求宿主机同路径。
+  # entrypoint 用 docker inspect 反查挂载源在 daemon 侧的真实路径，再以它作为
+  # compose 的项目目录，因此 Linux 与 Windows（Docker Desktop）表现一致。
+  # PACKAGE_HOST_PATH 是部署包在本机上的路径，install 脚本会自动写入 .env。
+  update-agent:
+    profiles: ["agent"]
+    image: patnest-update-agent:${APP_VERSION:-1.0.0}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+      pull: true
+    container_name: patnest-update-agent
+    environment:
+      PACKAGE_ROOT: /pkg
+      PACKAGE_HOST_ROOT: ${PACKAGE_HOST_ROOT:-}
+      POLL_SECONDS: ${POLL_SECONDS:-3}
+      PATNEST_AGENT_CONTAINER: "1"
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${PACKAGE_HOST_PATH:-.}:/pkg
+    working_dir: /pkg
+    # 不设 cap_drop：代理要覆盖 artifacts/ / web/dist/ / .env / nginx/upstream.conf，
+    # 去掉 CAP_DAC_OVERRIDE 后 root 会被普通文件权限挡住，发布必然失败。
+    # 而且挂载 docker.sock 已经是宿主机级权限，cap_drop 在这里给不了额外边界。
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
