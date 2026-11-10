@@ -199,6 +199,10 @@ func Login(c *gin.Context) {
 	resetLoginFail(user.ID)
 	cache.ClearLoginFailure(limitKey)
 
+	// 名下有在营机构但角色还挂在 owner 上的账号（后台直接建机构、历史数据），
+	// 登录就按机构身份发令牌，省得进机构端一片 403。
+	user.Role = middleware.EffectiveRole(user.ID, user.Role)
+
 	// 桌面端 / 手机端只允许普通用户（主人、机构）登录，管理员请使用后台管理端。
 	if req.Client == "app" && user.Role == "admin" {
 		Forbidden(c, "管理员账号请使用后台管理端登录")
@@ -326,7 +330,11 @@ func Refresh(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := middleware.GenerateAccessToken(claims.UserID, claims.Username, claims.Role, claims.SessionKey)
+	// 换发令牌时把角色换成数据库里的当前值：旧刷新令牌里的 role 是登录时的快照，
+	// 直接用会把"审核通过的机构还是 owner"这种过期角色一路续下去。
+	role := middleware.EffectiveRole(claims.UserID, claims.Role)
+
+	accessToken, err := middleware.GenerateAccessToken(claims.UserID, claims.Username, role, claims.SessionKey)
 	if err != nil {
 		InternalError(c, "生成访问令牌失败")
 		return
@@ -335,7 +343,7 @@ func Refresh(c *gin.Context) {
 	// 刷新令牌轮换：每换一次访问令牌就发一张新的刷新令牌，手里这张当场作废。
 	// 这样即使刷新令牌泄漏，它最多在被正常客户端下一次刷新之前有用，
 	// 之后无论真客户端还是攻击者再来用它，都会撞上上面的"令牌已被吊销"。
-	newRefresh, err := middleware.GenerateRefreshToken(claims.UserID, claims.Username, claims.Role, claims.SessionKey)
+	newRefresh, err := middleware.GenerateRefreshToken(claims.UserID, claims.Username, role, claims.SessionKey)
 	if err != nil {
 		InternalError(c, "生成刷新令牌失败")
 		return
@@ -350,7 +358,7 @@ func Refresh(c *gin.Context) {
 	// 会话画像跟着轮换：优先沿用原刷新令牌记下的客户端，没有就按当前请求重新识别
 	client, ok := clientinfo.LoadRefresh(refreshToken)
 	if !ok {
-		client = clientinfo.Detect("", c.Request.UserAgent(), claims.Role)
+		client = clientinfo.Detect("", c.Request.UserAgent(), role)
 		client.IP = c.ClientIP()
 	}
 	clientinfo.DropRefresh(refreshToken)
@@ -405,6 +413,13 @@ func GetProfile(c *gin.Context) {
 	if err != nil {
 		NotFound(c, "用户不存在")
 		return
+	}
+
+	// 回显的角色要和"真正能用的功能"一致：中间件已经按"数据库角色 + 名下是否有在营机构"
+	// 算好有效角色（名下有机构却还挂在 owner 上的账号会算成 sitter），这里直接沿用，
+	// 免得客户端显示"未开通机构"、服务端却已经放行机构端接口。
+	if role := c.GetString("role"); role != "" {
+		user.Role = role
 	}
 
 	var cancelDeadlineStr *string

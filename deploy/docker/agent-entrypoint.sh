@@ -50,6 +50,25 @@ docker compose version >/dev/null 2>&1 || fail "镜像内 docker compose 插件�
 # ---- 解析部署包在宿主机的真实路径 ------------------------------------------
 # PACKAGE_HOST_ROOT 可由 .env 显式指定（inspect 拿不到时的逃生口）；
 # 否则查自己这个容器的 /pkg 挂载源。容器的 hostname 默认就是容器 ID。
+#
+# 注意：Windows（Docker Desktop）上 inspect 给的是盘符路径 D:/dockers/patnest-docker。
+# 这个字符串在 Linux 容器里"不是绝对路径"，compose 会按当前目录拼成
+# /pkg/D:/dockers/... 再发给 daemon，bind 源里多个冒号，直接报
+# "too many colons"。Docker Desktop（WSL2）里宿主机盘符对应的绝对路径是
+# /run/desktop/mnt/host/<盘符小写>/<余下路径>，两边都认，所以统一换成这个形式。
+to_daemon_path() {
+  local p="$1"
+  # 不是盘符路径（Linux 部署）就原样返回
+  if [[ ! "$p" =~ ^([A-Za-z]):[\\/](.*)$ ]]; then
+    printf '%s' "$p"
+    return 0
+  fi
+  local drive rest
+  drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]')"
+  rest="${BASH_REMATCH[2]//\\//}"
+  printf '/run/desktop/mnt/host/%s/%s' "$drive" "$rest"
+}
+
 HOST_ROOT="${PACKAGE_HOST_ROOT:-}"
 if [[ -z "$HOST_ROOT" ]]; then
   self_id="$(cat /etc/hostname 2>/dev/null || hostname)"
@@ -60,8 +79,11 @@ fi
 [[ -n "$HOST_ROOT" ]] ||
   fail "无法解析部署包在宿主机上的路径（docker inspect 失败）。可在 .env 里设置 PACKAGE_HOST_ROOT 指定。"
 
-# 让容器内也能通过 HOST_ROOT 打开同一份文件（compose 客户端按 project-directory 拼路径）。
-if [[ "$HOST_ROOT" != "$PKG" && ! -e "$HOST_ROOT" ]]; then
+HOST_ROOT="$(to_daemon_path "$HOST_ROOT")"
+
+# 让容器内也能通过 HOST_ROOT 打开同一份文件（compose 客户端按 project-directory 拼路径，
+# build context 也要由客户端读出来再打包传给 daemon）。
+if [[ "$HOST_ROOT" != "$PKG" && ! -f "$HOST_ROOT/compose.yaml" ]]; then
   mkdir -p "$(dirname "$HOST_ROOT")" 2>/dev/null || true
   ln -sfn "$PKG" "$HOST_ROOT" 2>/dev/null ||
     fail "无法建立软链 $HOST_ROOT -> $PKG（权限不足？）。可在 .env 设置 PACKAGE_HOST_ROOT=$PKG 跳过。"
@@ -71,16 +93,18 @@ fi
 
 export PACKAGE_ROOT="$PKG"
 export PATNEST_AGENT_CONTAINER=1
+# compose 里 ${PACKAGE_HOST_PATH} 也走这条 daemon 视角的路径：容器内 /pkg 换成
+# 宿主机上的实际目录后，重建 update-agent 自身时挂载源依然合法。
+export PACKAGE_HOST_PATH="$HOST_ROOT"
 # common.sh 用它给 docker compose 加 --project-directory，确保 build context 与
-# 相对 bind mount 都被解析成宿主机真实路径。
+# 相对 bind mount 都被解析成 daemon 能访问的绝对路径。
 export PATNEST_COMPOSE_PROJECT_DIR="$HOST_ROOT"
 
 echo "[update-agent] container mode"
 echo "[update-agent]   package (container): $PKG"
 echo "[update-agent]   package (daemon):    $HOST_ROOT"
 
-# 关键：用 HOST_ROOT 这条“宿主机视角”的路径启动脚本。update-agent.sh / common.sh
-# 都靠 `cd "$(dirname "$BASH_SOURCE")/.." && pwd` 推导 ROOT_DIR，走软链进来才能拿到
-# HOST_ROOT；若直接用 /pkg，compose 的 build context 又会退回容器内路径。
-cd "$HOST_ROOT"
-exec bash "$HOST_ROOT/scripts/update-agent.sh"
+# 工作目录固定在 /pkg：脚本里的 cp / mv / 写 upstream.conf 都走容器内绝对路径，
+# 只有 compose 的 --project-directory 用 daemon 视角的 HOST_ROOT。
+cd "$PKG"
+exec bash "$PKG/scripts/update-agent.sh"

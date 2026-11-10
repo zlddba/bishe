@@ -60,6 +60,12 @@ func AdminCreateSitter(c *gin.Context) {
 	}
 
 	adminID := c.GetInt64("user_id")
+	// 后台直接建的机构不会走"审核状态变更"那条路径，这里补一次角色同步：
+	// 否则账号登录后仍然是 owner，机构端 /sitter/* 整片都是 403。
+	if status == "active" || status == "inactive" {
+		_, _ = db.Pool.Exec(context.Background(),
+			"UPDATE users SET role = 'sitter', updated_at = now() WHERE id = $1 AND role = 'owner'", req.UserID)
+	}
 	_, _ = db.Pool.Exec(context.Background(),
 		"SELECT fn_audit($1, 'CREATE_SITTER', 'sitter', $2, $3, NULLIF($4, '')::inet)",
 		adminID, id, fmt.Sprintf(`{"name": "%s"}`, req.Name), auditClientIP(c))

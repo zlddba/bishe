@@ -19,9 +19,10 @@ if [[ "$current" == "blue" ]]; then target=green; else target=blue; fi
 echo "[rollback] 使用 patnest-api:$VERSION，$current -> $target"
 APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile app up -d --no-deps "api-$target"
 
+require_probe_tool "[rollback]"
 healthy=0
 for _ in $(seq 1 "$HEALTH_RETRIES"); do
-  if "$ENGINE" exec patnest-nginx wget -qO- "http://api-$target:9201/health" >/dev/null 2>&1; then
+  if nginx_probe "http://api-$target:9201/health" >/dev/null 2>&1; then
     healthy=1
     break
   fi

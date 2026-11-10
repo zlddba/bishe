@@ -145,14 +145,20 @@ func Setup() *gin.Engine {
 		protected.PUT("/notifications/:id/read", handler.MarkNotificationRead)
 		protected.PUT("/notifications/read-all", handler.MarkAllNotificationsRead)
 
+		// --- 机构资料自助维护（任何登录用户）---
+		// 这里刻意不挂 RequireRole("sitter")：能不能操作不取决于令牌里的角色，
+		// 而取决于这个账号名下有没有机构记录——两个 handler 都按 user_id 定位，
+		// 没有记录就是 404，不会串号。
+		// 之前一刀切要求角色是 sitter，遇到"机构已通过审核但角色还没同步"、
+		// "后台直接建的机构"、"申请被驳回要改材料"这类账号，改自己的资料会直接 403。
+		protected.GET("/sitter/shop/me", handler.GetMyShop)
+		protected.PUT("/sitter/shop/me", handler.UpdateMyShop)
+		protected.POST("/sitter/shop", handler.CreateMyShop)
+
 		// --- Sitter namespace ---
 		sitter := protected.Group("/sitter")
 		sitter.Use(middleware.RequireRole("sitter"))
 		{
-			sitter.GET("/shop/me", handler.GetMyShop)
-			sitter.POST("/shop", handler.CreateMyShop)
-			sitter.PUT("/shop/me", handler.UpdateMyShop)
-
 			sitter.GET("/orders/manage", handler.ListReceivedOrders)
 			sitter.GET("/orders/:id", handler.GetOrderDetail)
 			sitter.PUT("/orders/:id/accept", handler.AcceptOrder)

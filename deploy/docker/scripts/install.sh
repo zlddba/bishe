@@ -39,9 +39,10 @@ echo "[install] 启动 redis / nginx / api-blue"
 APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile app up -d redis nginx api-blue
 
 echo "[install] 等待 api-blue 健康检查"
+require_probe_tool "[install]"
 healthy=0
 for _ in $(seq 1 "${HEALTH_RETRIES:-60}"); do
-  if "$ENGINE" exec patnest-nginx wget -qO- http://api-blue:9201/health >/dev/null 2>&1; then
+  if nginx_probe http://api-blue:9201/health >/dev/null 2>&1; then
     healthy=1
     break
   fi
@@ -52,7 +53,7 @@ if [[ "$healthy" != "1" ]]; then
   echo "[install] api-blue 健康检查失败，请检查 .env 里的数据库配置" >&2
   exit 1
 fi
-"$ENGINE" exec patnest-nginx wget -qO- http://api-blue:9201/health || true
+nginx_probe http://api-blue:9201/health || true
 echo
 
 # ---- 更新代理 ----------------------------------------------------------

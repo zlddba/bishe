@@ -235,12 +235,12 @@ func AdminUpdateSitterStatus(c *gin.Context) {
 		return
 	}
 
-	// 按审核结果同步账号角色：通过升级为 sitter，驳回退回 owner
+	// 按审核结果同步账号角色：上架/下架都算拿到机构资质，升为 sitter；驳回退回 owner
 	var sitterUserID int64
 	if err := db.Pool.QueryRow(context.Background(),
 		"SELECT user_id FROM sitters WHERE id = $1", sitterID).Scan(&sitterUserID); err == nil {
 		switch req.Status {
-		case "active":
+		case "active", "inactive":
 			_, _ = db.Pool.Exec(context.Background(),
 				"UPDATE users SET role = 'sitter', updated_at = now() WHERE id = $1 AND role = 'owner'", sitterUserID)
 		case "rejected":
