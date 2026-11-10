@@ -85,7 +85,9 @@ func geocodeResult(p *amap.Point, fromCache bool) gin.H {
 		"longitude":         round6(p.Longitude),
 		"formatted_address": p.Formatted,
 		"resolved_city":     p.City,
+		"province":          p.Province,
 		"district":          p.District,
+		"township":          p.Township,
 		"adcode":            p.Adcode,
 		"level":             p.Level,
 		"from_cache":        fromCache,
@@ -111,9 +113,9 @@ func lookupGeocode(key string, ttl time.Duration) (gin.H, bool) {
 		updated  time.Time
 	)
 	err := db.Pool.QueryRow(context.Background(),
-		`SELECT latitude, longitude, formatted_address, resolved_city, district, adcode, level, updated_at
+		`SELECT latitude, longitude, formatted_address, province, resolved_city, district, township, adcode, level, updated_at
 		 FROM geocode_cache WHERE cache_key = $1`, key,
-	).Scan(&lat, &lng, &point.Formatted, &point.City, &point.District, &point.Adcode, &point.Level, &updated)
+	).Scan(&lat, &lng, &point.Formatted, &point.Province, &point.City, &point.District, &point.Township, &point.Adcode, &point.Level, &updated)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			log.Printf("[Geocode] cache lookup error: %v", err)
@@ -131,19 +133,22 @@ func lookupGeocode(key string, ttl time.Duration) (gin.H, bool) {
 func saveGeocode(key, city, address string, p *amap.Point) {
 	_, err := db.Pool.Exec(context.Background(),
 		`INSERT INTO geocode_cache (cache_key, city, address, latitude, longitude,
-		                            formatted_address, resolved_city, adcode, district, level)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                            formatted_address, province, resolved_city, adcode, district, township, level)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 ON CONFLICT (cache_key) DO UPDATE SET
 		     latitude = EXCLUDED.latitude,
 		     longitude = EXCLUDED.longitude,
 		     formatted_address = EXCLUDED.formatted_address,
+		     province = EXCLUDED.province,
 		     resolved_city = EXCLUDED.resolved_city,
 		     adcode = EXCLUDED.adcode,
 		     district = EXCLUDED.district,
+		     township = EXCLUDED.township,
 		     level = EXCLUDED.level,
 		     hit_count = geocode_cache.hit_count + 1,
 		     updated_at = now()`,
-		key, city, address, p.Latitude, p.Longitude, p.Formatted, p.City, p.Adcode, p.District, p.Level,
+		key, city, address, p.Latitude, p.Longitude, p.Formatted,
+		p.Province, p.City, p.Adcode, p.District, p.Township, p.Level,
 	)
 	if err != nil {
 		log.Printf("[Geocode] cache upsert error: %v", err)

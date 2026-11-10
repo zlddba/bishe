@@ -12,7 +12,8 @@
 // - 正式：https://petnest.example.com/api/v1
 // 注意：健康检查挂在 /health（不在 /api/v1 下），见 system_api.js
 // ---------------------------------------------------------------------------
-export const API_BASE_URL = 'http://192.168.3.100:9200/api/v1'
+// export const API_BASE_URL = 'http://192.168.3.100:9200/api/v1'
+export const API_BASE_URL = 'http://10.109.248.94:9200/api/v1'
 
 // 统一响应中业务成功码（handler/response.go:16）
 export const SUCCESS_CODE = 0

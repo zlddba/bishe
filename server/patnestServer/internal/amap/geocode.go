@@ -29,10 +29,15 @@ type Point struct {
 	Latitude  float64
 	Longitude float64
 	Formatted string
-	City      string
-	District  string
-	Adcode    string
-	Level     string
+	// Province 省/自治区/直辖市，用于「选择地区」页把默认选中项定位到省一级
+	Province string
+	City     string
+	District string
+	// Township 街道/乡镇，高德逆地理在 extensions=all 时返回；
+	// 直辖市或部分开发区可能为空，此时用 District 兜底。
+	Township string
+	Adcode   string
+	Level    string
 }
 
 func Init(key, base string) {

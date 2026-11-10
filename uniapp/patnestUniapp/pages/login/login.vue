@@ -1,7 +1,7 @@
 <template>
 	<view class="login-page patnest-page">
 		<view class="brand">
-			<image class="logo" src="/static/logo.png" mode="aspectFit" />
+			<image class="logo" src="/static/appicon.svg" mode="aspectFit" />
 			<text class="title">宠栖 PatNest</text>
 			<text class="subtitle">为爱宠找一个临时的家</text>
 		</view>
@@ -40,14 +40,7 @@
 			</view>
 
 			<view v-if="mode === 'register'" class="field">
-				<text class="label">身份</text>
-				<view class="role-list">
-					<view :class="['role-item', role === 'owner' ? 'active' : '']" @click="role = 'owner'">
-						<image class="r-icon" src="/static/icons/pet.png" mode="aspectFit" />
-						<text class="role-text">我是宠物主人</text>
-					</view>
-				</view>
-				<text class="tip">小程序端仅支持主人账号；机构账号可在登录后于「我的 → 申请成为机构」提交入驻资料。</text>
+				<text class="tip">小程序端仅支持主人账号；机构账号可在App提交入驻资料。</text>
 			</view>
 
 			<!-- 记住密码 -->

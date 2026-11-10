@@ -19,6 +19,14 @@
 			}
 		},
 		{
+			"path": "pages/location/index",
+			"style": {
+				"navigationBarTitleText": "选择位置",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
 			"path": "pages/sitter/detail",
 			"style": {
 				"navigationBarTitleText": "机构详情",
@@ -214,6 +222,9 @@
 			}
 		}
 	],
+	"easycom": {
+		"autoscan": true
+	},
 	"tabBar": {
 		"color": "#9AA3AF",
 		"selectedColor": "#AF4A62",

@@ -13,6 +13,8 @@ x-api: &api
   env_file: .env
   volumes:
     - ./data/updates:/var/lib/patnest/updates
+    # 证书目录：后台「HTTPS 证书」上传时由 API 写入，nginx 容器读同一份
+    - ./nginx/tls:/var/lib/patnest/tls
   depends_on:
     - redis
   restart: unless-stopped
@@ -77,11 +79,20 @@ services:
       context: .
       dockerfile: docker/Dockerfile.web
       pull: true
+      # /files/ 反代目标在构建时写进 nginx 配置；从 .env 取，和后端同一份来源
+      args:
+        MINIO_SCHEME: "${MINIO_SCHEME:-http}"
+        MINIO_ENDPOINT: "${MINIO_ENDPOINT:-zdz1.linkzdsada.dpdns.org:9000}"
+        MINIO_BUCKET: "${MINIO_BUCKET:-patnest-uploads}"
     container_name: patnest-nginx
     ports:
       - "${PUBLIC_PORT:-9200}:9200"
+      # HTTPS：证书由后台「系统更新 → HTTPS 证书」上传，未配置时 443 不监听
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./nginx/upstream.conf:/etc/nginx/patnest/upstream.conf:ro
+      # 证书目录：API 写、nginx 读，tls-watch.sh 校验通过后才 reload
+      - ./nginx/tls:/etc/nginx/patnest/tls
     depends_on:
       - api-blue
     restart: unless-stopped

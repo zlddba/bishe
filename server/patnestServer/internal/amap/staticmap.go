@@ -79,8 +79,11 @@ func Reverse(ctx context.Context, lng, lat float64) (*Point, error) {
 		Regeo    struct {
 			FormattedAddress flexText `json:"formatted_address"`
 			AddressComponent struct {
+				Province flexText `json:"province"`
 				City     flexText `json:"city"`
 				District flexText `json:"district"`
+				// township 只有 extensions=all 才返回，是街道/乡镇一级
+				Township flexText `json:"township"`
 				Adcode   flexText `json:"adcode"`
 			} `json:"addressComponent"`
 		} `json:"regeocode"`
@@ -100,8 +103,10 @@ func Reverse(ctx context.Context, lng, lat float64) (*Point, error) {
 		Latitude:  lat,
 		Longitude: lng,
 		Formatted: parsed.Regeo.FormattedAddress.s,
+		Province:  comp.Province.s,
 		City:      comp.City.s,
 		District:  comp.District.s,
+		Township:  comp.Township.s,
 		Adcode:    comp.Adcode.s,
 	}, nil
 }

@@ -3,7 +3,7 @@
 		<view class="top-bar">
 			<text class="title">消息中心</text>
 			<view class="right">
-				<text class="read-all" @click="markAll">全部已读</text>
+				<text v-if="logged" class="read-all" @click="markAll">全部已读</text>
 			</view>
 		</view>
 
@@ -19,7 +19,12 @@
 					<text class="m-type">{{ typeText(n.type) }}</text>
 				</view>
 			</view>
-			<empty v-if="!loading && list.length === 0" text="暂无消息" image="/static/icons/bell.png" desc="订单状态变化、寄养动态与平台公告都会出现在这里" />
+			<empty
+				v-if="!loading && list.length === 0"
+				:text="logged ? '暂无消息' : '登录后查看消息'"
+				image="/static/icons/bell.png"
+				:desc="logged ? '订单状态变化、寄养动态与平台公告都会出现在这里' : '登录后可以收到订单进展与平台公告'"
+			/>
 			<load-more :loading="loading" :has-more="hasMore" :empty="!loading && list.length === 0" empty-text="" />
 		</view>
 	</view>
@@ -29,12 +34,20 @@
 	import { notifyApi } from '../../utils/api.js'
 	import { NOTIFY_TYPE_TEXT } from '../../config.js'
 	import { fromNow, parseJson } from '../../utils/format.js'
+	import { isLoggedIn } from '../../utils/auth.js'
 
 	export default {
 		data() {
-			return { list: [], loading: false, page: 1, hasMore: true }
+			return { logged: false, list: [], loading: false, page: 1, hasMore: true }
 		},
 		onShow() {
+			// 未登录不打消息接口（必然 401），只展示登录引导
+			this.logged = isLoggedIn()
+			if (!this.logged) {
+				this.list = []
+				this.loading = false
+				return
+			}
 			this.reload()
 		},
 		onPullDownRefresh() {

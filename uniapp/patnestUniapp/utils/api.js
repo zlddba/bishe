@@ -33,16 +33,18 @@ function toId(v) {
 // ---------------------------------------------------------------------------
 export const authApi = {
 	// 注册（role 固定 owner）
+	// noAuth：这三个接口本身就在「未登录」状态下调用，
+	// 不标的话会被 request 层的「无令牌不发请求」直接拦掉，登录页永远进不去
 	register(data) {
-		return http.post('/auth/register', data)
+		return http.post('/auth/register', data, { noAuth: true })
 	},
 	// 登录
 	login(data) {
-		return http.post('/auth/login', data)
+		return http.post('/auth/login', data, { noAuth: true })
 	},
 	// 刷新 token（由 request.js 自动处理，一般不手动调用）
 	refresh(refreshToken) {
-		return http.post('/auth/refresh', { refresh_token: refreshToken })
+		return http.post('/auth/refresh', { refresh_token: refreshToken }, { noAuth: true })
 	},
 	// 登出（吊销该用户全部 refresh_token）
 	logout() {
@@ -392,12 +394,22 @@ export const accountApi = {
 // ---------------------------------------------------------------------------
 export const geoApi = {
 	// 逆地理编码：坐标 → 城市/区县/详细地址
-	// 返回 { latitude, longitude, formatted_address, resolved_city, district, adcode }
+	// 返回 { latitude, longitude, formatted_address, resolved_city, district, township, adcode }
+	//
+	// noAuth：首页顶部地名在**未登录**时也要显示（游客可以直接浏览机构列表），
+	// 后端把这个接口放在公开组，按 IP/账号限流兜住高德配额。
 	reverse(latitude, longitude) {
 		return http.post('/geo/reverse', {
 			latitude: Number(latitude),
 			longitude: Number(longitude)
-		}, { silent: true })
+		}, { silent: true, noAuth: true })
+	},
+	// 城市 → 下辖区县（带中心点坐标）
+	// 参数：{ city: '呼和浩特市' } 或 { adcode: '150100' }（市级 6 位）
+	// 返回 { keywords, items: [{ name, adcode, level, center_lng, center_lat }] }
+	// 公开接口：选择位置页未登录也要能列出区县
+	districts(params = {}) {
+		return http.get('/geo/districts', params, { silent: true, noAuth: true })
 	},
 	// 地址 → 坐标
 	geocode(address) {

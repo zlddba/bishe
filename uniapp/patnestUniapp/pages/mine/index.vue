@@ -1,7 +1,17 @@
 <template>
 	<view class="mine-page patnest-page">
+		<!-- 未登录：引导登录，不展示任何依赖登录态的数据 -->
+		<view v-if="!logged" class="profile patnest-card" @click="goLogin">
+			<image class="avatar" src="/static/avatar-default.jpg" mode="aspectFill" />
+			<view class="u-info">
+				<text class="u-name">未登录</text>
+				<text class="u-sub">登录后查看订单、收藏与优惠券</text>
+			</view>
+			<text class="u-login">去登录 ›</text>
+		</view>
+
 		<!-- 用户信息 -->
-		<view class="profile patnest-card" @click="editProfile">
+		<view v-else class="profile patnest-card" @click="editProfile">
 			<image class="avatar" :src="user.avatar_url || '/static/avatar-default.jpg'" mode="aspectFill" />
 			<view class="u-info">
 				<text class="u-name">{{ user.nickname || user.username || '宠栖用户' }}</text>
@@ -10,8 +20,8 @@
 			<text v-if="user.points != null" class="u-points">积分 {{ user.points }}</text>
 		</view>
 
-		<!-- 数据概览 -->
-		<view class="stats patnest-card">
+		<!-- 数据概览（未登录时没有数据，不展示三个 0） -->
+		<view v-if="logged" class="stats patnest-card">
 			<view class="st-item" @click="go('/pages/favorite/list')">
 				<text class="st-num">{{ favCount }}</text>
 				<text class="st-label">收藏机构</text>
@@ -78,12 +88,13 @@
 
 <script>
 	import { authApi, notifyApi, favoriteApi, walletApi, supportApi, accountApi } from '../../utils/api.js'
-	import { getUserInfo, clearAuth } from '../../utils/auth.js'
+	import { getUserInfo, clearAuth, isLoggedIn } from '../../utils/auth.js'
 	import { clearOrders } from '../../utils/orderCache.js'
 
 	export default {
 		data() {
 			return {
+				logged: false,
 				user: {},
 				unread: 0,
 				favCount: 0,
@@ -92,6 +103,17 @@
 			}
 		},
 		onShow() {
+			// 未登录时不能发请求：/auth/me 与四个统计接口都会 401，
+			// 控制台会刷一屏红色错误，页面却还是空白
+			this.logged = isLoggedIn()
+			if (!this.logged) {
+				this.user = {}
+				this.unread = 0
+				this.favCount = 0
+				this.couponsCount = 0
+				this.ticketCount = 0
+				return
+			}
 			const cached = getUserInfo()
 			if (cached) this.user = cached
 			this.loadProfile()
@@ -123,6 +145,10 @@
 				} catch (e) {}
 			},
 			go(url) {
+				// 未登录时除公开页（首页、登录、机构浏览）外一律先引导登录
+				if (!this.logged && !/^\/(pages\/index|pages\/login|pages\/sitter)/.test(url)) {
+					return this.goLogin()
+				}
 				// tabBar 页面需用 switchTab，其余用 navigateTo
 				const tabs = ['/pages/index/index', '/pages/order/list', '/pages/notify/list', '/pages/mine/index']
 				if (tabs.indexOf(url) >= 0) {
@@ -133,6 +159,9 @@
 			},
 			editProfile() {
 				uni.navigateTo({ url: '/pages/mine/profile' })
+			},
+			goLogin() {
+				uni.navigateTo({ url: '/pages/login/login' })
 			},
 			withdrawCancel() {
 				uni.showModal({
@@ -208,6 +237,12 @@
 		background: #FDF1F4;
 		padding: 6rpx 18rpx;
 		border-radius: 20rpx;
+	}
+	.u-login {
+		font-size: 26rpx;
+		color: #AF4A62;
+		font-weight: 600;
+		flex-shrink: 0;
 	}
 	.stats {
 		display: flex;

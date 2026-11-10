@@ -14,6 +14,8 @@ func Setup() *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS())
+	// 文件链接：库里存相对路径，出入站各做一次转换（详见 middleware/fileurl.go）
+	r.Use(middleware.FileURL())
 
 	// 健康检查与版本信息（发布门禁、管理面板热更新提示共用）
 	r.GET("/health", handler.Health)
@@ -29,6 +31,12 @@ func Setup() *gin.Engine {
 	v1.GET("/sitters/:id/capacity", handler.SitterCapacityPublic)
 	v1.GET("/sitters/:id/addons", handler.ListAddons)
 	v1.GET("/sitters/:id/reviews", handler.SitterReviewsPublic)
+
+	// 逆地理编码：首页顶部地名要把坐标换成区县/街道，游客（未登录）浏览机构时
+	// 同样需要显示，因此放在公开组；按 IP 限流兜住高德配额（handler.reverseWithinQuota）。
+	v1.POST("/geo/reverse", handler.ReverseGeocode)
+	// 行政区划：城市 adcode → 下辖区县（带中心点），「选择位置」页用来做区县筛选
+	v1.GET("/geo/districts", handler.GeoDistricts)
 
 	// 地图选点页：浏览器打开，凭一次性令牌访问，不带登录态
 	v1.GET("/geo/pick/:token", handler.GeoPickerPage)
@@ -307,6 +315,11 @@ func Setup() *gin.Engine {
 			admin.GET("/account-cancels/failed", handler.AdminListCancelFailures)
 			admin.POST("/account-cancels/:user_id/retry", handler.AdminRetryCancel)
 
+			// --- HTTPS 证书（上传后由 nginx 容器守护脚本校验并 reload）---
+			admin.GET("/system/tls", handler.AdminGetTLS)
+			admin.POST("/system/tls", handler.AdminUploadTLS)
+			admin.DELETE("/system/tls", handler.AdminDeleteTLS)
+
 			admin.GET("/push-tasks", handler.AdminListPushTasks)
 			admin.POST("/push-tasks", handler.AdminCreatePushTask)
 			admin.POST("/push-tasks/:id/send", handler.AdminSendPushTask)
@@ -320,7 +333,6 @@ func Setup() *gin.Engine {
 		protected.POST("/geo/geocode", handler.GeocodeAddress)
 		protected.GET("/geo/static-map", handler.GeoStaticMap)
 		protected.GET("/geo/tile", handler.GeoTile)
-		protected.POST("/geo/reverse", handler.ReverseGeocode)
 		protected.POST("/geo/pick", handler.CreateGeoPick)
 		protected.GET("/geo/pick-result/:token", handler.PollGeoPick)
 	}

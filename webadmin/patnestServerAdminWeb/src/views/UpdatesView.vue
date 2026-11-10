@@ -164,6 +164,84 @@
       </el-table>
     </section>
 
+    <!-- HTTPS 证书：上传后由 nginx 容器校验并热加载，失败自动回滚 -->
+    <section class="tls-section">
+      <div class="tls-head">
+        <div>
+          <h3>HTTPS 证书</h3>
+          <p>上传证书链与私钥，保存后自动校验并生效；校验失败会回滚，站点不受影响</p>
+        </div>
+        <el-button :loading="tlsLoading" @click="loadTLS">刷新状态</el-button>
+      </div>
+
+      <el-descriptions :column="3" border size="small" class="tls-desc">
+        <el-descriptions-item label="当前状态">
+          <span class="pn-tag" :class="tls.configured ? 'pn-tag-ok' : 'pn-tag-soft'">
+            {{ tls.configured ? '已配置' : '未配置（仅 HTTP）' }}
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="域名">{{ (tls.domains || []).join(', ') || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="有效期">
+          <span v-if="tls.not_after">{{ tls.not_after }}（剩 {{ tls.days_left }} 天）</span>
+          <span v-else>-</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="签发者">{{ tls.issuer || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="上次生效" :span="2">
+          <span v-if="tls.last_reload">{{ reloadText }}</span>
+          <span v-else>-</span>
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <el-alert
+        v-if="tls.configured && tls.days_left !== undefined && tls.days_left < 15"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="`证书将在 ${tls.days_left} 天后过期，请尽快续期后重新上传`"
+        style="margin-bottom:12px"
+      />
+
+      <el-form label-width="96px">
+        <el-form-item label="证书链">
+          <el-input
+            v-model="tlsForm.cert"
+            type="textarea"
+            :rows="5"
+            placeholder="-----BEGIN CERTIFICATE-----&#10;站点证书在前、中间证书在后，按顺序拼接（缺中间证书会报链不完整）"
+          />
+        </el-form-item>
+        <el-form-item label="私钥">
+          <el-input
+            v-model="tlsForm.key"
+            type="textarea"
+            :rows="4"
+            placeholder="-----BEGIN PRIVATE KEY-----"
+          />
+        </el-form-item>
+        <el-form-item label="域名">
+          <el-input
+            v-model="tlsForm.server_name"
+            placeholder="留空则取证书里的第一个域名"
+            style="width:320px"
+          />
+        </el-form-item>
+      </el-form>
+
+      <div class="tls-actions">
+        <el-button type="primary" :loading="tlsSaving" @click="saveTLS">保存并生效</el-button>
+        <el-button
+          v-if="tls.configured"
+          type="danger"
+          plain
+          :loading="tlsSaving"
+          @click="removeTLS"
+        >移除证书</el-button>
+        <span class="tls-hint">
+          保存后约 5 秒生效。生效结果看「上次生效」，失败时原配置保持不变。
+        </span>
+      </div>
+    </section>
+
     <el-dialog v-model="logDialog" title="更新日志" width="760px">
       <pre class="log-box">{{ jobLog || '暂无日志' }}</pre>
     </el-dialog>
@@ -383,7 +461,82 @@ function formatTime(value) {
   return d.toLocaleString('zh-CN', { hour12: false })
 }
 
-onMounted(load)
+/* ---------- HTTPS 证书 ---------- */
+const tls = ref({})
+const tlsLoading = ref(false)
+const tlsSaving = ref(false)
+const tlsForm = reactive({ cert: '', key: '', server_name: '' })
+
+const reloadText = computed(() => {
+  const raw = tls.value.last_reload
+  if (!raw) return '-'
+  try {
+    const j = JSON.parse(raw)
+    const head = (j.ok ? '成功' : '失败') + (j.at ? ' · ' + j.at : '')
+    return j.ok ? head : `${head} · ${j.message || '未知错误'}`
+  } catch {
+    return raw
+  }
+})
+
+async function loadTLS() {
+  tlsLoading.value = true
+  try {
+    const res = await adminApi.getTLS()
+    tls.value = res.data || {}
+  } catch (e) {
+    // 证书未配置时接口也返回 200；这里出错多半是权限或网络，不额外打扰
+  } finally {
+    tlsLoading.value = false
+  }
+}
+
+async function saveTLS() {
+  if (!tlsForm.cert.trim() || !tlsForm.key.trim()) {
+    return ElMessage.warning('请填写证书链和私钥')
+  }
+  tlsSaving.value = true
+  try {
+    await adminApi.uploadTLS({
+      cert: tlsForm.cert.trim(),
+      key: tlsForm.key.trim(),
+      server_name: tlsForm.server_name.trim(),
+    })
+    ElMessage.success('已提交，约 5 秒后自动生效')
+    tlsForm.cert = ''
+    tlsForm.key = ''
+    setTimeout(loadTLS, 5000)
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    tlsSaving.value = false
+  }
+}
+
+async function removeTLS() {
+  try {
+    await ElMessageBox.confirm('移除后 443 停止监听，只能继续用 HTTP 访问。确定移除吗？', '移除证书', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  tlsSaving.value = true
+  try {
+    await adminApi.removeTLS()
+    ElMessage.success('已移除，约 5 秒后生效')
+    setTimeout(loadTLS, 5000)
+  } catch (e) {
+    ElMessage.error(e.message || '移除失败')
+  } finally {
+    tlsSaving.value = false
+  }
+}
+
+onMounted(() => {
+  load()
+  loadTLS()
+})
 onUnmounted(stopPolling)
 </script>
 
@@ -484,5 +637,41 @@ onUnmounted(stopPolling)
 }
 @media (max-width: 640px) {
   .up-summary { grid-template-columns: 1fr; }
+}
+
+/* ---------- HTTPS 证书 ---------- */
+.tls-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--line, #EDE4E7);
+  border-radius: 12px;
+}
+.tls-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.tls-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: var(--ink, #3A2A2F);
+}
+.tls-head p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink3, #9AA3AF);
+}
+.tls-desc { margin-bottom: 12px; }
+.tls-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tls-hint {
+  font-size: 12px;
+  color: var(--ink3, #9AA3AF);
 }
 </style>

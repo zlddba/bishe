@@ -1,9 +1,29 @@
 # 本地已构建好管理页面，服务器只做镜像打包
 FROM nginx:latest
 
+# 对象存储地址在构建时写进 nginx 配置（/files/ 反代目标）。
+# compose 会从 .env 取 MINIO_* 传进来，所以它和后端用的是同一份配置。
+ARG MINIO_SCHEME=http
+ARG MINIO_ENDPOINT=zdz1.linkzdsada.dpdns.org:9000
+ARG MINIO_BUCKET=patnest-uploads
+
 RUN rm -f /etc/nginx/conf.d/default.conf
 
+# default.conf 只留两个 server 声明，具体规则在 locations.conf 里（9200/443 共用）
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/locations.conf /etc/nginx/patnest/locations.conf
+
+RUN sed -i \
+        -e "s|@@MINIO_SCHEME@@|${MINIO_SCHEME}|g" \
+        -e "s|@@MINIO_ENDPOINT@@|${MINIO_ENDPOINT}|g" \
+        -e "s|@@MINIO_BUCKET@@|${MINIO_BUCKET}|g" \
+        /etc/nginx/patnest/locations.conf
+
+# 证书热加载守护：entrypoint 会 source 这个脚本，它把自己丢到后台后立即返回。
+# 千万别在里面写 exit —— 会连带结束整个 entrypoint，nginx 直接起不来。
+COPY docker/nginx/tls-watch.sh /docker-entrypoint.d/50-patnest-tls-watch.sh
+RUN chmod +x /docker-entrypoint.d/50-patnest-tls-watch.sh
+
 COPY web/dist/ /usr/share/nginx/html/
 
-EXPOSE 9200
+EXPOSE 9200 443

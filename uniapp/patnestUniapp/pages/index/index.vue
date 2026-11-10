@@ -4,7 +4,7 @@
 		<view class="navbar">
 			<view class="nb-status" :style="{ height: statusBarHeight + 'px' }" />
 			<view class="nb-bar">
-				<view class="nb-loc" @click="requestLocation">
+				<view class="nb-loc" @click="openLocationPicker">
 					<image class="nb-loc-icon" src="/static/icons/location.png" mode="aspectFit" />
 					<text class="nb-loc-text">{{ cityLabel }}</text>
 					<text class="nb-loc-arrow">▾</text>
@@ -75,8 +75,13 @@
 				:key="s.id"
 				:sitter="s"
 				:distance-text="distText(s)"
+				:distance-prefix="region ? '距该地区' : '距你'"
 			/>
-			<empty v-if="!loading && list.length === 0" text="没有找到匹配的机构" desc="换个关键词或放宽筛选条件试试" />
+			<empty
+				v-if="!loading && list.length === 0"
+				:text="region ? '该地区暂无机构' : '没有找到匹配的机构'"
+				:desc="region ? '点左上角换个地区，或选择「按距离推荐」' : '换个关键词或放宽筛选条件试试'"
+			/>
 			<load-more :loading="loading" :has-more="hasMore" :empty="!loading && list.length === 0" empty-text="" />
 		</view>
 	</view>
@@ -86,7 +91,7 @@
 	import { sitterApi } from '../../utils/api.js'
 	import { isLoggedIn } from '../../utils/auth.js'
 	import { SORT_OPTIONS } from '../../config.js'
-	import { getCurrentLocation, distanceTo, formatDistance, cityText, resolveCity } from '../../utils/location.js'
+	import { getCurrentLocation, distanceTo, formatDistance, cityText, resolveArea, getSelectedRegion } from '../../utils/location.js'
 	import { saveSnapshots } from '../../utils/sitterCache.js'
 
 	export default {
@@ -113,6 +118,9 @@
 				inited: false,
 				loc: null,
 				searchMode: false,
+				// 位置页选中的地区（null = 不限定，按距离推荐）
+				region: null,
+				regionKey: '',
 				// 自定义导航栏的状态栏高度（px）
 				statusBarHeight: 20
 			}
@@ -122,9 +130,17 @@
 				const hit = SORT_OPTIONS.find((o) => o.value === this.params.sort)
 				return hit ? hit.label : '综合推荐'
 			},
-			// 定位按钮上的城市名：已定位显示城市，未定位提示「定位」
+			// 定位按钮上的地名：选了地区显示地区名，否则显示定位到的城市/区县
 			cityLabel() {
+				if (this.region && this.region.name) return this.region.name
 				return cityText(this.loc)
+			},
+			// 距离基准：选了地区用该地区中心点，否则用当前坐标
+			// （用户可能选的是别的城市，用 GPS 距离会全是几千公里）
+			refPoint() {
+				const r = this.region
+				if (r && r.lat && r.lng) return { latitude: r.lat, longitude: r.lng }
+				return this.loc
 			}
 		},
 		onLoad() {
@@ -138,12 +154,24 @@
 		},
 		onShow() {
 			this.logged = isLoggedIn()
+			// 位置页可能刚改过地区：先同步，首次进入也要带上
+			const regionChanged = this.syncRegion()
 			if (!this.inited) {
 				this.inited = true
 				this.reload()
 				// 静默尝试定位（用户之前授权过才有结果，不弹窗打扰）
 				this.applyLocation(getCurrentLocation())
+				return
 			}
+			if (regionChanged) {
+				this.reload()
+				return
+			}
+			// 定位可能变了，静默刷一次（命中缓存不发请求）；
+			// 当前按距离排序时重拉列表，否则顺序还是旧的
+			this.applyLocation(getCurrentLocation()).then(() => {
+				if (this.params.sort === 'distance' && this.refPoint) this.reload()
+			})
 		},
 		onPullDownRefresh() {
 			this.reload().then(() => uni.stopPullDownRefresh())
@@ -153,19 +181,19 @@
 		},
 		methods: {
 			/**
-			 * 应用定位结果并补城市名。
-			 * ⚠️ 城市名必须用**新对象**整体替换 this.loc：
+			 * 应用定位结果并补行政区划（区县/街道）。
+			 * ⚠️ 必须用**新对象**整体替换 this.loc：
 			 *    直接改 loc.city 改的是原始对象，Vue3 的响应式代理感知不到，
-			 *    页面上的城市名不会更新（踩过这个坑）。
+			 *    页面上的地名不会更新（踩过这个坑）。
 			 */
 			async applyLocation(promise) {
 				const loc = await promise
 				if (!loc) return
 				this.loc = loc
-				// 逆地理编码取城市名（失败不阻塞）
-				const city = await resolveCity(loc)
-				if (city) {
-					this.loc = Object.assign({}, this.loc, { city })
+				// 逆地理编码取区县/街道（失败不阻塞主流程）
+				const area = await resolveArea(loc)
+				if (area && (area.city || area.district || area.township)) {
+					this.loc = Object.assign({}, this.loc, area)
 				}
 			},
 			async reload() {
@@ -189,6 +217,18 @@
 					if (!isNaN(max) && max > 0) p.price_max = max
 					else delete p.price_max
 
+					// 地区筛选：位置页选到区县就按区县，只选到市就按市
+					if (this.region && this.region.district) {
+						p.district = this.region.district
+						delete p.city
+					} else if (this.region && this.region.city) {
+						p.city = this.region.city
+						delete p.district
+					} else {
+						delete p.city
+						delete p.district
+					}
+
 					let res
 					if (this.searchMode && this.keyword) {
 						res = await sitterApi.search(this.keyword, { page: p.page, per_page: p.per_page })
@@ -211,21 +251,37 @@
 			// 「离我最近」：后端暂未实现距离排序，这里按 Haversine 本地排
 			// 没有坐标的机构统一排在最后
 			sortByDistance(list) {
-				if (this.params.sort !== 'distance' || !this.loc) return list
+				const base = this.refPoint
+				if (this.params.sort !== 'distance' || !base) return list
 				return list.slice().sort((a, b) => {
-					const da = distanceTo(a, this.loc)
-					const db = distanceTo(b, this.loc)
+					const da = distanceTo(a, base)
+					const db = distanceTo(b, base)
 					if (da == null && db == null) return 0
 					if (da == null) return 1
 					if (db == null) return -1
 					return da - db
 				})
 			},
-			// 机构距离文案
+			// 机构距离文案（基准点同上：地区中心或当前坐标）
 			distText(sitter) {
-				return formatDistance(distanceTo(sitter, this.loc))
+				const base = this.refPoint
+				if (!base) return ''
+				return formatDistance(distanceTo(sitter, base))
 			},
-			// 主动请求定位（用户点了「定位」按钮）
+			// 同步「选择位置」页选中的地区；返回 true 表示变了、需要重拉列表
+			syncRegion() {
+				const region = getSelectedRegion()
+				const key = region ? [region.province, region.city, region.district].join('|') : ''
+				if (key === this.regionKey) return false
+				this.regionKey = key
+				this.region = region
+				return true
+			},
+			// 点左上角定位：进入「选择位置」页（自动定位 / 选省市区）
+			openLocationPicker() {
+				uni.navigateTo({ url: '/pages/location/index' })
+			},
+			// 主动请求定位（按距离排序时若还没有坐标，先要一次授权）
 			async requestLocation() {
 				uni.showLoading({ title: '定位中...' })
 				const loc = await getCurrentLocation(true)
@@ -239,10 +295,10 @@
 					})
 				}
 				this.loc = loc
-				// 补城市名（逆地理编码），并用新对象触发响应式更新
-				const city = await resolveCity(loc)
-				if (city) {
-					this.loc = Object.assign({}, this.loc, { city })
+				// 补行政区划（逆地理编码），并用新对象触发响应式更新
+				const area = await resolveArea(loc)
+				if (area && (area.city || area.district || area.township)) {
+					this.loc = Object.assign({}, this.loc, area)
 				}
 				uni.showToast({ title: '定位成功', icon: 'none' })
 				if (this.params.sort === 'distance') {

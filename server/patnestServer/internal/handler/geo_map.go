@@ -29,6 +29,12 @@ const (
 	// 瓦片比整张静态图碎得多、也几乎不变化：限得更宽，缓存得更久
 	tileRatePerMinute = 600
 	tileTTL           = 24 * time.Hour
+
+	// 逆地理（坐标→区县/街道）：首页每次冷启动问一次，正常用户远低于这个量；
+	// 因为接口公开（游客也要看地名），限流按 IP 兜底防刷高德配额
+	reverseRatePerMinute = 30
+	// 行政区划查询（城市→区县）：进「选择位置」页时问一次，结果缓存一天
+	districtRatePerMinute = 30
 )
 
 // 逆地理缓存有效期：同一次选点会连续问几次相邻坐标，这里主要防重复请求；
@@ -161,6 +167,11 @@ func ReverseGeocode(c *gin.Context) {
 		BadRequest(c, "坐标超出范围")
 		return
 	}
+	// 公开接口，先限流再花高德配额
+	if !geoPublicWithinQuota(c, "regeo", reverseRatePerMinute) {
+		Fail(c, http.StatusTooManyRequests, 42901, "定位解析过于频繁，请一分钟后再试")
+		return
+	}
 	if !amap.Enabled() {
 		Fail(c, http.StatusNotImplemented, 50002, "服务端未配置 AMAP_KEY，无法解析坐标")
 		return
@@ -221,6 +232,27 @@ func imageWithinQuota(kind string, userID int64, limit int) bool {
 	n, err := cache.IncrWindow("geo:"+kind+":uid:"+strconv.FormatInt(userID, 10), time.Minute)
 	if err != nil {
 		log.Printf("[GeoMap] rate limit unavailable: %v", err)
+		return true
+	}
+	return n <= int64(limit)
+}
+
+// geoPublicWithinQuota 公开地理接口的限流。
+//
+// 这类接口（逆地理、行政区划）在公开路由组：首页顶部要显示区县，而游客（未登录）
+// 也在浏览机构列表，没有登录态可依。因此未登录按 IP 计数、已登录按用户计数——
+// 既防住匿名刷高德配额，也避免同一出口 IP 下的多个登录用户互相挤占。
+func geoPublicWithinQuota(c *gin.Context, kind string, limit int) bool {
+	if !cache.Enabled() {
+		return true
+	}
+	key := "geo:" + kind + ":ip:" + c.ClientIP()
+	if uid := c.GetInt64("user_id"); uid > 0 {
+		key = "geo:" + kind + ":uid:" + strconv.FormatInt(uid, 10)
+	}
+	n, err := cache.IncrWindow(key, time.Minute)
+	if err != nil {
+		log.Printf("[GeoMap] %s rate limit unavailable: %v", kind, err)
 		return true
 	}
 	return n <= int64(limit)

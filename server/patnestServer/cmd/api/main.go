@@ -72,11 +72,12 @@ func main() {
 	log.Println("[MinIO] Connecting to object storage...")
 	if cfg.MinIOAccessKey != "" && cfg.MinIOSecretKey != "" {
 		err := storage.InitMinIO(storage.MinIOConfig{
-			Endpoint:  cfg.MinIOEndpoint,
-			AccessKey: cfg.MinIOAccessKey,
-			SecretKey: cfg.MinIOSecretKey,
-			Bucket:    cfg.MinIOBucket,
-			UseSSL:    cfg.MinIOUseSSL,
+			Endpoint:   cfg.MinIOEndpoint,
+			AccessKey:  cfg.MinIOAccessKey,
+			SecretKey:  cfg.MinIOSecretKey,
+			Bucket:     cfg.MinIOBucket,
+			UseSSL:     cfg.MinIOUseSSL,
+			PublicBase: cfg.PublicFileBase,
 		})
 		if err != nil {
 			log.Printf("[MinIO] WARNING: %v (file upload will be unavailable)", err)

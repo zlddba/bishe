@@ -1,6 +1,6 @@
 {
     "name" : "宠栖PatNest",
-    "appid" : "",
+    "appid" : "__UNI__24E4D49",
     "description" : "宠栖 PatNest 微信小程序 · 宠物寄养服务预约（主人端）",
     "versionName" : "1.2.0",
     "versionCode" : "120",
@@ -8,7 +8,7 @@
     /* 本项目小程序端只覆盖微信小程序（mp-weixin）内容，
        其余平台（H5 / App / 各家小程序）不在本仓库实现范围内。 */
     "mp-weixin" : {
-        "appid" : "wx2a5cc54ef6e3e8ac",
+        "appid" : "wx1366ab99a6b27171",
         "setting" : {
             "urlCheck" : false,
             "es6" : true,
@@ -16,6 +16,14 @@
             "postcss" : true
         },
         "usingComponents" : true,
+        /* 组件按需注入（微信小程序「按需注入」能力）：
+           启动时只注入当前页面真正用到的组件代码，而不是把 components/ 下
+           的全部组件打进首屏。配合 easycom（pages.json）使用：
+           编译期仍按页面自动引入组件，运行期只加载用到的那部分。
+           ⚠️ 开启后不要用 <component :is="名字"> 这类动态组件 —— 编译器
+              分析不到引用，组件不会被打进页面，运行时报「组件不存在」。
+              本项目全部是静态标签，无此风险。 */
+        "lazyCodeLoading" : "requiredComponents",
         /* 定位与导航（见 docs/10-定位与导航服务配置指南.md §4.1）
            requiredPrivateInfos 微信只认这 8 个隐私接口：
              getFuzzyLocation / getLocation / onLocationChange /

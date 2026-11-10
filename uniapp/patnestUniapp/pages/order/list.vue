@@ -38,8 +38,8 @@
 
 			<empty
 				v-else-if="!loading && shown.length === 0"
-				text="还没有订单"
-				desc="去「找寄养」挑选一家心仪的机构吧"
+				:text="logged ? '还没有订单' : '登录后查看订单'"
+				:desc="logged ? '去「找寄养」挑选一家心仪的机构吧' : '登录后可以看到你下的全部订单'"
 			/>
 			<load-more :loading="loading" :has-more="hasMore" :empty="!loading && shown.length === 0" empty-text="" />
 		</view>
@@ -50,6 +50,7 @@
 	import { orderApi } from '../../utils/api.js'
 	import { fmtMoney } from '../../utils/format.js'
 	import { listOrders, saveOrder } from '../../utils/orderCache.js'
+	import { isLoggedIn } from '../../utils/auth.js'
 
 	export default {
 		data() {
@@ -64,6 +65,7 @@
 					{ value: 'closed', label: '已取消', statuses: ['cancelled', 'rejected'], filter: 'cancelled,rejected' }
 				],
 				tab: 'all',
+				logged: false,
 				list: [],
 				total: 0,
 				page: 1,
@@ -84,6 +86,14 @@
 			}
 		},
 		onShow() {
+			// 未登录不要打订单接口（必然 401），直接展示登录引导
+			this.logged = isLoggedIn()
+			if (!this.logged) {
+				this.list = []
+				this.total = 0
+				this.loading = false
+				return
+			}
 			this.reload()
 		},
 		onPullDownRefresh() {

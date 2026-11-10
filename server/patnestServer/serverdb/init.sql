@@ -16,6 +16,9 @@
 --     0018 的脏值检查、0019 的约束替换）——新库没有历史数据，这些语句无对象可作用。
 --   * 补上了原本缺失的 fn_sync_capacity_rows 定义（旧文件创建了引用它的触发器却没定义函数，
 --     单独执行会在 CREATE TRIGGER 处失败）。
+--   * 文件链接（头像 / 封面 / 相册 / 证件 / 动态与评价配图）只存相对路径
+--     /uploads/YYYY/MM/xxx.ext，域名与协议不入库；绝对地址由 API 出站时按
+--     PUBLIC_FILE_BASE 拼接（internal/middleware/fileurl.go，0008 迁移已转换存量数据）。
 --   * migrations/ 目录只保留 0001_baseline.sql（内容不得改动，老库依赖它的校验和）；
 --     0002~0021 已归档到 migrations/archive/，仅供追溯，不再被 cmd/migrate 加载。
 -- ==================================================================
@@ -626,6 +629,8 @@ CREATE TABLE IF NOT EXISTS geocode_cache (
     resolved_city     VARCHAR(64)    NOT NULL DEFAULT '',
     adcode            VARCHAR(16)    NOT NULL DEFAULT '',
     district          VARCHAR(64)    NOT NULL DEFAULT '',
+    township          VARCHAR(64)    NOT NULL DEFAULT '',
+    province          VARCHAR(64)    NOT NULL DEFAULT '',
     level             VARCHAR(64)    NOT NULL DEFAULT '',
     hit_count         INT            NOT NULL DEFAULT 1 CHECK (hit_count >= 1),
     created_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),

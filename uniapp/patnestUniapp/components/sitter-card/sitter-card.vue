@@ -15,7 +15,7 @@
 					<text class="star">★</text>
 					<text class="score-num">{{ score }}</text>
 					<text class="review-count">({{ sitter.review_count || 0 }})</text>
-					<text v-if="distanceText" class="dist">· 距你 {{ distanceText }}</text>
+					<text v-if="distanceText" class="dist">· {{ distancePrefix }} {{ distanceText }}</text>
 				</view>
 				<view class="price">
 					<text class="price-num">¥{{ price }}</text>
@@ -43,6 +43,12 @@
 			distanceText: {
 				type: String,
 				default: ''
+			},
+			// 距离前面的说明：默认「距你」；按地区浏览时页面会传「距该地区」，
+			// 因为那时距离基准是地区中心而不是用户位置
+			distancePrefix: {
+				type: String,
+				default: '距你'
 			},
 			// 为 false 时不跳转详情（用于收藏对比等内嵌场景）
 			linkable: {

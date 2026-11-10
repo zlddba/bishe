@@ -117,7 +117,9 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	url := storage.PublicURL(objectKey)
+	// 入库用相对路径（/uploads/...）：域名不进数据库。
+	// 出站时中间件会补成完整地址，客户端拿到的仍是可直接显示的链接。
+	url := storage.RelPath(objectKey)
 	c.JSON(http.StatusOK, Response{
 		Code:    0,
 		Message: "上传成功",

@@ -85,11 +85,27 @@ function rawRequest(options) {
 // ---------------------------------------------------------------------------
 async function request(options) {
 	const token = getAccessToken()
+
+	// 没有令牌就直接拒绝，不发请求。
+	// 裸着发出去后端必然回 401：既刷一屏红色错误日志，又会触发一次注定失败的
+	// 刷新尝试。页面拿到 reject 后自己决定要不要引导登录。
+	// 公开接口（noAuth: true）不受影响。
+	if (!token && options.noAuth !== true) {
+		return Promise.reject({
+			code: ERROR_CODE.UNAUTHENTICATED,
+			message: '请先登录'
+		})
+	}
+
 	const header = Object.assign(
 		{ 'Content-Type': 'application/json' },
 		options.header || {}
 	)
-	if (token && !options.noAuth) {
+	// 有令牌就带上，无论接口是否要求登录：
+	//   - 公开接口（noAuth）由后端自行决定用不用，逆地理编码据此把登录用户计在账号头上，
+	//     而不是和无登录用户一起挤同一个 IP 配额；
+	//   - 登录/注册这类接口后端不校验 Authorization，多带一个头没有副作用。
+	if (token) {
 		header['Authorization'] = 'Bearer ' + token
 	}
 

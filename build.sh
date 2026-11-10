@@ -120,7 +120,15 @@ cp "$TPL_DIR/Dockerfile.api" "$TPL_DIR/Dockerfile.web" "$TPL_DIR/Dockerfile.agen
 # 放进 docker/ 子目录会导致 build 时 "agent-entrypoint.sh: not found"。
 cp "$TPL_DIR/agent-entrypoint.sh" "$PKG_DIR/"
 cp "$TPL_DIR/nginx/default.conf" "$PKG_DIR/docker/nginx/"
+# locations.conf 是 9200/443 两个 server 共用的规则，Dockerfile.web 会 COPY 它
+cp "$TPL_DIR/nginx/locations.conf" "$PKG_DIR/docker/nginx/"
+# 证书热加载守护，被 copy 到 /docker-entrypoint.d/
+cp "$TPL_DIR/nginx/tls-watch.sh" "$PKG_DIR/docker/nginx/"
 cp "$TPL_DIR/nginx/upstream.conf" "$PKG_DIR/nginx/"
+# 证书目录是运行时挂载源（compose 的 ./nginx/tls）。必须带一个 https.conf 占位：
+# 新版 default.conf 会 include 它，文件缺失 nginx 直接起不来。
+mkdir -p "$PKG_DIR/nginx/tls"
+cp "$TPL_DIR/nginx/tls/https.conf" "$PKG_DIR/nginx/tls/"
 cp "$TPL_DIR"/scripts/*.sh "$PKG_DIR/scripts/"
 if compgen -G "$TPL_DIR/scripts/*.ps1" >/dev/null; then
   cp "$TPL_DIR"/scripts/*.ps1 "$PKG_DIR/scripts/"

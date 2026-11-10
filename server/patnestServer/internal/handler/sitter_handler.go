@@ -52,6 +52,19 @@ func ListSitters(c *gin.Context) {
 		idx++
 	}
 
+	// 地区筛选：机构只在 address 里存自由文本，没有结构化的省市区字段，
+	// 所以按「包含」匹配。区县优先——传了区县就不必再比城市，
+	// 否则「呼和浩特市」会把该市所有区县都算进来，和用户的意图不符。
+	if district := strings.TrimSpace(c.Query("district")); district != "" {
+		where += fmt.Sprintf(" AND s.address ILIKE $%d", idx)
+		args = append(args, "%"+district+"%")
+		idx++
+	} else if city := strings.TrimSpace(c.Query("city")); city != "" {
+		where += fmt.Sprintf(" AND s.address ILIKE $%d", idx)
+		args = append(args, "%"+city+"%")
+		idx++
+	}
+
 	orderBy := "s.avg_score DESC, s.review_count DESC"
 	switch c.Query("sort") {
 	case "price_asc":

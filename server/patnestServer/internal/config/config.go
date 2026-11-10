@@ -25,9 +25,13 @@ type Config struct {
 	MinIOSecretKey      string
 	MinIOBucket         string
 	MinIOUseSSL         bool
-	RedisAddr           string
-	RedisPassword       string
-	RedisDB             int
+	// PublicFileBase 图片对外访问前缀，例如 https://api.example.com/files。
+	// 配置后上传接口返回这个前缀的地址（由 Nginx 反代到对象存储），
+	// 留空则继续返回对象存储直链，兼容老部署。
+	PublicFileBase string
+	RedisAddr      string
+	RedisPassword  string
+	RedisDB        int
 	// 高德地图 Web 服务 API（机构地理编码 / POI / 距离计算），仅后端使用，禁止下发客户端
 	AMapKey     string
 	AMapBaseURL string
@@ -55,6 +59,7 @@ func Load() *Config {
 		MinIOSecretKey:      getStr("MINIO_SECRET_KEY", ""),
 		MinIOBucket:         getStr("MINIO_BUCKET", "patnest-uploads"),
 		MinIOUseSSL:         getBool("MINIO_USE_SSL", false),
+		PublicFileBase:      getStr("PUBLIC_FILE_BASE", ""),
 		RedisAddr:           getStr("REDIS_ADDR", ""),
 		RedisPassword:       getStr("REDIS_PASSWORD", ""),
 		RedisDB:             getInt("REDIS_DB", 0),
