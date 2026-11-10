@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F48AA5"/>
+      <stop offset="100%" stop-color="#8E3B4E"/>
+    </linearGradient>
+    <linearGradient id="paw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E0708A"/>
+      <stop offset="100%" stop-color="#AF4A62"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角方形 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+  <!-- 小窝（奶白色房子，圆润） -->
+  <path d="M 512 220
+           L 250 430
+           Q 220 455 250 475
+           L 280 495
+           L 280 770
+           Q 280 810 320 810
+           L 704 810
+           Q 744 810 744 770
+           L 744 495
+           L 774 475
+           Q 804 455 774 430
+           Z"
+        fill="#FFF5F7"/>
+
+  <!-- 猫爪印（房子中央，粉色渐变） -->
+  <!-- 大掌垫 -->
+  <ellipse cx="512" cy="660" rx="72" ry="60" fill="url(#paw)"/>
+  <!-- 四个小肉垫 -->
+  <ellipse cx="420" cy="575" rx="28" ry="36" fill="url(#paw)"/>
+  <ellipse cx="478" cy="545" rx="26" ry="34" fill="url(#paw)"/>
+  <ellipse cx="546" cy="545" rx="26" ry="34" fill="url(#paw)"/>
+  <ellipse cx="604" cy="575" rx="28" ry="36" fill="url(#paw)"/>
+</svg>

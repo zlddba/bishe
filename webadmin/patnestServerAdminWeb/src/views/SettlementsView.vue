@@ -12,6 +12,17 @@
       </div>
     </div>
 
+    <div class="commission-bar">
+      <span class="cb-title">平台默认佣金比例</span>
+      <el-input-number v-model="commissionPct" :min="0" :max="100" :precision="2" :step="1" style="width:130px" />
+      <span class="cb-unit">%</span>
+      <el-button type="primary" :loading="savingRate" @click="saveCommission">保存</el-button>
+      <span class="cb-hint">
+        未单独设置比例的机构按此扣佣；已单独设置的机构不受影响（在「机构管理 - 编辑」里单独设置）
+        <template v-if="commissionUpdatedAt"> · 上次修改 {{ commissionUpdatedAt }}</template>
+      </span>
+    </div>
+
     <div class="table-card">
       <el-table :data="items" v-loading="loading" stripe>
         <el-table-column prop="id" label="单号" width="70" />
@@ -25,6 +36,9 @@
         </el-table-column>
         <el-table-column label="平台佣金" width="110">
           <template #default="{ row }">¥{{ Number(row.commission_amount).toFixed(2) }}</template>
+        </el-table-column>
+        <el-table-column label="佣金比例" width="95">
+          <template #default="{ row }">{{ rateText(row) }}</template>
         </el-table-column>
         <el-table-column label="应打款" width="110">
           <template #default="{ row }"><strong>¥{{ Number(row.net_amount).toFixed(2) }}</strong></template>
@@ -96,8 +110,55 @@ const dialog = ref(false)
 const current = ref(null)
 const note = ref('')
 
+// 全局佣金比例（百分比展示，接口用 0-1 小数）
+const commissionPct = ref(10)
+const commissionUpdatedAt = ref('')
+const savingRate = ref(false)
+
 function statusLabel(s) { return { pending: '待打款', paid: '已打款', rejected: '已驳回' }[s] || s }
 function statusClass(s) { return { pending: 'pn-tag-warn', paid: 'pn-tag-ok', rejected: 'pn-tag-danger' }[s] || 'pn-tag-soft' }
+
+// 结算单落库时已固化佣金金额，比例按「佣金 / 流水」反算，历史单也能看当时的比例
+function rateText(row) {
+  // 0004 之后结算单把当时生效的比例一起落库，优先用它；
+  // 历史单该字段为 null，只能按「佣金 / 流水」反算
+  if (row.commission_rate != null) {
+    return (Number(row.commission_rate) * 100).toFixed(2).replace(/\.00$/, '') + '%'
+  }
+  const gross = Number(row.gross_amount) || 0
+  const commission = Number(row.commission_amount) || 0
+  if (gross <= 0) return '-'
+  return (commission / gross * 100).toFixed(2).replace(/\.00$/, '') + '%'
+}
+
+async function loadCommission() {
+  try {
+    const res = await adminApi.getCommissionSetting()
+    const rate = Number(res.data?.rate ?? 0.1)
+    commissionPct.value = Number((rate * 100).toFixed(2))
+    commissionUpdatedAt.value = res.data?.updated_at || ''
+  } catch (e) {
+    ElMessage.error(e.message || '加载佣金比例失败')
+  }
+}
+
+async function saveCommission() {
+  const pct = Number(commissionPct.value)
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    ElMessage.warning('佣金比例需在 0 ~ 100 之间')
+    return
+  }
+  savingRate.value = true
+  try {
+    await adminApi.updateCommissionSetting({ rate: Number((pct / 100).toFixed(4)) })
+    ElMessage.success('平台默认佣金已更新')
+    loadCommission()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    savingRate.value = false
+  }
+}
 
 async function loadData() {
   loading.value = true
@@ -136,5 +197,25 @@ async function handle(action) {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadCommission()
+  loadData()
+})
 </script>
+
+<style scoped>
+.commission-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid var(--line, #e8eaef);
+  border-radius: 10px;
+}
+.cb-title { font-size: 13px; font-weight: 600; color: var(--ink, #1f2430); }
+.cb-unit { font-size: 13px; color: var(--ink3, #8a90a0); margin-right: 4px; }
+.cb-hint { font-size: 12px; color: var(--ink3, #8a90a0); margin-left: 4px; }
+</style>

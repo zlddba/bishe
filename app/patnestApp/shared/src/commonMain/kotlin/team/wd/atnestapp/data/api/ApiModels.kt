@@ -98,7 +98,12 @@ data class ApplySitterResult(
 )
 
 @Serializable
-data class CancelRequestResult(val mode: String = "", val deadline: String = "")
+data class CancelRequestResult(
+    val mode: String = "",
+    val deadline: String = "",
+    /** 账户注销时钱包余额会转成退款单，这里是预计转出的金额（0 或 null 表示没有余额） */
+    @SerialName("wallet_refund_amount") val walletRefundAmount: Double? = null,
+)
 
 @Serializable
 data class WithdrawCancelResult(val withdrawn: Boolean = false)
@@ -578,6 +583,8 @@ data class EarningsSummaryDto(
     @SerialName("commission_rate") val commissionRate: Double = 0.0,
     @SerialName("commission_amount") val commissionAmount: Double = 0.0,
     @SerialName("net_amount") val netAmount: Double = 0.0,
+    /** 明细最多 200 条，超过时汇总仍按全量统计 */
+    @SerialName("item_truncated") val itemTruncated: Boolean = false,
 )
 
 @Serializable
@@ -664,6 +671,8 @@ data class SettlementDto(
     @SerialName("gross_amount") val grossAmount: Double = 0.0,
     @SerialName("commission_amount") val commissionAmount: Double = 0.0,
     @SerialName("net_amount") val netAmount: Double = 0.0,
+    /** 结算时生效的佣金比例；0004 之前的历史单为 null，前端回退到金额反算 */
+    @SerialName("commission_rate") val commissionRate: Double? = null,
     val status: String = "pending",
     @SerialName("applied_at") val appliedAt: String = "",
     @SerialName("paid_at") val paidAt: String = "",
@@ -672,10 +681,30 @@ data class SettlementDto(
 @Serializable
 data class SettlementListDto(val items: List<SettlementDto> = emptyList())
 
+/**
+ * 本次可申请结算的区间。
+ * 起点由后端按「上一次 pending/paid 结算单的 period_end + 1」计算，
+ * 机构漏点某个月时会自动带上，不会丢收益。
+ */
+@Serializable
+data class SettlementWindowDto(
+    val start: String = "",
+    val end: String = "",
+    @SerialName("order_count") val orderCount: Int = 0,
+    @SerialName("gross_amount") val grossAmount: Double = 0.0,
+    @SerialName("commission_rate") val commissionRate: Double = 0.0,
+    @SerialName("commission_amount") val commissionAmount: Double = 0.0,
+    @SerialName("net_amount") val netAmount: Double = 0.0,
+    /** 是否已有待打款的结算单 */
+    @SerialName("has_pending") val hasPending: Boolean = false,
+)
+
 @Serializable
 data class SettlementApplyPayload(
-    @SerialName("period_start") val periodStart: String,
-    @SerialName("period_end") val periodEnd: String,
+    // 留空表示「由后端算上次结算之后 → 今天」，客户端不再自己拼本月 1 号，
+    // 否则机构漏点一个月，那段收益会永远落在区间外
+    @SerialName("period_start") val periodStart: String = "",
+    @SerialName("period_end") val periodEnd: String = "",
 )
 
 @Serializable
@@ -943,6 +972,21 @@ data class WalletTransactionListDto(val items: List<WalletTransactionDto> = empt
 
 @Serializable
 data class RechargeRequestDto(val amount: Double, val channel: String = "mock")
+
+/** 余额退款申请：钱包没有提现通道，提交后由客服线下打款 */
+@Serializable
+data class WalletWithdrawalPayload(
+    val amount: Double,
+    @SerialName("account_name") val accountName: String,
+    @SerialName("account_no") val accountNo: String,
+    val contact: String = "",
+)
+
+@Serializable
+data class WalletWithdrawalResultDto(
+    val id: Long = 0,
+    val amount: Double = 0.0,
+)
 
 @Serializable
 data class RechargeResultDto(

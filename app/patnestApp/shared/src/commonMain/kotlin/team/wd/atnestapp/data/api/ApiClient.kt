@@ -442,6 +442,21 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun confirmRecharge(rechargeId: Long): RechargeConfirmDto =
         postNoBody<RechargeConfirmDto>("/pet-owner/wallet/recharge/$rechargeId/pay")
 
+    /**
+     * 申请把钱包余额退回。钱包没有提现通道，这里只登记申请单，
+     * 客服线下打款后由后台确认；提交时余额已扣走，不会重复占用。
+     */
+    suspend fun applyWalletWithdrawal(
+        amount: Double,
+        accountName: String,
+        accountNo: String,
+        contact: String,
+    ): WalletWithdrawalResultDto =
+        postData(
+            "/pet-owner/wallet/withdrawals",
+            WalletWithdrawalPayload(amount, accountName, accountNo, contact),
+        )
+
     /** 提交售后工单（联系客服） */
     suspend fun createTicket(category: String, title: String, content: String): ClaimResult =
         postData("/support/tickets", TicketPayload(category, title, content))
@@ -720,8 +735,11 @@ class ApiClient(rawBaseUrl: String) {
         return data.items
     }
 
-    suspend fun applySettlement(periodStart: String, periodEnd: String): SettlementDto =
+    suspend fun applySettlement(periodStart: String = "", periodEnd: String = ""): SettlementDto =
         postData("/sitter/settlements", SettlementApplyPayload(periodStart, periodEnd))
+
+    /** 本次可申请结算的区间（起点为上次结算之后，漏掉的月份会自动带上） */
+    suspend fun settlementWindow(): SettlementWindowDto = getData("/sitter/settlements/window")
 
     suspend fun sitterAddons(sitterId: Long): List<AddonDto> {
         val data: AddonListDto = getData("/sitters/$sitterId/addons")

@@ -332,9 +332,11 @@ private fun AccountSecurityPanel(app: AppState) {
                 Text("注销账户", color = PatNestColors.Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (app.isSitterAccount) {
-                        "可选择注销整个账户或仅注销机构；申请后立即退出登录，3 天内重新登录自动撤销。"
+                        "可选择注销整个账户或仅注销机构；申请后立即退出登录，3 天内重新登录自动撤销。" +
+                            "注销机构前需先结清待打款结算、完成进行中的订单，并清空钱包余额。"
                     } else {
-                        "申请后立即退出登录，进入 3 天冷静期；重新登录自动撤销，到期后自动删除账号数据。"
+                        "申请后立即退出登录，进入 3 天冷静期；重新登录自动撤销，到期后自动删除账号数据。" +
+                            "钱包余额不会作废，会自动转成一张退款单，客服联系确认收款方式后打款。"
                     },
                     color = PatNestColors.Ink2, fontSize = 12.sp,
                     modifier = Modifier.padding(top = 3.dp),
@@ -344,7 +346,9 @@ private fun AccountSecurityPanel(app: AppState) {
                 GhostButton("注销机构", {
                     app.modal = ModalKind.Confirm(
                         "注销机构",
-                        "提交后将立即退出登录并进入 3 天冷静期：重新登录自动撤销；到期后机构将被注销，账号退回主人角色。",
+                        "提交后将立即退出登录并进入 3 天冷静期：重新登录自动撤销；到期后机构将被注销，账号退回主人角色。" +
+                            "注销时会把尚未结算的收益自动生成一张待打款结算单，钱不会丢；" +
+                            "但如果还有待打款的结算、未完成的订单或钱包余额，需要先处理完才能提交。",
                     ) { app.scope.launch { app.requestAccountCancel("sitter") } }
                 }, textColor = PatNestColors.Danger, height = 36.dp)
                 Spacer(Modifier.width(10.dp))

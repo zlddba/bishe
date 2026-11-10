@@ -105,7 +105,7 @@ func SitterStats(c *gin.Context) {
 	var todayRevenue float64
 	_ = db.Pool.QueryRow(context.Background(), `
 		SELECT COALESCE(SUM(total_amount), 0) FROM orders
-		WHERE sitter_id = $1 AND status = 'completed' AND deleted_at IS NULL
+		WHERE sitter_id = $1 AND status IN `+doneOrderStatuses+` AND deleted_at IS NULL
 		  AND completed_at::date = current_date`, sitterID).Scan(&todayRevenue)
 
 	OK(c, gin.H{

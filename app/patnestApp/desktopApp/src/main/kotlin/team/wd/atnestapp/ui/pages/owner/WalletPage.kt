@@ -84,6 +84,7 @@ fun walletSignedAmount(tx: WalletTransactionDto): Double = when (tx.type) {
 @Composable
 fun WalletPage(app: AppState) {
     var showRecharge by remember { mutableStateOf(false) }
+    var showWithdraw by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { app.loadWallet() }
 
@@ -100,6 +101,8 @@ fun WalletPage(app: AppState) {
         ) {
             PageHeader("我的钱包", "真实货币余额，可用于支付寄养订单")
             Spacer(Modifier.weight(1f))
+            // 钱包没有提现通道，退款走「申请 → 客服线下打款 → 后台确认」
+            GhostButton("申请退款", { showWithdraw = true }, height = 38.dp)
             PrimaryButton("充值", { showRecharge = true }, height = 38.dp, icon = AppIcon.Plus)
         }
 
@@ -148,6 +151,114 @@ fun WalletPage(app: AppState) {
                 }
             },
         )
+    }
+
+    if (showWithdraw) {
+        WithdrawDialog(
+            balance = app.wallet?.balance ?: app.walletBalance,
+            onDismiss = { showWithdraw = false },
+            onConfirm = { amount, name, no, contact ->
+                app.scope.launch {
+                    val ok = app.applyWalletWithdrawal(amount, name, no, contact)
+                    if (ok) showWithdraw = false
+                }
+            },
+        )
+    }
+}
+
+/**
+ * 余额退款申请。
+ *
+ * 收款信息是必填的：钱包没有提现通道，客服要靠这些信息线下打款；
+ * 不填就只能靠电话追问，退款单会一直挂着。
+ */
+@Composable
+private fun WithdrawDialog(
+    balance: Double,
+    onDismiss: () -> Unit,
+    onConfirm: (Double, String, String, String) -> Unit,
+) {
+    var amountText by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var accountNo by remember { mutableStateOf("") }
+    var contact by remember { mutableStateOf("") }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0x66241A1E))
+            .clickable { onDismiss() },
+    ) {
+        Box(
+            Modifier
+                .align(Alignment.Center)
+                .width(420.dp)
+                .clip(PatNestShape.Lg)
+                .background(Color.White)
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
+                .padding(22.dp),
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("申请余额退款", color = PatNestColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Box(Modifier.size(26.dp).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
+                        AppIcon(AppIcon.Close, Modifier.size(16.dp), PatNestColors.Ink3)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "当前可用余额 ¥$moneyText(balance)",
+                    color = PatNestColors.Ink3, fontSize = 12.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+
+                FieldLabel("退款金额（元）")
+                SoftTextField(
+                    amountText,
+                    { amountText = it.filter { c -> c.isDigit() || c == '.' }.take(10) },
+                    Modifier.fillMaxWidth(),
+                    placeholder = "不超过可用余额",
+                )
+                Spacer(Modifier.height(10.dp))
+                FieldLabel("收款人姓名")
+                SoftTextField(name, { name = it.take(32) }, Modifier.fillMaxWidth(), placeholder = "与银行卡/支付宝一致")
+                Spacer(Modifier.height(10.dp))
+                FieldLabel("收款账号")
+                SoftTextField(
+                    accountNo,
+                    { accountNo = it.take(64) },
+                    Modifier.fillMaxWidth(),
+                    placeholder = "银行卡号 / 支付宝账号",
+                )
+                Spacer(Modifier.height(10.dp))
+                FieldLabel("联系电话")
+                SoftTextField(contact, { contact = it.take(20) }, Modifier.fillMaxWidth(), placeholder = "方便客服确认")
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "提交后金额会立即从余额扣除，由客服线下打款；若被驳回，金额自动退回钱包。",
+                    color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                )
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GhostButton("取消", onDismiss, Modifier.weight(1f), height = 40.dp)
+                    PrimaryButton(
+                        "提交申请",
+                        {
+                            val amount = amountText.toDoubleOrNull()
+                            if (amount == null || amount <= 0.0 || name.isBlank() || accountNo.isBlank()) {
+                                return@PrimaryButton
+                            }
+                            onConfirm(amount, name.trim(), accountNo.trim(), contact.trim())
+                        },
+                        Modifier.weight(1f),
+                        height = 40.dp,
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -126,6 +126,10 @@ CREATE TABLE IF NOT EXISTS users (
     cancel_mode         VARCHAR(16),
     cancel_requested_at TIMESTAMPTZ,
     cancel_deadline     TIMESTAMPTZ,
+    -- 0007：注销执行失败的重试控制
+    cancel_attempts     INT             NOT NULL DEFAULT 0,
+    cancel_last_error   VARCHAR(255),
+    cancel_blocked_at   TIMESTAMPTZ,
     token_invalid_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
@@ -192,6 +196,7 @@ CREATE TABLE IF NOT EXISTS sitters (
     status          sitter_status   NOT NULL DEFAULT 'pending',
     banned_at       TIMESTAMPTZ,
     banned_reason   VARCHAR(255),
+    commission_rate NUMERIC(5,4)    CHECK (commission_rate IS NULL OR (commission_rate >= 0 AND commission_rate <= 1)),
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ
@@ -199,6 +204,7 @@ CREATE TABLE IF NOT EXISTS sitters (
 
 COMMENT ON TABLE sitters IS 'Boarding facilities / individual sitters';
 COMMENT ON COLUMN sitters.avg_score IS 'Denormalized average, updated by trigger on review insert';
+COMMENT ON COLUMN sitters.commission_rate IS '机构单独佣金比例 0-1，NULL 表示跟随 platform_settings.commission_rate';
 
 -- 3.4 sitter_daily_capacity
 CREATE TABLE IF NOT EXISTS sitter_daily_capacity (
@@ -546,13 +552,15 @@ CREATE INDEX IF NOT EXISTS idx_ticket_messages ON ticket_messages (ticket_id, cr
 -- 3.24 机构结算（0003）
 CREATE TABLE IF NOT EXISTS sitter_settlements (
     id              BIGSERIAL       PRIMARY KEY,
-    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE CASCADE,
+    -- 财务凭证：机构有结算记录时不允许物理删除（0005 由 CASCADE 改为 RESTRICT）
+    sitter_id       BIGINT          NOT NULL REFERENCES sitters(id) ON DELETE RESTRICT,
     period_start    DATE            NOT NULL,
     period_end      DATE            NOT NULL,
     order_count     INT             NOT NULL DEFAULT 0,
     gross_amount    NUMERIC(12,2)   NOT NULL DEFAULT 0,
     commission_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
     net_amount      NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    commission_rate NUMERIC(5,4),
     status          VARCHAR(16)     NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','paid','rejected')),
     applied_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
@@ -641,6 +649,16 @@ CREATE TABLE IF NOT EXISTS geo_pick_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_geo_pick_sessions_expires ON geo_pick_sessions (expires_at);
 
+-- 3.30 平台配置（0003_commission_rates）
+-- 后台可改的全局参数，值统一存文本，读的时候按业务自行解析。
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT        NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by BIGINT      REFERENCES users(id) ON DELETE SET NULL
+);
+COMMENT ON TABLE platform_settings IS '平台级运行时配置（键值对），后台可改，不需要发版';
+
 -- ==================================================================
 -- 4. Indexes
 -- ==================================================================
@@ -684,6 +702,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_owner     ON orders (owner_id, created_at 
 CREATE INDEX IF NOT EXISTS idx_orders_sitter    ON orders (sitter_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_status    ON orders (status) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_dates     ON orders (start_date, end_date) WHERE deleted_at IS NULL;
+-- 收益 / 结算按机构 + 完成时间区间查，idx_orders_sitter 用的是 created_at，命中不了
+CREATE INDEX IF NOT EXISTS idx_orders_sitter_completed ON orders (sitter_id, completed_at) WHERE deleted_at IS NULL;
 
 -- order_pet
 CREATE INDEX IF NOT EXISTS idx_order_pet_pet    ON order_pet (pet_id);
@@ -1339,6 +1359,30 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
 CREATE INDEX IF NOT EXISTS idx_wtx_user_time ON wallet_transactions (user_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_wtx_ref       ON wallet_transactions (ref_type, ref_id);
 
+-- 3.26 钱包余额退款单（0006）
+-- 钱包没有提现接口，账号注销时余额会悬空；这里把余额转成退款单，
+-- 由后台确认打款或驳回（驳回原路退回钱包）。
+CREATE TABLE IF NOT EXISTS wallet_withdrawals (
+    id           BIGSERIAL     PRIMARY KEY,
+    user_id      BIGINT        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    amount       NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    status       VARCHAR(16)   NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending','paid','rejected')),
+    -- cancel = 注销时自动转出；manual = 用户主动申请（预留）
+    source       VARCHAR(16)   NOT NULL DEFAULT 'manual'
+                 CHECK (source IN ('cancel','manual')),
+    account_name VARCHAR(64),
+    account_no   VARCHAR(128),
+    contact      VARCHAR(64),
+    note         VARCHAR(255),
+    admin_id     BIGINT        REFERENCES users(id) ON DELETE SET NULL,
+    admin_note   VARCHAR(255),
+    applied_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    paid_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_wd_status ON wallet_withdrawals (status, applied_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wd_user   ON wallet_withdrawals (user_id, id DESC);
+
 CREATE TABLE IF NOT EXISTS recharge_orders (
     id             BIGSERIAL PRIMARY KEY,
     user_id        BIGINT       NOT NULL REFERENCES wallets(user_id),
@@ -1380,6 +1424,10 @@ INSERT INTO role_permissions (role, permission, allowed) VALUES
   ('sitter','dynamics.publish',TRUE),('sitter','settlements.apply',TRUE)
 ON CONFLICT (role, permission) DO NOTHING;
 
+-- 0003_commission_rates：平台默认佣金比例（机构可在 sitters.commission_rate 单独覆盖）
+INSERT INTO platform_settings (key, value) VALUES ('commission_rate', '0.10')
+ON CONFLICT (key) DO NOTHING;
+
 -- 0003：默认通知模板
 INSERT INTO notification_templates (code, name, title, content, channel) VALUES
   ('order_created','新订单提醒','收到新预约 {{order_no}}','宠物主人 {{owner}} 提交了 {{start}} 至 {{end}} 的预约，请尽快确认。','in_app'),
@@ -1414,15 +1462,16 @@ COMMIT;
 
 -- ==================================================================
 -- PatNest database initialization complete.
--- 36 张表 = 35 张业务表 + 迁移记录表 schema_migrations：
+-- 38 张表 = 37 张业务表 + 迁移记录表 schema_migrations：
 --   users, pets, sitters, sitter_daily_capacity, orders, order_pet,
 --   dynamics, reviews, payments, notifications, audit_logs, refresh_tokens,
---   wallets, wallet_transactions, recharge_orders,
+--   wallets, wallet_transactions, recharge_orders, wallet_withdrawals,
 --   system_release, coupons, user_coupons, points_ledger, favorites,
 --   sitter_price_rules, sitter_addons, order_addons, dynamic_likes,
 --   dynamic_comments, review_followups, refund_requests, support_tickets,
 --   ticket_messages, sitter_settlements, notification_templates,
 --   role_permissions, notification_push_tasks, geocode_cache, geo_pick_sessions,
+--   platform_settings,
 --   schema_migrations
 -- 函数：fn_set_updated_at, fn_generate_order_no, fn_calculate_order_cost,
 --   fn_update_sitter_score, fn_reserve_capacity, fn_release_capacity,

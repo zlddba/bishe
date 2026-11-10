@@ -74,6 +74,8 @@ func adminPermissionFor(method, path string) string {
 		return "tickets.handle"
 	case strings.HasPrefix(path, "/api/v1/admin/settlements"):
 		return "settlements.manage"
+	case strings.HasPrefix(path, "/api/v1/admin/settings"):
+		return "system.settings"
 	case strings.HasPrefix(path, "/api/v1/admin/audit"):
 		return "audit.read"
 	case strings.HasPrefix(path, "/api/v1/admin/system"),

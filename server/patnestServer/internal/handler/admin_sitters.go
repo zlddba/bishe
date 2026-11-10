@@ -28,9 +28,15 @@ func AdminCreateSitter(c *gin.Context) {
 		CoverPhoto   string   `json:"cover_photo_url"`
 		DetailPhotos []string `json:"detail_photos"`
 		Status       string   `json:"status"`
+		// 不传则跟随平台默认佣金
+		CommissionRate *float64 `json:"commission_rate"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	if req.CommissionRate != nil && (*req.CommissionRate < 0 || *req.CommissionRate > 1) {
+		BadRequest(c, "佣金比例需在 0 ~ 1 之间，例如 0.1 表示 10%")
 		return
 	}
 
@@ -47,12 +53,12 @@ func AdminCreateSitter(c *gin.Context) {
 	var id int64
 	err := db.Pool.QueryRow(context.Background(),
 		`INSERT INTO sitters (user_id, name, type, description, daily_price, visit_price, price_mode,
-		 capacity, address, latitude, longitude, cover_photo_url, detail_photos, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		 capacity, address, latitude, longitude, cover_photo_url, detail_photos, status, commission_rate)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 RETURNING id`,
 		req.UserID, req.Name, req.Type, nilIfEmpty(req.Description), req.DailyPrice, req.VisitPrice,
 		req.PriceMode, req.Capacity, nilIfEmpty(req.Address), req.Latitude, req.Longitude,
-		nilIfEmpty(req.CoverPhoto), photos, status,
+		nilIfEmpty(req.CoverPhoto), photos, status, req.CommissionRate,
 	).Scan(&id)
 	if err != nil {
 		InternalError(c, "创建机构失败: "+err.Error())
@@ -94,9 +100,17 @@ func AdminUpdateSitter(c *gin.Context) {
 		Longitude    *float64  `json:"longitude"`
 		CoverPhoto   *string   `json:"cover_photo_url"`
 		DetailPhotos *[]string `json:"detail_photos"`
+		// 单独佣金比例 0-1；InheritCommission=true 时清空，改回跟随平台默认
+		CommissionRate    *float64 `json:"commission_rate"`
+		InheritCommission bool     `json:"inherit_commission"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	if !req.InheritCommission && req.CommissionRate != nil &&
+		(*req.CommissionRate < 0 || *req.CommissionRate > 1) {
+		BadRequest(c, "佣金比例需在 0 ~ 1 之间，例如 0.1 表示 10%")
 		return
 	}
 
@@ -162,6 +176,14 @@ func AdminUpdateSitter(c *gin.Context) {
 	if req.DetailPhotos != nil {
 		updates += fmt.Sprintf("detail_photos = $%d, ", idx)
 		args = append(args, *req.DetailPhotos)
+		idx++
+	}
+	// inherit_commission 优先：显式要求跟随平台默认时，把单独比例清成 NULL
+	if req.InheritCommission {
+		updates += "commission_rate = NULL, "
+	} else if req.CommissionRate != nil {
+		updates += fmt.Sprintf("commission_rate = $%d, ", idx)
+		args = append(args, *req.CommissionRate)
 		idx++
 	}
 
@@ -265,6 +287,11 @@ func AdminGetSitterDetail(c *gin.Context) {
 		Status          string   `json:"status"`
 		BannedReason    *string  `json:"banned_reason"`
 		CreatedAt       string   `json:"created_at"`
+		// 单独设置的佣金比例，null 表示跟随平台默认
+		CommissionRate *float64 `json:"commission_rate"`
+		// 生效比例与平台默认值，后台编辑框据此回显
+		EffectiveCommissionRate float64 `json:"effective_commission_rate"`
+		GlobalCommissionRate    float64 `json:"global_commission_rate"`
 	}
 
 	var s SitterDetail
@@ -275,7 +302,8 @@ func AdminGetSitterDetail(c *gin.Context) {
 		 s.cover_photo_url, s.detail_photos,
 		 s.contact_person, s.license_photo_url, s.id_card_photo_url, s.review_note,
 		 s.status::text, s.banned_reason,
-		 to_char(s.created_at, 'YYYY-MM-DD HH24:MI')
+		 to_char(s.created_at, 'YYYY-MM-DD HH24:MI'),
+		 s.commission_rate::float8
 		 FROM sitters s JOIN users u ON u.id = s.user_id
 		 WHERE s.id = $1 AND s.deleted_at IS NULL`,
 		sitterID,
@@ -285,11 +313,17 @@ func AdminGetSitterDetail(c *gin.Context) {
 		&s.CoverPhoto, &s.DetailPhotos,
 		&s.ContactPerson, &s.LicensePhotoURL, &s.IDCardPhotoURL, &s.ReviewNote,
 		&s.Status, &s.BannedReason,
-		&s.CreatedAt)
+		&s.CreatedAt, &s.CommissionRate)
 
 	if err != nil {
 		NotFound(c, "机构不存在")
 		return
+	}
+
+	s.GlobalCommissionRate = globalCommissionRate(context.Background())
+	s.EffectiveCommissionRate = s.GlobalCommissionRate
+	if s.CommissionRate != nil {
+		s.EffectiveCommissionRate = clampCommissionRate(*s.CommissionRate)
 	}
 
 	OK(c, s)

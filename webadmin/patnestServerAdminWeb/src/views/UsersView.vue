@@ -15,6 +15,9 @@
           <el-option label="全部" value="all" />
         </el-select>
         <el-button type="primary" @click="loadData">查询</el-button>
+        <el-button :type="cancelFailCount > 0 ? 'warning' : 'default'" @click="openCancelFailures">
+          注销异常{{ cancelFailCount ? `（${cancelFailCount}）` : '' }}
+        </el-button>
         <el-button :loading="exporting" @click="exportCSV">导出 CSV</el-button>
         <el-button type="primary" @click="openCreate">新增用户</el-button>
       </div>
@@ -119,6 +122,53 @@
         <el-button type="primary" @click="confirmReset">确认重置</el-button>
       </template>
     </el-dialog>
+
+    <!-- 注销执行异常：失败次数 / 停止自动重试 / 人工重试 -->
+    <el-dialog v-model="cancelFailOpen" title="注销执行异常" width="900px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom:16px"
+        title="注销失败会按 1/5/15/30/60 分钟退避重试；连续 5 次失败后自动停止，避免反复刷日志。处理完原因后点「立即重试」重新排队。"
+      />
+      <el-table :data="cancelFails" v-loading="cancelFailLoading" stripe>
+        <el-table-column prop="user_id" label="ID" width="70" />
+        <el-table-column prop="username" label="用户名" width="130" />
+        <el-table-column prop="role" label="角色" width="80">
+          <template #default="{ row }">{{ roleLabel(row.role) }}</template>
+        </el-table-column>
+        <el-table-column prop="phone" label="手机号" width="120">
+          <template #default="{ row }">{{ row.phone || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="注销类型" width="100">
+          <template #default="{ row }">{{ row.cancel_mode === 'sitter' ? '仅机构' : '整个账号' }}</template>
+        </el-table-column>
+        <el-table-column prop="attempts" label="失败次数" width="90" />
+        <el-table-column prop="last_error" label="失败原因" min-width="200" show-overflow-tooltip />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <span class="pn-tag" :class="row.blocked ? 'pn-tag-danger' : 'pn-tag-warn'">
+              {{ row.blocked ? '已停止重试' : '等待重试' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="下次 / 停止时间" width="150">
+          <template #default="{ row }">{{ row.blocked_at || row.next_attempt_at || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              type="primary"
+              size="small"
+              :loading="retryingId === row.user_id"
+              @click="retryCancel(row)"
+            >立即重试</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!cancelFailLoading && cancelFails.length === 0" description="没有注销异常" :image-size="60" />
+    </el-dialog>
   </div>
 </template>
 
@@ -142,6 +192,53 @@ const form = reactive({ id: null, username: '', password: '', nickname: '', phon
 
 const resetDialog = ref(false)
 const resetTarget = ref(null)
+
+/* ---------- 注销执行异常 ---------- */
+const cancelFailOpen = ref(false)
+const cancelFails = ref([])
+const cancelFailLoading = ref(false)
+const cancelFailCount = ref(0)
+const retryingId = ref(null)
+
+async function loadCancelFailCount() {
+  try {
+    const res = await adminApi.getCancelFailures({ per_page: 1 })
+    cancelFailCount.value = res.data?.total || 0
+  } catch {
+    // 拿不到数量不影响用户列表本身
+  }
+}
+
+async function openCancelFailures() {
+  cancelFailOpen.value = true
+  await loadCancelFails()
+}
+
+async function loadCancelFails() {
+  cancelFailLoading.value = true
+  try {
+    const res = await adminApi.getCancelFailures({ per_page: 100 })
+    cancelFails.value = res.data?.items || []
+    cancelFailCount.value = res.data?.total || 0
+  } catch (e) {
+    ElMessage.error(e.message || '加载注销异常失败')
+  } finally {
+    cancelFailLoading.value = false
+  }
+}
+
+async function retryCancel(row) {
+  retryingId.value = row.user_id
+  try {
+    await adminApi.retryCancel(row.user_id)
+    ElMessage.success('已重新排队，worker 下一轮会再试一次')
+    await loadCancelFails()
+  } catch (e) {
+    ElMessage.error(e.message || '重试失败')
+  } finally {
+    retryingId.value = null
+  }
+}
 const newPassword = ref('')
 const exporting = ref(false)
 
@@ -277,5 +374,8 @@ async function exportCSV() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  loadCancelFailCount()
+})
 </script>

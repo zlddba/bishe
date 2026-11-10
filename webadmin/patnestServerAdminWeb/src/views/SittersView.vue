@@ -30,6 +30,12 @@
           <template #default="{ row }">{{ Number(row.daily_price).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column prop="capacity" label="容量" width="70" />
+        <el-table-column label="佣金" width="110">
+          <template #default="{ row }">
+            {{ pctText(row.effective_commission_rate) }}%
+            <span v-if="row.commission_rate == null" class="rate-default">默认</span>
+          </template>
+        </el-table-column>
         <el-table-column label="评分" width="70">
           <template #default="{ row }">{{ Number(row.avg_score).toFixed(1) }}</template>
         </el-table-column>
@@ -90,6 +96,16 @@
         </el-form-item>
         <el-form-item label="容量">
           <el-input-number v-model="form.capacity" :min="1" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="佣金比例">
+          <div class="commission-row">
+            <el-switch v-model="form.inherit_commission" active-text="跟随平台默认" />
+            <template v-if="!form.inherit_commission">
+              <el-input-number v-model="form.commission_pct" :min="0" :max="100" :precision="2" style="width:130px" />
+              <span class="rate-hint">%</span>
+            </template>
+            <span v-else class="rate-hint">当前平台默认 {{ pctText(form.global_commission_rate) }}%</span>
+          </div>
         </el-form-item>
         <el-form-item label="地址">
           <el-input v-model="form.address" placeholder="选填" />
@@ -168,6 +184,11 @@
           <el-descriptions-item label="上门单价">{{ Number(detail.visit_price).toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="评分">{{ Number(detail.avg_score).toFixed(1) }}</el-descriptions-item>
           <el-descriptions-item label="评价数">{{ detail.review_count }}</el-descriptions-item>
+          <el-descriptions-item label="佣金比例" :span="2">
+            {{ pctText(detail.effective_commission_rate) }}%
+            <span v-if="detail.commission_rate == null" class="rate-default">（跟随平台默认）</span>
+            <span v-else class="rate-default">（单独设置）</span>
+          </el-descriptions-item>
           <el-descriptions-item label="地址" :span="2">{{ detail.address || '-' }}</el-descriptions-item>
           <el-descriptions-item label="经纬度" :span="2">
             {{ detail.latitude ?? '-' }}, {{ detail.longitude ?? '-' }}
@@ -233,7 +254,16 @@ const form = reactive({
   daily_price: 50, visit_price: 0, price_mode: 'per_day', capacity: 5,
   address: '', status: 'pending', latitude: undefined, longitude: undefined,
   cover_photo_url: '', detail_photos: [],
+  // 佣金：inherit_commission=true 表示跟随平台默认（后端把 commission_rate 置 NULL）
+  inherit_commission: true, commission_pct: 10, global_commission_rate: 0.1,
 })
+
+// 比例统一按百分比显示，去掉多余的 .00
+function pctText(rate) {
+  const v = Number(rate)
+  if (!Number.isFinite(v)) return '0'
+  return (v * 100).toFixed(2).replace(/\.00$/, '')
+}
 
 const banDialog = ref(false)
 const banReason = ref('')
@@ -310,6 +340,7 @@ function openCreate() {
     daily_price: 50, visit_price: 0, price_mode: 'per_day', capacity: 5,
     address: '', status: 'pending', latitude: undefined, longitude: undefined,
     cover_photo_url: '', detail_photos: [],
+    inherit_commission: true, commission_pct: 10, global_commission_rate: 0.1,
   })
   mapAddress.value = ''
   formDialog.value = true
@@ -326,6 +357,9 @@ async function openEdit(row) {
       price_mode: d.price_mode, capacity: d.capacity, address: d.address || '',
       latitude: d.latitude ?? undefined, longitude: d.longitude ?? undefined,
       cover_photo_url: d.cover_photo_url || '', detail_photos: [...(d.detail_photos || [])],
+      inherit_commission: d.commission_rate == null,
+      commission_pct: Number((((d.commission_rate ?? d.global_commission_rate ?? 0.1) * 100)).toFixed(2)),
+      global_commission_rate: d.global_commission_rate ?? 0.1,
     })
     mapAddress.value = ''
     formDialog.value = true
@@ -354,10 +388,18 @@ async function submitForm() {
         price_mode: form.price_mode, capacity: form.capacity, address: form.address,
         latitude: form.latitude, longitude: form.longitude,
         cover_photo_url: form.cover_photo_url, detail_photos: form.detail_photos,
+        // 跟随默认时显式告诉后端清空，不能只传 null（null 等于“没改”）
+        inherit_commission: form.inherit_commission,
+        commission_rate: form.inherit_commission ? null : Number((form.commission_pct / 100).toFixed(4)),
       })
       ElMessage.success('机构已更新')
     } else {
-      await adminApi.createSitter({ ...form, status: form.status })
+      await adminApi.createSitter({
+        ...form,
+        status: form.status,
+        // 新建时同样区分「跟随默认」与「单独比例」
+        commission_rate: form.inherit_commission ? null : Number((form.commission_pct / 100).toFixed(4)),
+      })
       ElMessage.success('机构创建成功')
     }
     formDialog.value = false
@@ -414,7 +456,22 @@ async function exportCSV() {
   }
 }
 
-onMounted(loadData)
+// 新建机构时也要知道平台默认比例，才好显示「跟随平台默认 x%」
+async function loadGlobalRate() {
+  try {
+    const res = await adminApi.getCommissionSetting()
+    const rate = Number(res.data?.rate ?? 0.1)
+    form.global_commission_rate = rate
+    if (form.inherit_commission) form.commission_pct = Number((rate * 100).toFixed(2))
+  } catch (e) {
+    // 拿不到就按 10% 显示，不阻塞机构管理页
+  }
+}
+
+onMounted(() => {
+  loadGlobalRate()
+  loadData()
+})
 </script>
 
 <style scoped>
@@ -454,4 +511,7 @@ onMounted(loadData)
   font-size: 12px;
   color: var(--ink3);
 }
+.commission-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+.rate-hint { font-size: 12px; color: var(--ink3); }
+.rate-default { font-size: 11px; color: var(--ink3); margin-left: 2px; }
 </style>

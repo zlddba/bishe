@@ -18,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import team.wd.atnestapp.ui.AppState
+import team.wd.atnestapp.ui.components.ChipRow
 import team.wd.atnestapp.ui.components.HCell
 import team.wd.atnestapp.ui.components.PageHeader
 import team.wd.atnestapp.ui.components.Panel
@@ -33,11 +35,29 @@ import team.wd.atnestapp.ui.theme.PatNestColors
 @Composable
 fun SitterIncomePage(app: AppState) {
     LaunchedEffect(app.loggedIn) {
-        if (app.loggedIn && app.earnings == null && !app.earningsLoading) app.loadEarnings()
-        if (app.loggedIn && app.settlements.isEmpty() && !app.settlementsLoading) app.loadSettlements()
+        // 每次进页面都强制取一次：订单结束 / 主人评价都会改金额，缓存会显示旧值；
+        // 结算记录同理——后台打款或驳回后，非 force 的加载会一直显示旧的 pending
+        if (app.loggedIn) app.loadEarnings(force = true)
+        if (app.loggedIn) app.loadSettlements(force = true)
+        if (app.loggedIn) app.loadSettleWindow(force = true)
     }
 
     val summary = app.earnings?.summary
+    val today = java.time.LocalDate.now()
+    // 快捷区间：不想让机构自己输日期，这四个覆盖绝大多数场景
+    val presets = listOf(
+        "近 7 天" to (today.minusDays(6).toString() to today.toString()),
+        "近 30 天" to (today.minusDays(29).toString() to today.toString()),
+        "本月" to (today.withDayOfMonth(1).toString() to today.toString()),
+        "上月" to (
+            today.minusMonths(1).withDayOfMonth(1).toString() to
+                today.withDayOfMonth(1).minusDays(1).toString()
+        ),
+    )
+    // 空串表示走后端默认（近 30 天），此时也要把「近 30 天」点亮
+    val activeLabel = presets.firstOrNull {
+        it.second.first == app.earningsFrom && it.second.second == app.earningsTo
+    }?.first ?: if (app.earningsFrom.isBlank()) "近 30 天" else ""
 
     Column(
         Modifier
@@ -45,28 +65,49 @@ fun SitterIncomePage(app: AppState) {
             .verticalScroll(rememberScrollState())
             .padding(start = 26.dp, end = 26.dp, top = 22.dp, bottom = 40.dp),
     ) {
-        PageHeader("收益结算", "近 30 天收入明细（平台佣金 10%）") {
+        // 佣金比例已改成后台可配（全局默认 + 单机构覆盖），不能在这里写死 10%
+        PageHeader(
+            "收益结算",
+            if (summary != null) {
+                val p = app.earnings?.period
+                "${p?.from.orEmpty()} ~ ${p?.to.orEmpty()} · 佣金 ${pctText(summary.commissionRate)}%"
+            } else {
+                "按完成订单统计"
+            },
+        ) {
             PrimaryButton("刷新", {
                 app.scope.launch { app.loadEarnings(force = true) }
             }, height = 38.dp)
         }
 
+        // 以前固定近 30 天，机构想查上个月或上一周都看不到，只能干等
+        ChipRow(
+            options = presets.map { it.first },
+            selected = activeLabel,
+            onSelect = { label ->
+                val range = presets.first { it.first == label }.second
+                app.scope.launch { app.loadEarningsRange(range.first, range.second) }
+            },
+        )
+
+        Spacer(Modifier.height(16.dp))
+
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             StatCard(
-                "近 30 天收入",
-                "¥${summary?.grossAmount?.toInt() ?: 0}",
+                "区间收入",
+                "¥${money2(summary?.grossAmount ?: 0.0)}",
                 trend = "订单 ${summary?.orderCount ?: 0} 笔",
                 modifier = Modifier.weight(1f),
             )
             StatCard(
                 "平台佣金",
-                "¥${summary?.commissionAmount?.toInt() ?: 0}",
-                trend = "佣金比例 ${((summary?.commissionRate ?: 0.1) * 100).toInt()}%",
+                "¥${money2(summary?.commissionAmount ?: 0.0)}",
+                trend = summary?.let { "佣金比例 ${pctText(it.commissionRate)}%" } ?: "加载中…",
                 modifier = Modifier.weight(1f),
             )
             StatCard(
-                "可结算金额",
-                "¥${summary?.netAmount?.toInt() ?: 0}",
+                "应得收入",
+                "¥${money2(summary?.netAmount ?: 0.0)}",
                 trend = "已完成订单",
                 modifier = Modifier.weight(1f),
             )
@@ -82,7 +123,7 @@ fun SitterIncomePage(app: AppState) {
                 app.earnings == null || app.earnings!!.items.isEmpty() -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            app.earningsError ?: "近 30 天还没有已完成订单的收益",
+                            app.earningsError ?: "该区间还没有已完成订单的收益",
                             color = PatNestColors.Ink2, fontSize = 13.sp,
                             modifier = Modifier.weight(1f),
                         )
@@ -107,7 +148,7 @@ fun SitterIncomePage(app: AppState) {
                             TCell(item.orderNo, 1.6f, mono = true)
                             TCell(item.date, 1f, dim = true)
                             TCell(item.owner, 1f)
-                            TCell("¥${item.amount.toInt()}", 0.9f, mono = true)
+                            TCell("¥${money2(item.amount)}", 0.9f, mono = true)
                         }
                         ThinDivider()
                     }
@@ -119,11 +160,35 @@ fun SitterIncomePage(app: AppState) {
 
         Panel(
             title = "提现申请",
-            subtitle = "按本月周期申请结算",
+            subtitle = "区间由系统按上次结算之后自动计算",
         ) {
+            val win = app.settleWindow
+            if (win != null) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (win.orderCount > 0) {
+                            "可结算 ${win.start} ~ ${win.end} · ${win.orderCount} 笔 · " +
+                                "流水 ¥${money2(win.grossAmount)} · 应得 ¥${money2(win.netAmount)}"
+                        } else {
+                            "暂无待结算收益"
+                        },
+                        color = PatNestColors.Ink2, fontSize = 12.5.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (win.hasPending) Tag("有待打款", TagKind.Warn)
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                PrimaryButton("申请提现", {
+                Text(
+                    // 漏掉的月份会被自动带进来，这里说清楚，免得机构以为只能领当月
+                    "上次结算之后的收益会一起结算，断掉的月份不会丢",
+                    color = PatNestColors.Ink3, fontSize = 11.5.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                PrimaryButton("申请结算", {
                     app.scope.launch { app.applySettlement() }
                 }, height = 34.dp)
             }
@@ -149,7 +214,7 @@ fun SitterIncomePage(app: AppState) {
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                "¥${item.netAmount.toInt()}",
+                                "¥${money2(item.netAmount)}",
                                 color = PatNestColors.Ink, fontSize = 12.5.sp,
                                 modifier = Modifier.padding(end = 12.dp),
                             )
@@ -174,3 +239,15 @@ fun SitterIncomePage(app: AppState) {
         }
     }
 }
+
+/** 佣金比例按百分比展示，最多一位小数：0.1 → 10，0.125 → 12.5 */
+internal fun pctText(rate: Double): String {
+    val pct = (rate * 1000).roundToInt() / 10.0
+    return if (pct % 1.0 == 0.0) pct.toInt().toString() else pct.toString()
+}
+
+/**
+ * 金额固定两位小数。
+ * 原来用 toInt() 截断，99.9 元会显示成 99，机构会以为平台少算了钱。
+ */
+internal fun money2(amount: Double): String = String.format("%.2f", amount)

@@ -43,7 +43,7 @@ fun SitterOverviewPage(app: AppState) {
         if (!app.loggedIn) return@LaunchedEffect
         if (app.receivedOrders.isEmpty() && !app.receivedOrdersLoading) app.loadReceivedOrders()
         if (app.capacityItems.isEmpty() && !app.capacityLoading) app.loadCapacity()
-        if (app.earnings == null && !app.earningsLoading) app.loadEarnings()
+        if (!app.earningsLoading) app.loadEarnings(force = true)
         if (app.myShop == null && !app.shopLoading) app.loadMyShop()
         if (app.sitterStats == null && !app.sitterStatsLoading) app.loadSitterStats()
     }
@@ -108,9 +108,12 @@ fun SitterOverviewPage(app: AppState) {
             StatCard("待确认订单", "$pending", "单", "需要尽快处理", modifier = Modifier.weight(1f), icon = AppIcon.Orders)
             StatCard("进行中寄养", "$active", "单", "已接单 + 寄养中", modifier = Modifier.weight(1f), icon = AppIcon.Paw)
             StatCard(
-                "近 30 天收入",
-                "¥${app.earnings?.summary?.grossAmount?.toInt() ?: 0}",
-                trend = "平台佣金 10%",
+                // 收益页可以切区间，这里跟着显示的是同一个区间的数据，
+                // 所以标题不能写死「近 30 天」
+                "区间收入",
+                "¥${money2(app.earnings?.summary?.grossAmount ?: 0.0)}",
+                // 佣金已改成后台可配，不能再写死 10%
+                trend = app.earnings?.summary?.let { "佣金 ${pctText(it.commissionRate)}%" } ?: "近 30 天",
                 modifier = Modifier.weight(1f),
                 icon = AppIcon.Bank,
             )

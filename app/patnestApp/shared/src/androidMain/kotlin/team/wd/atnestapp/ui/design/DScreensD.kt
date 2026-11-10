@@ -485,7 +485,8 @@ fun D51SitterDashboard(nav: DNav) {
     val store = DLocalStore.current
     LaunchedEffect(Unit) {
         store.loadSitterStats()
-        store.loadEarnings()
+        // 看板上的「近 30 天净收入」和顶部今日收入必须同源同时效
+        store.loadEarnings(force = true)
         store.loadReceivedOrders()
         if (store.myShop == null) store.loadMyShop()
     }
@@ -1080,6 +1081,14 @@ fun D60Wallet(nav: DNav) {
     var custom by remember { mutableStateOf("") }
     var recharging by remember { mutableStateOf(false) }
 
+    // 余额退款：钱包没有提现通道，提交后由客服线下打款
+    var showWithdraw by remember { mutableStateOf(false) }
+    var wdAmount by remember { mutableStateOf("") }
+    var wdName by remember { mutableStateOf("") }
+    var wdNo by remember { mutableStateOf("") }
+    var wdContact by remember { mutableStateOf("") }
+    var withdrawing by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         wallet = runCatching { store.api.walletOverview() }.getOrNull()
         transactions = runCatching { store.api.walletTransactions(1).items }.getOrDefault(emptyList())
@@ -1109,6 +1118,39 @@ fun D60Wallet(nav: DNav) {
                     nav.toast(e.message ?: "充值失败")
                 } finally {
                     recharging = false
+                }
+            }
+        }
+    }
+
+    val submitWithdraw: () -> Unit = {
+        val amt = wdAmount.toDoubleOrNull() ?: 0.0
+        if (withdrawing) {
+        } else if (amt < 1.0) {
+            nav.toast("退款金额至少 1 元")
+        } else if (wdName.isBlank() || wdNo.isBlank()) {
+            nav.toast("请填写收款人和收款账号")
+        } else {
+            scope.launch {
+                withdrawing = true
+                try {
+                    store.api.applyWalletWithdrawal(
+                        amt, wdName.trim(), wdNo.trim(), wdContact.trim(),
+                    )
+                    // 余额已被扣走，重新拉一次概览与流水
+                    wallet = runCatching { store.api.walletOverview() }.getOrNull() ?: wallet
+                    transactions = runCatching { store.api.walletTransactions(1).items }
+                        .getOrDefault(transactions)
+                    showWithdraw = false
+                    wdAmount = ""
+                    wdName = ""
+                    wdNo = ""
+                    wdContact = ""
+                    nav.toast("退款申请已提交，客服会尽快联系你确认打款")
+                } catch (e: Exception) {
+                    nav.toast(e.message ?: "提交失败")
+                } finally {
+                    withdrawing = false
                 }
             }
         }
@@ -1162,6 +1204,14 @@ fun D60Wallet(nav: DNav) {
                     42.dp,
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            DButton(
+                if (showWithdraw) "收起退款申请" else "申请退款",
+                { showWithdraw = !showWithdraw },
+                Modifier.fillMaxWidth(),
+                DButtonStyle.Ghost,
+                42.dp,
+            )
         }
         if (showRecharge) {
             DPad {
@@ -1203,6 +1253,58 @@ fun D60Wallet(nav: DNav) {
                         DButtonStyle.Primary,
                         44.dp,
                         !recharging,
+                    )
+                }
+            }
+        }
+        if (showWithdraw) {
+            DPad {
+                Spacer(Modifier.height(10.dp))
+                DCard {
+                    Text("余额退款", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+                    Spacer(Modifier.height(10.dp))
+                    DFieldInput(
+                        label = "退款金额（元）",
+                        value = wdAmount,
+                        onValueChange = { input ->
+                            if (input.count { it == '.' } <= 1 && input.all { it.isDigit() || it == '.' }) {
+                                wdAmount = input
+                            }
+                        },
+                        placeholder = "不超过可用余额",
+                        numeric = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    DFieldInput(
+                        label = "收款人姓名",
+                        value = wdName,
+                        onValueChange = { wdName = it.take(32) },
+                        placeholder = "与银行卡/支付宝一致",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    DFieldInput(
+                        label = "收款账号",
+                        value = wdNo,
+                        onValueChange = { wdNo = it.take(64) },
+                        placeholder = "银行卡号 / 支付宝账号",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    DFieldInput(
+                        label = "联系电话",
+                        value = wdContact,
+                        onValueChange = { wdContact = it.take(20) },
+                        placeholder = "方便客服确认",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    DNotice("提交后金额立即从余额扣除，由客服线下打款；若被驳回，金额自动退回钱包。")
+                    Spacer(Modifier.height(10.dp))
+                    DButton(
+                        if (withdrawing) "处理中…" else "提交退款申请",
+                        submitWithdraw,
+                        Modifier.fillMaxWidth(),
+                        DButtonStyle.Primary,
+                        44.dp,
+                        !withdrawing,
                     )
                 }
             }

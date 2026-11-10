@@ -102,6 +102,8 @@ func Setup() *gin.Engine {
 			owner.GET("/wallet/transactions", handler.WalletTransactions)
 			owner.POST("/wallet/recharge", handler.CreateRecharge)
 			owner.POST("/wallet/recharge/:id/pay", handler.ConfirmRecharge)
+			// 余额退款：钱包没有提现通道，这里只是登记申请，线下打款后由后台确认
+			owner.POST("/wallet/withdrawals", handler.ApplyWalletWithdrawal)
 
 			owner.GET("/coupons", handler.MyCoupons)
 			owner.POST("/coupons/:id/claim", handler.ClaimCoupon)
@@ -187,6 +189,7 @@ func Setup() *gin.Engine {
 
 			sitter.GET("/earnings", handler.SitterEarnings)
 			sitter.GET("/settlements", handler.ListMySettlements)
+			sitter.GET("/settlements/window", handler.SitterSettlementWindow)
 			sitter.POST("/settlements", handler.ApplySettlement)
 
 			// --- 机构优惠券：自助发布与管理，仅限本机构订单核销 ---
@@ -284,12 +287,25 @@ func Setup() *gin.Engine {
 			admin.GET("/settlements", handler.AdminListSettlements)
 			admin.PUT("/settlements/:id", handler.AdminPaySettlement)
 
+			// --- 平台参数（全局佣金比例；单机构覆盖走 /admin/sitters/:id）---
+			admin.GET("/settings/commission", handler.AdminGetCommissionSetting)
+			admin.PUT("/settings/commission", handler.AdminUpdateCommissionSetting)
+
 			// --- 钱包管理 ---
 			admin.GET("/wallets", handler.AdminListWallets)
 			admin.GET("/wallets/:user_id", handler.AdminGetWallet)
 			admin.POST("/wallets/:user_id/adjust", handler.AdminAdjustWallet)
 			admin.GET("/wallet/recharges", handler.AdminListRecharges)
 			admin.POST("/wallet/recharges/:id/confirm", handler.AdminConfirmRecharge)
+
+			// --- 钱包余额退款（注销时自动转出，人工确认打款） ---
+			admin.GET("/wallet/withdrawals", handler.AdminListWalletWithdrawals)
+			admin.POST("/wallet/withdrawals/:id/pay", handler.AdminPayWalletWithdrawal)
+			admin.POST("/wallet/withdrawals/:id/reject", handler.AdminRejectWalletWithdrawal)
+
+			// --- 注销执行异常（失败 / 停止自动重试）---
+			admin.GET("/account-cancels/failed", handler.AdminListCancelFailures)
+			admin.POST("/account-cancels/:user_id/retry", handler.AdminRetryCancel)
 
 			admin.GET("/push-tasks", handler.AdminListPushTasks)
 			admin.POST("/push-tasks", handler.AdminCreatePushTask)

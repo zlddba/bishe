@@ -115,7 +115,7 @@ func AdminListSitters(c *gin.Context) {
 
 	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.name, s.type::text, s.description, s.daily_price, s.visit_price,
 		s.price_mode::text, s.capacity, s.address, s.avg_score, s.review_count, s.status::text, to_char(s.created_at, 'YYYY-MM-DD HH24:MI'),
-		u.username
+		u.username, s.commission_rate::float8
 		FROM sitters s JOIN users u ON u.id = s.user_id
 		%s ORDER BY s.created_at DESC LIMIT $%d OFFSET $%d`, where, idx, idx+1)
 	args = append(args, perPage, offset)
@@ -143,15 +143,27 @@ func AdminListSitters(c *gin.Context) {
 		ReviewCount int     `json:"review_count"`
 		Status      string  `json:"status"`
 		CreatedAt   string  `json:"created_at"`
+		// 单独设置的佣金比例，null 表示跟随平台默认
+		CommissionRate *float64 `json:"commission_rate"`
+		// 实际生效比例：单独设置优先，否则取平台默认，列表直接展示这个
+		EffectiveCommissionRate float64 `json:"effective_commission_rate"`
 	}
+
+	// 全局默认只查一次，避免每行都打一次库
+	globalRate := globalCommissionRate(context.Background())
 
 	sitters := make([]AdminSitter, 0)
 	for rows.Next() {
 		var s AdminSitter
 		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
-			&s.PriceMode, &s.Capacity, &s.Address, &s.AvgScore, &s.ReviewCount, &s.Status, &s.CreatedAt, &s.Username); err != nil {
+			&s.PriceMode, &s.Capacity, &s.Address, &s.AvgScore, &s.ReviewCount, &s.Status, &s.CreatedAt, &s.Username,
+			&s.CommissionRate); err != nil {
 			log.Printf("[AdminListSitters] scan error: %v", err)
 			continue
+		}
+		s.EffectiveCommissionRate = globalRate
+		if s.CommissionRate != nil {
+			s.EffectiveCommissionRate = clampCommissionRate(*s.CommissionRate)
 		}
 		sitters = append(sitters, s)
 	}

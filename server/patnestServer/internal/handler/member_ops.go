@@ -2,8 +2,11 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -11,14 +14,21 @@ import (
 	"patnestServer/internal/db"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // pointsPerYuan 100 积分 = 1 元。
 const pointsPerYuan = 100
 
-// platformCommission 平台抽佣比例。
-const platformCommission = 0.10
+// 平台抽佣比例不再写死在代码里：全局默认存在 platform_settings.commission_rate，
+// 单个机构可在 sitters.commission_rate 覆盖，统一由 commission.go 的
+// sitterCommissionRate() 取生效值。
+
+// doneOrderStatuses 算“已完成、可计收益”的订单状态。
+// 主人评价后订单会从 completed 变成 evaluated，如果只认 completed，
+// 一评价收益就会从收益页消失，所以两个状态都要算进去。
+const doneOrderStatuses = "('completed','evaluated')"
 
 // ---------------- 个人中心 ----------------
 
@@ -708,29 +718,174 @@ func DeleteAddon(c *gin.Context) {
 
 // ---------------- 机构收益 / 结算 ----------------
 
+// earningsRange 解析收益查询的日期区间，默认「近 30 天（含今天）」。
+// 不能复用 capacityRange：那里的默认区间是「今天 → 未来 30 天」，
+// 客户端一旦没带 from/to，收益就会查成一段未来时间，永远是 0。
+//
+// 返回 time.Time 而不是字符串：SQL 里参数是 `$2::date`，pgx 对 date 的
+// 二进制编码只认 time.Time，传字符串在 prepared statement 下会编码失败。
+// time.Parse 得到的是 UTC 零点，取日期部分正好是用户填的那一天。
+func earningsRange(c *gin.Context) (from, to time.Time, ok bool) {
+	now := time.Now()
+	fromStr := c.DefaultQuery("from", now.AddDate(0, 0, -29).Format("2006-01-02"))
+	toStr := c.DefaultQuery("to", now.Format("2006-01-02"))
+	from, err1 := time.Parse("2006-01-02", fromStr)
+	to, err2 := time.Parse("2006-01-02", toStr)
+	if err1 != nil || err2 != nil || to.Before(from) {
+		BadRequest(c, "日期范围无效，格式 YYYY-MM-DD")
+		return from, to, false
+	}
+	// 上限和结算申请保持一致（366 天）：机构申请一个季度/一年的结算区间时，
+	// 收益页要能查到整段，否则看不到自己申请的区间里到底有多少钱。
+	if to.Sub(from) > 366*24*time.Hour {
+		BadRequest(c, "单次最多查询 366 天")
+		return from, to, false
+	}
+	return from, to, true
+}
+
+// ---------------- 金额：一律用整数分计算 ----------------
+
+// centsToYuan 分 → 元，只用于 JSON 输出。
+// 库里是 NUMERIC(12,2)，如果在 Go 里用 float64 先算再落库，
+// gross - commission 和 net 会各自四舍五入，偶尔出现「两边加起来差 1 分」。
+// 所以汇总、佣金、净额全部先转成分做整数运算，最后除回去。
+func centsToYuan(cents int64) float64 {
+	return float64(cents) / 100
+}
+
+// commissionCents 按比例算佣金（分），四舍五入到分。
+func commissionCents(grossCents int64, rate float64) int64 {
+	if grossCents <= 0 || rate <= 0 {
+		return 0
+	}
+	return int64(math.Round(float64(grossCents) * rate))
+}
+
+// settleWindow 描述「这次能申请哪一段」，也用于前端展示可结算区间。
+type settleWindow struct {
+	Start      time.Time
+	End        time.Time
+	OrderCount int64
+	GrossCents int64
+	HasPending bool
+}
+
+// settlementWindow 计算本次可申请结算的区间。
+//
+// 起点取「上一次 pending/paid 结算单 period_end 的下一天」，因此：
+//   - 机构某个月忘了点，下个月申请时会自动把漏掉的月份一起带上，不会丢钱；
+//   - 被驳回（rejected）的单不参与，对应区间重新回到可申请范围，可以补领；
+//   - 从没有过结算单时，从最早一笔计入收益的订单开始，历史收益也能补领。
+//
+// 以前客户端固定传「本月 1 号 → 今天」，漏掉的月份永远被排除在外。
+func settlementWindow(ctx context.Context, q rowQuerier, sitterID int64) (settleWindow, error) {
+	var w settleWindow
+	now := time.Now()
+	w.End = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	var lastEnd *time.Time
+	var pendingCount int64
+	if err := q.QueryRow(ctx, `
+		SELECT MAX(period_end),
+		       COUNT(*) FILTER (WHERE status = 'pending')
+		FROM sitter_settlements
+		WHERE sitter_id = $1 AND status IN ('pending','paid')`, sitterID).
+		Scan(&lastEnd, &pendingCount); err != nil {
+		return w, err
+	}
+	w.HasPending = pendingCount > 0
+
+	if lastEnd != nil {
+		w.Start = lastEnd.AddDate(0, 0, 1)
+	} else {
+		var first *time.Time
+		if err := q.QueryRow(ctx, `
+			SELECT MIN(completed_at::date) FROM orders
+			WHERE sitter_id = $1 AND status IN `+doneOrderStatuses+` AND deleted_at IS NULL`,
+			sitterID).Scan(&first); err != nil {
+			return w, err
+		}
+		if first != nil {
+			w.Start = *first
+		} else {
+			w.Start = w.End
+		}
+	}
+
+	if w.Start.After(w.End) {
+		// 上一次结算已经盖到今天之后，本次没有可结算区间。
+		// 返回空区间（start == end）而不是倒置区间，前端据此显示「暂无待结算收益」
+		w.Start = w.End
+		return w, nil
+	}
+
+	if err := q.QueryRow(ctx, `
+		SELECT COUNT(*), COALESCE((SUM(total_amount) * 100)::bigint, 0) FROM orders
+		WHERE sitter_id = $1 AND status IN `+doneOrderStatuses+` AND deleted_at IS NULL
+		  AND completed_at >= $2::date AND completed_at < $3::date + 1`,
+		sitterID, w.Start, w.End).Scan(&w.OrderCount, &w.GrossCents); err != nil {
+		return w, err
+	}
+	return w, nil
+}
+
+// SitterSettlementWindow handles GET /api/v1/sitter/settlements/window
+// 返回本次可申请结算的区间、订单数和金额，机构端在点「申请提现」前先看这个。
+func SitterSettlementWindow(c *gin.Context) {
+	sitterID, err := mySitterID(c.GetInt64("user_id"))
+	if err != nil {
+		NotFound(c, "机构资料不存在")
+		return
+	}
+	w, err := settlementWindow(context.Background(), db.Pool, sitterID)
+	if err != nil {
+		InternalError(c, "查询可结算区间失败: "+err.Error())
+		return
+	}
+	rate := sitterCommissionRate(context.Background(), sitterID)
+	commission := commissionCents(w.GrossCents, rate)
+	OK(c, gin.H{
+		"start":             w.Start.Format("2006-01-02"),
+		"end":               w.End.Format("2006-01-02"),
+		"order_count":       w.OrderCount,
+		"gross_amount":      centsToYuan(w.GrossCents),
+		"commission_rate":   rate,
+		"commission_amount": centsToYuan(commission),
+		"net_amount":        centsToYuan(w.GrossCents - commission),
+		"has_pending":       w.HasPending,
+	})
+}
+
 func SitterEarnings(c *gin.Context) {
 	sitterID, err := mySitterID(c.GetInt64("user_id"))
 	if err != nil {
 		NotFound(c, "机构资料不存在")
 		return
 	}
-	from, to, ok := capacityRange(c)
+	from, to, ok := earningsRange(c)
 	if !ok {
 		return
 	}
-	var orders int
-	var gross float64
-	_ = db.Pool.QueryRow(context.Background(), `
-		SELECT COUNT(*), COALESCE(SUM(total_amount), 0) FROM orders
-		WHERE sitter_id = $1 AND status = 'completed' AND deleted_at IS NULL
-		  AND completed_at >= $2 AND completed_at < $3 + interval '1 day'`,
-		sitterID, from, to).Scan(&orders, &gross)
+	var orders int64
+	var grossCents int64
+	// 这里不能吞错误：查库失败时返回 0 会被前端当成「没有收益」，
+	// 和「今天的单没算进去」看起来一模一样，极难排查。宁可报错。
+	// 金额在 SQL 里直接乘 100 转成分，避免 float64 参与汇总。
+	if err := db.Pool.QueryRow(context.Background(), `
+		SELECT COUNT(*), COALESCE((SUM(total_amount) * 100)::bigint, 0) FROM orders
+		WHERE sitter_id = $1 AND status IN `+doneOrderStatuses+` AND deleted_at IS NULL
+		  AND completed_at >= $2::date AND completed_at < $3::date + 1`,
+		sitterID, from, to).Scan(&orders, &grossCents); err != nil {
+		InternalError(c, "查询收益失败: "+err.Error())
+		return
+	}
 
 	rows, err := db.Pool.Query(context.Background(), `
-		SELECT o.order_no, o.completed_at::date::text, o.total_amount, u.username
+		SELECT o.order_no, o.completed_at::date::text, (o.total_amount * 100)::bigint, u.username
 		FROM orders o JOIN users u ON u.id = o.owner_id
-		WHERE o.sitter_id = $1 AND o.status = 'completed' AND o.deleted_at IS NULL
-		  AND o.completed_at >= $2 AND o.completed_at < $3 + interval '1 day'
+		WHERE o.sitter_id = $1 AND o.status IN `+doneOrderStatuses+` AND o.deleted_at IS NULL
+		  AND o.completed_at >= $2::date AND o.completed_at < $3::date + 1
 		ORDER BY o.completed_at DESC LIMIT 200`, sitterID, from, to)
 	if err != nil {
 		InternalError(c, "查询收益失败")
@@ -740,18 +895,22 @@ func SitterEarnings(c *gin.Context) {
 	items := make([]gin.H, 0)
 	for rows.Next() {
 		var no, date, owner string
-		var amount float64
-		if err := rows.Scan(&no, &date, &amount, &owner); err == nil {
-			items = append(items, gin.H{"order_no": no, "date": date, "amount": amount, "owner": owner})
+		var amountCents int64
+		if err := rows.Scan(&no, &date, &amountCents, &owner); err == nil {
+			items = append(items, gin.H{"order_no": no, "date": date, "amount": centsToYuan(amountCents), "owner": owner})
 		}
 	}
-	commission := gross * platformCommission
+	rate := sitterCommissionRate(context.Background(), sitterID)
+	commission := commissionCents(grossCents, rate)
 	OK(c, gin.H{
 		"period": gin.H{"from": from.Format("2006-01-02"), "to": to.Format("2006-01-02")},
 		"summary": gin.H{
-			"order_count": orders, "gross_amount": gross,
-			"commission_rate": platformCommission, "commission_amount": commission,
-			"net_amount": gross - commission,
+			"order_count": orders, "gross_amount": centsToYuan(grossCents),
+			"commission_rate": rate, "commission_amount": centsToYuan(commission),
+			"net_amount": centsToYuan(grossCents - commission),
+			// 明细最多 200 条，超过时前端要提示「仅展示最近 200 笔」，
+			// 否则用户拿明细自己加总，会和 summary 对不上
+			"item_truncated": orders > int64(len(items)),
 		},
 		"items": items,
 	})
@@ -764,8 +923,9 @@ func ListMySettlements(c *gin.Context) {
 		return
 	}
 	rows, err := db.Pool.Query(context.Background(), `
-		SELECT id, period_start::text, period_end::text, order_count, gross_amount,
-		       commission_amount, net_amount, status,
+		SELECT id, period_start::text, period_end::text, order_count,
+		       (gross_amount * 100)::bigint, (commission_amount * 100)::bigint, (net_amount * 100)::bigint,
+		       status, commission_rate::float8,
 		       to_char(applied_at, 'YYYY-MM-DD HH24:MI'), COALESCE(to_char(paid_at, 'YYYY-MM-DD HH24:MI'), '')
 		FROM sitter_settlements WHERE sitter_id = $1 ORDER BY id DESC LIMIT 50`, sitterID)
 	if err != nil {
@@ -775,16 +935,55 @@ func ListMySettlements(c *gin.Context) {
 	defer rows.Close()
 	items := make([]gin.H, 0)
 	for rows.Next() {
-		var id, orders int64
+		var id, orders, grossCents, commissionCents, netCents int64
 		var start, end, status, applied, paid string
-		var gross, commission, net float64
-		if err := rows.Scan(&id, &start, &end, &orders, &gross, &commission, &net, &status, &applied, &paid); err == nil {
+		var rate *float64
+		if err := rows.Scan(&id, &start, &end, &orders, &grossCents, &commissionCents, &netCents,
+			&status, &rate, &applied, &paid); err == nil {
 			items = append(items, gin.H{"id": id, "period_start": start, "period_end": end,
-				"order_count": orders, "gross_amount": gross, "commission_amount": commission,
-				"net_amount": net, "status": status, "applied_at": applied, "paid_at": paid})
+				"order_count":  orders,
+				"gross_amount": centsToYuan(grossCents), "commission_amount": centsToYuan(commissionCents),
+				"net_amount": centsToYuan(netCents), "commission_rate": rate,
+				"status": status, "applied_at": applied, "paid_at": paid})
 		}
 	}
 	OK(c, gin.H{"items": items})
+}
+
+// insertSettlement 写一条结算单。
+//
+// 判重和写入在同一条 `INSERT ... WHERE NOT EXISTS` 里完成：先 SELECT COUNT
+// 再 INSERT 时，两个并发请求都能通过检查，会生成两张重叠的结算单。
+// 区间与已有 pending / paid 单有交集时不插入，返回 inserted=false。
+//
+// 金额传分（bigint），由数据库除回元，避免 float64 落库时的精度抖动。
+// commission_rate 一并落库：以后不用靠「佣金 / 流水」反算，gross=0 也能审计。
+//
+// q 既可以是连接池，也可以是事务——注销流程需要在同一个事务里写这张单。
+func insertSettlement(ctx context.Context, q rowQuerier, sitterID int64, start, end time.Time,
+	orders, grossCents int64, rate float64, note string) (int64, bool, error) {
+	commission := commissionCents(grossCents, rate)
+	netCents := grossCents - commission
+	var id int64
+	err := q.QueryRow(ctx, `
+		INSERT INTO sitter_settlements (sitter_id, period_start, period_end, order_count,
+		      gross_amount, commission_amount, net_amount, commission_rate, note)
+		SELECT $1, $2, $3, $4, $5::bigint / 100.0, $6::bigint / 100.0, $7::bigint / 100.0, $8,
+		       NULLIF($9, '')
+		WHERE NOT EXISTS (
+			SELECT 1 FROM sitter_settlements
+			WHERE sitter_id = $1 AND status IN ('pending','paid')
+			  AND period_start <= $3 AND period_end >= $2
+		)
+		RETURNING id`,
+		sitterID, start, end, orders, grossCents, commission, netCents, rate, note).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return id, true, nil
 }
 
 func ApplySettlement(c *gin.Context) {
@@ -794,51 +993,86 @@ func ApplySettlement(c *gin.Context) {
 		return
 	}
 	var in struct {
-		PeriodStart string `json:"period_start" binding:"required"`
-		PeriodEnd   string `json:"period_end" binding:"required"`
+		PeriodStart string `json:"period_start"`
+		PeriodEnd   string `json:"period_end"`
 	}
-	if err := c.ShouldBindJSON(&in); err != nil {
+	if err := c.ShouldBindJSON(&in); err != nil && !errors.Is(err, io.EOF) {
+		// 允许完全不带 body：客户端只发 {} 或干脆不发，都表示「用后端算的区间」
 		BadRequest(c, "参数无效")
 		return
 	}
-	start, err1 := time.Parse("2006-01-02", in.PeriodStart)
-	end, err2 := time.Parse("2006-01-02", in.PeriodEnd)
-	if err1 != nil || err2 != nil || end.Before(start) {
-		BadRequest(c, "日期范围无效")
+
+	var start, end time.Time
+	switch {
+	case in.PeriodStart == "" && in.PeriodEnd == "":
+		// 不传区间时由后端算「上次结算之后 → 今天」。
+		// 客户端以前固定传「本月 1 号 → 今天」，机构漏点一个月，那段收益
+		// 就永远落在区间之外，再也申请不到。默认走这条路就不会丢。
+		w, werr := settlementWindow(context.Background(), db.Pool, sitterID)
+		if werr != nil {
+			InternalError(c, "计算可结算区间失败: "+werr.Error())
+			return
+		}
+		start, end = w.Start, w.End
+	case in.PeriodStart == "" || in.PeriodEnd == "":
+		BadRequest(c, "period_start 与 period_end 需要同时提供")
+		return
+	default:
+		var err1, err2 error
+		start, err1 = time.Parse("2006-01-02", in.PeriodStart)
+		end, err2 = time.Parse("2006-01-02", in.PeriodEnd)
+		if err1 != nil || err2 != nil || end.Before(start) {
+			BadRequest(c, "日期范围无效")
+			return
+		}
+	}
+	if start.After(end) {
+		BadRequest(c, "没有可结算的区间")
 		return
 	}
-	var overlap int
-	_ = db.Pool.QueryRow(context.Background(), `
-		SELECT COUNT(*) FROM sitter_settlements
-		WHERE sitter_id = $1 AND status IN ('pending','paid')
-		  AND period_start <= $3 AND period_end >= $2`, sitterID, start, end).Scan(&overlap)
-	if overlap > 0 {
-		Conflict(c, "该时间段已申请过结算")
+	// 不设上限时机构可以一次性申请好几年的区间，金额和订单数都失去意义
+	if end.Sub(start) > 366*24*time.Hour {
+		BadRequest(c, "单次结算周期不能超过 366 天")
 		return
 	}
-	var orders int
-	var gross float64
-	_ = db.Pool.QueryRow(context.Background(), `
-		SELECT COUNT(*), COALESCE(SUM(total_amount), 0) FROM orders
-		WHERE sitter_id = $1 AND status = 'completed' AND deleted_at IS NULL
-		  AND completed_at >= $2 AND completed_at < $3 + interval '1 day'`,
-		sitterID, start, end).Scan(&orders, &gross)
+
+	var orders, grossCents int64
+	if err := db.Pool.QueryRow(context.Background(), `
+		SELECT COUNT(*), COALESCE((SUM(total_amount) * 100)::bigint, 0) FROM orders
+		WHERE sitter_id = $1 AND status IN `+doneOrderStatuses+` AND deleted_at IS NULL
+		  AND completed_at >= $2::date AND completed_at < $3::date + 1`,
+		sitterID, start, end).Scan(&orders, &grossCents); err != nil {
+		InternalError(c, "统计结算金额失败: "+err.Error())
+		return
+	}
 	if orders == 0 {
 		BadRequest(c, "该时间段没有可结算的已完成订单")
 		return
 	}
-	commission := gross * platformCommission
-	var id int64
-	err = db.Pool.QueryRow(context.Background(), `
-		INSERT INTO sitter_settlements (sitter_id, period_start, period_end, order_count,
-		      gross_amount, commission_amount, net_amount)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		sitterID, start, end, orders, gross, commission, gross-commission).Scan(&id)
+
+	rate := sitterCommissionRate(context.Background(), sitterID)
+	id, inserted, err := insertSettlement(context.Background(), db.Pool, sitterID, start, end,
+		orders, grossCents, rate, "")
 	if err != nil {
-		InternalError(c, "提交结算申请失败")
+		InternalError(c, "提交结算申请失败: "+err.Error())
 		return
 	}
-	Created(c, "已提交结算申请", gin.H{"id": id, "net_amount": gross - commission})
+	if !inserted {
+		Conflict(c, "该时间段已申请过结算")
+		return
+	}
+	commission := commissionCents(grossCents, rate)
+	netCents := grossCents - commission
+	Created(c, "已提交结算申请", gin.H{
+		"id":                id,
+		"period_start":      start.Format("2006-01-02"),
+		"period_end":        end.Format("2006-01-02"),
+		"order_count":       orders,
+		"gross_amount":      centsToYuan(grossCents),
+		"commission_rate":   rate,
+		"commission_amount": centsToYuan(commission),
+		"net_amount":        centsToYuan(netCents),
+	})
 }
 
 // ---------------- 售后工单（用户侧） ----------------

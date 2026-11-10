@@ -38,8 +38,11 @@ func paging(c *gin.Context, maxPerPage int) (int, int, int) {
 	if page < 1 {
 		page = 1
 	}
-	if perPage < 1 || perPage > maxPerPage {
+	if perPage < 1 {
 		perPage = 20
+	}
+	if perPage > maxPerPage {
+		perPage = maxPerPage
 	}
 	return page, perPage, (page - 1) * perPage
 }
@@ -730,6 +733,7 @@ func AdminListSettlements(c *gin.Context) {
 	rows, err := db.Pool.Query(context.Background(), `
 		SELECT st.id, s.name, st.period_start::text, st.period_end::text, st.order_count,
 		       st.gross_amount, st.commission_amount, st.net_amount, st.status,
+		       st.commission_rate::float8,
 		       to_char(st.applied_at, 'YYYY-MM-DD HH24:MI'),
 		       COALESCE(to_char(st.paid_at, 'YYYY-MM-DD HH24:MI'), ''), COALESCE(st.note, '')
 		FROM sitter_settlements st JOIN sitters s ON s.id = st.sitter_id `+where+`
@@ -744,13 +748,16 @@ func AdminListSettlements(c *gin.Context) {
 		var id, orders int64
 		var sitter, start, end, st, applied, paid, note string
 		var gross, commission, net float64
+		// commission_rate 在 0004 之前的历史单上是 NULL，前端回退到金额反算
+		var rate *float64
 		if err := rows.Scan(&id, &sitter, &start, &end, &orders, &gross, &commission, &net, &st,
-			&applied, &paid, &note); err != nil {
+			&rate, &applied, &paid, &note); err != nil {
 			continue
 		}
 		items = append(items, gin.H{"id": id, "sitter": sitter, "period_start": start, "period_end": end,
 			"order_count": orders, "gross_amount": gross, "commission_amount": commission,
-			"net_amount": net, "status": st, "applied_at": applied, "paid_at": paid, "note": note})
+			"net_amount": net, "status": st, "commission_rate": rate,
+			"applied_at": applied, "paid_at": paid, "note": note})
 	}
 	OK(c, gin.H{"items": items, "total": total, "page": page, "per_page": perPage})
 }
@@ -782,12 +789,21 @@ func AdminPaySettlement(c *gin.Context) {
 	if in.Action == "reject" {
 		newStatus = "rejected"
 	}
-	_, err := db.Pool.Exec(context.Background(), `
-		UPDATE sitter_settlements SET status = $1, admin_id = $2, note = $3,
-		       paid_at = CASE WHEN $1 = 'paid' THEN now() ELSE NULL END
-		WHERE id = $4`, newStatus, c.GetInt64("user_id"), in.Note, id)
+	// $1 必须显式定成一种类型：status 列是 varchar，而 `$1 = 'paid'` 的比较会把
+	// 参数推向 text，两处推断不一致时 Postgres 直接报 42P08
+	// （inconsistent types deduced for parameter $1），整条 UPDATE 失败 → 500。
+	// 条件里再带一次 status = 'pending'：两个管理员同时点「打款」时，
+	// 只有第一个能命中，第二个得到 409 而不是默默覆盖 paid_at。
+	res, err := db.Pool.Exec(context.Background(), `
+		UPDATE sitter_settlements SET status = $1::text, admin_id = $2, note = $3,
+		       paid_at = CASE WHEN $1::text = 'paid' THEN now() ELSE NULL END
+		WHERE id = $4 AND status = 'pending'`, newStatus, c.GetInt64("user_id"), in.Note, id)
 	if err != nil {
-		InternalError(c, "更新结算失败")
+		InternalError(c, "更新结算失败: "+err.Error())
+		return
+	}
+	if res.RowsAffected() == 0 {
+		Conflict(c, "该结算单已处理")
 		return
 	}
 	var sitterUserID int64

@@ -9,11 +9,20 @@ plugins {
 }
 
 /**
- * 高德 3D 地图的依赖来源，两种取其一：
+ * 高德 3D 地图 SDK 的来源，两种取其一：
  *
- * 1. 官网下载的 aar 丢进 shared/libs/ → 用本地包（官网版本比 Maven Central 新）。
- *    文件名随便叫，放几个都行（3D 地图 / 定位 / 搜索可以一起放）。
- * 2. libs/ 是空的 → 退回 Maven 上的 com.amap.api:3dmap（版本旧，但能直接跑）。
+ * 1. 官网下载的 aar 放进 shared/amap-repo/（本地 Maven 仓库布局，见该目录 README）
+ *    → 用本地包，官网版本比 Maven Central 新。
+ * 2. amap-repo 里没有 aar → 退回 Maven 上的 com.amap.api:3dmap（版本旧，但能直接跑）。
+ *
+ * 为什么不写成 implementation(files("libs/xxx.aar"))：
+ * shared 用的是 AGP 的 KMP 库插件（com.android.kotlin.multiplatform.library），
+ * 它必须把 shared 打成 AAR 交给 androidApp。AGP 9 明确禁止 AAR 里再引用"本地 .aar 文件"：
+ *
+ *   Direct local .aar file dependencies are not supported when building an AAR.
+ *
+ * 因为这样的 AAR 不会把那个本地 aar 的类与资源打进去，下游拿到的是残缺产物。
+ * 换成 Maven 坐标后 AGP 走标准的 AAR 依赖管线，限制就不存在了。
  *
  * 为什么必须在 shared 而不是 androidApp：DAmap.kt 在 shared 的 androidMain 里
  * 直接 import com.amap.api.maps.*，SDK 得进 shared 的编译类路径，
@@ -23,11 +32,14 @@ plugins {
  * 会在 dex 阶段报 Duplicate class com.amap.api.maps.AMap，直接构建失败。
  * 所以这里用 if/else 而不是"两个都加"。
  *
- * 注意：这个判断在配置阶段执行。放了 / 删了 aar 之后要重新 Sync 一次项目
+ * 注意：这个判断在配置阶段执行。换版本 / 删了 aar 之后要重新 Sync 一次项目
  * （命令行加 --rerun-tasks，或直接删 .gradle 缓存），否则会沿用上一次的结论。
  */
-val amapLocalLibs = fileTree("libs") { include("*.aar", "*.jar") }
-val useLocalAmapAar: Boolean = amapLocalLibs.files.isNotEmpty()
+val amapLocalVersion = "11.3.100"
+val amapLocalAar = file(
+    "amap-repo/com/amap/api/amap-bundle/$amapLocalVersion/amap-bundle-$amapLocalVersion.aar"
+)
+val useLocalAmapAar: Boolean = amapLocalAar.isFile
 
 kotlin {
     jvm()
@@ -62,7 +74,7 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.navigation.compose)
             if (useLocalAmapAar) {
-                implementation(amapLocalLibs)
+                implementation("com.amap.api:amap-bundle:$amapLocalVersion")
             } else {
                 implementation(libs.amap.map3d)
             }

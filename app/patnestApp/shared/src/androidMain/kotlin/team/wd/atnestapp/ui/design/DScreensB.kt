@@ -51,6 +51,7 @@ import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.app.MobileImage
 import team.wd.atnestapp.ui.app.rememberPhotoPicker
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 /* ================================================================== *
@@ -1926,6 +1927,12 @@ fun D28PublishDynamic(nav: DNav) {
     }
 }
 
+/** 佣金比例按百分比展示，最多保留一位小数：0.1 → 10%，0.125 → 12.5% */
+private fun B_ratePct(rate: Double): String {
+    val pct = (rate * 1000).roundToInt() / 10.0
+    return if (pct % 1.0 == 0.0) "${pct.toInt()}%" else "$pct%"
+}
+
 private fun B_orderLabel(order: ReceivedOrderDto): String =
     "${order.ownerName.ifBlank { "主人" }} · ${order.petCount} 只 · ${order.orderNo}"
 
@@ -1935,14 +1942,34 @@ fun D29SitterIncome(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        store.loadEarnings()
+        // 进收益页一定要重新取：订单刚结束、主人刚评价都会改变金额，
+        // 走缓存会出现「今日收入有值、收益页还是 0」
+        store.loadEarnings(force = true)
         store.loadSettlements()
         store.loadSitterStats()
+        store.loadSettleWindow()
     }
     val earnings = store.earnings
     val summary = earnings?.summary
     val settled = store.settlements.filter { it.status == "paid" }.sumOf { it.netAmount }
-    val pendingSettle = store.settlements.filter { it.status != "paid" }.sumOf { it.netAmount }
+    // 只算 pending：rejected 的结算单平台不会打款，算进「待结算」会永远挂在那里，
+    // 用户等不到钱也不知道该重新申请
+    val pendingSettle = store.settlements.filter { it.status == "pending" }.sumOf { it.netAmount }
+
+    // 收益区间快捷项：以前固定近 30 天，想查上月/上周看不到
+    val today = java.time.LocalDate.now()
+    val presets = listOf(
+        "近 7 天" to (today.minusDays(6).toString() to today.toString()),
+        "近 30 天" to (today.minusDays(29).toString() to today.toString()),
+        "本月" to (today.withDayOfMonth(1).toString() to today.toString()),
+        "上月" to (
+            today.minusMonths(1).withDayOfMonth(1).toString() to
+                today.withDayOfMonth(1).minusDays(1).toString()
+        ),
+    )
+    val activeLabel = presets.firstOrNull {
+        it.second.first == store.earningsFrom && it.second.second == store.earningsTo
+    }?.first ?: if (store.earningsFrom.isBlank()) "近 30 天" else ""
     DFrame(nav = nav, title = null, backable = false) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
@@ -1966,7 +1993,8 @@ fun D29SitterIncome(nav: DNav) {
                 Text("待结算 ${store.money(pendingSettle)}", fontSize = 12.sp, color = DColor.White.copy(alpha = 0.9f))
                 if (summary != null && summary.commissionRate > 0) {
                     Text(
-                        "佣金 ${store.money(summary.commissionAmount)}",
+                        // 比例由后台配置（全局默认或本机构单独设置），这里只做展示
+                        "佣金 ${B_ratePct(summary.commissionRate)} · ${store.money(summary.commissionAmount)}",
                         fontSize = 12.sp,
                         color = DColor.White.copy(alpha = 0.9f),
                     )
@@ -1979,7 +2007,18 @@ fun D29SitterIncome(nav: DNav) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                     B_Stat((summary?.orderCount ?: 0).toString(), "结算订单")
                     B_Stat(store.money(summary?.grossAmount ?: 0.0), "流水")
-                    B_Stat((summary?.commissionRate ?: 0.0).toString() + "%", "佣金比例")
+                    // 后端返回 0-1 的小数，直接拼 "%" 会显示成 0.1%，这里统一换算
+                    B_Stat(B_ratePct(summary?.commissionRate ?: 0.0), "佣金比例")
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                presets.forEach { preset ->
+                    DChip(preset.first, activeLabel == preset.first) {
+                        scope.launch {
+                            store.loadEarningsRange(preset.second.first, preset.second.second)
+                        }
+                    }
                 }
             }
         }
@@ -1995,8 +2034,11 @@ fun D29SitterIncome(nav: DNav) {
                             title = "${item.periodStart} ~ ${item.periodEnd}",
                             sub = "${item.orderCount} 单 · " + when (item.status) {
                                 "paid" -> "已打款 " + item.paidAt.take(10)
-                                "applied" -> "已申请，等待打款"
-                                else -> "待申请结算"
+                                // 后端状态是 pending，以前这里写成 applied，导致
+                                // 已申请的单一直显示「待申请结算」
+                                "pending" -> "已申请，等待打款"
+                                "rejected" -> "已驳回，可重新申请"
+                                else -> item.status
                             },
                             amount = store.money(item.netAmount),
                             positive = item.status == "paid",
@@ -2005,6 +2047,21 @@ fun D29SitterIncome(nav: DNav) {
                 }
             }
             Spacer(Modifier.height(14.dp))
+            // 可结算区间：起点是上次结算之后，漏掉的月份会自动带上
+            val win = store.settleWindow
+            if (win != null) {
+                Text(
+                    if (win.orderCount > 0) {
+                        "可结算 ${win.start} ~ ${win.end} · ${win.orderCount} 单 · " +
+                            "应得 ${store.money(win.netAmount)}"
+                    } else {
+                        "暂无待结算收益"
+                    },
+                    fontSize = 11.5.sp,
+                    color = DColor.Ink3,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
             DButton(
                 "申请结算（待结算 ${store.money(pendingSettle)}）",
                 { scope.launch { store.applySettlement() } },

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.amap.api</groupId>
+  <artifactId>amap-bundle</artifactId>
+  <version>11.3.100</version>
+  <packaging>aar</packaging>
+
+  <name>AMap Android SDK Bundle</name>
+  <description>
+    高德开放平台官网下载的 Android SDK 合并包（3D 地图 11.3.100 + 搜索 9.8.1 +
+    定位 11.3.101），只做本地依赖用，不发布到任何远端仓库。
+  </description>
+
+  <!--
+    这个 POM 是给 Gradle 认坐标用的，内容刻意保持最小：
+    官网下发的 aar 本身不带传递依赖，原来的 files("*.aar") 写法也不解析依赖，
+    所以这里不声明任何 dependencies，行为与改动前完全一致。
+  -->
+</project>

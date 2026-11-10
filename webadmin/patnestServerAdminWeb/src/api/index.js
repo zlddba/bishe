@@ -201,12 +201,21 @@ export const adminApi = {
   getSettlements: (params) => request.get('/admin/settlements', { params }),
   paySettlement: (id, data) => request.put(`/admin/settlements/${id}`, data),
 
+  // 平台参数：全局佣金比例（单机构覆盖走 updateSitter 的 commission_rate）
+  getCommissionSetting: () => request.get('/admin/settings/commission'),
+  updateCommissionSetting: (data) => request.put('/admin/settings/commission', data),
+
   // 钱包管理
   getWallets: (params) => request.get('/admin/wallets', { params }),
   getWalletDetail: (userId) => request.get(`/admin/wallets/${userId}`),
   adjustWallet: (userId, data) => request.post(`/admin/wallets/${userId}/adjust`, data),
   getRecharges: (params) => request.get('/admin/wallet/recharges', { params }),
   confirmRecharge: (id) => request.post(`/admin/wallet/recharges/${id}/confirm`),
+  getWalletWithdrawals: (params) => request.get('/admin/wallet/withdrawals', { params }),
+  payWalletWithdrawal: (id, data) => request.post(`/admin/wallet/withdrawals/${id}/pay`, data),
+  rejectWalletWithdrawal: (id, data) => request.post(`/admin/wallet/withdrawals/${id}/reject`, data),
+  getCancelFailures: (params) => request.get('/admin/account-cancels/failed', { params }),
+  retryCancel: (userId) => request.post(`/admin/account-cancels/${userId}/retry`),
 
   verifyPetVaccine: (id, data) => request.put(`/admin/pets/${id}/vaccine`, data),
 

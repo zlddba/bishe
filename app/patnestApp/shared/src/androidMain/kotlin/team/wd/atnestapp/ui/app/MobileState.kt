@@ -35,6 +35,7 @@ import team.wd.atnestapp.data.api.RefundDto
 import team.wd.atnestapp.data.api.ReviewPayload
 import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.SettlementDto
+import team.wd.atnestapp.data.api.SettlementWindowDto
 import team.wd.atnestapp.data.api.SitterCouponDto
 import team.wd.atnestapp.data.api.SitterCouponPayload
 import team.wd.atnestapp.data.api.SitterDto
@@ -278,6 +279,14 @@ class MobileState(private val session: MobileSession) {
         private set
     var earningsLoading by mutableStateOf(false)
         private set
+    /** 收益页选中的统计区间，空串表示用后端默认（近 30 天） */
+    var earningsFrom by mutableStateOf("")
+        private set
+    var earningsTo by mutableStateOf("")
+        private set
+    /** 本次可申请结算的区间（上次结算之后 → 今天） */
+    var settleWindow by mutableStateOf<SettlementWindowDto?>(null)
+        private set
     var sitterReviews by mutableStateOf(listOf<SitterReviewDto>())
         private set
     var sitterDynamics by mutableStateOf(listOf<DynamicDto>())
@@ -408,11 +417,22 @@ class MobileState(private val session: MobileSession) {
     /** 申请注销：服务端会吊销全部令牌，这里直接退出登录，冷静期内重新登录即可撤销 */
     suspend fun requestAccountCancel(mode: String) {
         try {
-            api.requestAccountCancel(mode)
+            val result = api.requestAccountCancel(mode)
             val current = api.token
             if (!current.isNullOrBlank()) runCatching { api.logout(current) }
             clearSession()
-            toast("注销申请已提交，3 天内重新登录可撤销")
+            // 账户注销时余额会被转成待退款单（不是没收），把金额说清楚，
+            // 否则用户会以为钱没了
+            val refund = result.walletRefundAmount ?: 0.0
+            toast(
+                buildString {
+                    append("注销申请已提交，3 天内重新登录可撤销")
+                    if (mode != "sitter" && refund > 0) {
+                        append("。钱包余额 ").append(money(refund))
+                            .append(" 将转为待退款单，客服会联系你确认收款方式")
+                    }
+                },
+            )
         } catch (e: Exception) {
             toast(e.message ?: "提交失败")
         }
@@ -450,6 +470,9 @@ class MobileState(private val session: MobileSession) {
         receivedOrders = emptyList()
         capacityItems = emptyList()
         earnings = null
+        earningsFrom = ""
+        earningsTo = ""
+        settleWindow = null
         sitterReviews = emptyList()
         sitterDynamics = emptyList()
         sitterCoupons = emptyList()
@@ -1401,6 +1424,11 @@ class MobileState(private val session: MobileSession) {
             api.completeOrder(order.id)
             toast("订单已完成")
             loadReceivedOrders(force = true)
+            // 一结束订单，今日收益 / 近 30 天收益 / 结算口径都会变。
+            // 收益数据带缓存（earnings != null 就不再请求），这里不主动刷，
+            // 收益页会一直停留在结束订单之前的空数据。
+            loadEarnings(force = true)
+            loadSitterStats()
         } catch (e: Exception) {
             toast(e.message ?: "操作失败")
         }
@@ -1450,12 +1478,28 @@ class MobileState(private val session: MobileSession) {
         earningsLoading = true
         try {
             val today = LocalDate.now()
-            earnings = api.sitterEarnings(today.minusDays(29).toString(), today.toString())
+            // 空表示用后端默认区间（近 30 天）
+            val from = earningsFrom.ifBlank { today.minusDays(29).toString() }
+            val to = earningsTo.ifBlank { today.toString() }
+            earnings = api.sitterEarnings(from, to)
         } catch (e: Exception) {
             toast(e.message ?: "收益加载失败")
         } finally {
             earningsLoading = false
         }
+    }
+
+    /** 切换收益统计区间并立即重取 */
+    suspend fun loadEarningsRange(from: String, to: String) {
+        earningsFrom = from
+        earningsTo = to
+        loadEarnings(force = true)
+    }
+
+    /** 本次可申请结算的区间；起点是上次结算之后，漏掉的月份会自动带上 */
+    suspend fun loadSettleWindow() {
+        if (!loggedIn) return
+        settleWindow = runCatching { api.settlementWindow() }.getOrNull() ?: settleWindow
     }
 
     suspend fun loadSitterReviews() {
@@ -1629,11 +1673,14 @@ class MobileState(private val session: MobileSession) {
     }
 
     suspend fun applySettlement() {
-        val today = LocalDate.now()
         try {
-            api.applySettlement(today.withDayOfMonth(1).toString(), today.toString())
+            // 不传区间：后端按「上次结算之后 → 今天」算。
+            // 原来固定传「本月 1 号 → 今天」，机构漏点一个月，那段收益就再也申请不到了。
+            api.applySettlement()
             toast("结算申请已提交")
             loadSettlements()
+            loadSettleWindow()
+            loadEarnings(force = true)
         } catch (e: Exception) {
             toast(e.message ?: "申请失败")
         }

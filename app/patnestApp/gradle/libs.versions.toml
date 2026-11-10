@@ -60,7 +60,6 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 navigation-compose={module="androidx.navigation:navigation-compose",version.ref="navigationCompose"}
 amap-map3d = { module = "com.amap.api:3dmap", version.ref = "amap3dmap" }
-# 会话持久化：两端共用 commonMain 里的一套 SessionStore（KMP 版 DataStore，1.1.0+ 支持多平台）
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
 datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
