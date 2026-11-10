@@ -1,52 +1,74 @@
 /**
- * 这里是uni-app内置的常用样式变量
- *
- * uni-app 官方扩展插件及插件市场（https://ext.dcloud.net.cn）上很多三方插件均使用了这些样式变量
- * 如果你是插件开发者，建议你使用scss预处理，并在插件代码中直接使用这些变量（无需 import 这个文件），方便用户通过搭积木的方式开发整体风格一致的App
- *
+ * uni-app 内置样式变量 + 宠栖 PatNest 主题变量
+ * 配色依据：docs/宠栖后台-UI配色设计图.html（玫瑰粉品牌色阶 + 语义色 + 中性色）
  */
 
-/**
- * 如果你是App开发者（插件使用者），你可以通过修改这些变量来定制自己的插件主题，实现自定义主题功能
- *
- * 如果你的项目同样使用了scss预处理，你也可以直接在你的 scss 代码中使用如下变量，同时无需 import 这个文件
- */
+/* 品牌主色阶 · Primary */
+$patnest-primary-50: #FDF1F4;
+$patnest-primary-100: #FBE0E6;
+$patnest-primary-200: #F6C2CE;
+$patnest-primary-300: #EFA0B3;
+$patnest-primary-400: #E87D97;
+$patnest-primary-500: #E0708A;
+$patnest-primary-600: #C85B74;
+$patnest-primary-700: #AF4A62;
+$patnest-primary-800: #8E3B4E;
+$patnest-primary-900: #6F2A3B;
 
-/* 颜色变量 */
+/* 语义色 */
+$patnest-success: #2F9E63;
+$patnest-warning: #D97706;
+$patnest-danger: #C2456A;
+$patnest-info: #3E7BFA;
+
+/* 中性色 */
+$patnest-n0: #FFFFFF;
+$patnest-n50: #F6F7F8;
+$patnest-n100: #EFF1F3;
+$patnest-n200: #E7E9EC;
+$patnest-n300: #D4D8DD;
+$patnest-n400: #B7BDC5;
+$patnest-n500: #9AA3AF;
+$patnest-n600: #5C6470;
+$patnest-n700: #3A4149;
+$patnest-n800: #1B1E23;
+
+/* 点缀色 */
+$patnest-star: #EAB308;
+$patnest-rose-light: #F2AEBE;
+$patnest-rose-light-bg: #FAE7EC;
 
 /* 行为相关颜色 */
-$uni-color-primary: #007aff;
-$uni-color-success: #4cd964;
-$uni-color-warning: #f0ad4e;
-$uni-color-error: #dd524d;
+$uni-color-primary: #C85B74;
+$uni-color-success: #2F9E63;
+$uni-color-warning: #D97706;
+$uni-color-error: #C2456A;
 
 /* 文字基本颜色 */
-$uni-text-color:#333;//基本色
-$uni-text-color-inverse:#fff;//反色
-$uni-text-color-grey:#999;//辅助灰色，如加载更多的提示信息
-$uni-text-color-placeholder: #808080;
-$uni-text-color-disable:#c0c0c0;
+$uni-text-color: #1B1E23; //基本色
+$uni-text-color-inverse: #fff; //反色
+$uni-text-color-grey: #9AA3AF; //辅助灰色，如加载更多的提示信息
+$uni-text-color-placeholder: #9AA3AF;
+$uni-text-color-disable: #B7BDC5;
 
 /* 背景颜色 */
-$uni-bg-color:#ffffff;
-$uni-bg-color-grey:#f8f8f8;
-$uni-bg-color-hover:#f1f1f1;//点击状态颜色
-$uni-bg-color-mask:rgba(0, 0, 0, 0.4);//遮罩颜色
+$uni-bg-color: #ffffff;
+$uni-bg-color-grey: #F6F7F8;
+$uni-bg-color-hover: #F3F3F5; //点击状态颜色
+$uni-bg-color-mask: rgba(27, 30, 35, 0.4); //遮罩颜色
 
 /* 边框颜色 */
-$uni-border-color:#c8c7cc;
-
-/* 尺寸变量 */
+$uni-border-color: #E7E9EC;
 
 /* 文字尺寸 */
-$uni-font-size-sm:12px;
-$uni-font-size-base:14px;
-$uni-font-size-lg:16px;
+$uni-font-size-sm: 12px;
+$uni-font-size-base: 14px;
+$uni-font-size-lg: 16px;
 
 /* 图片尺寸 */
-$uni-img-size-sm:20px;
-$uni-img-size-base:26px;
-$uni-img-size-lg:40px;
+$uni-img-size-sm: 20px;
+$uni-img-size-base: 26px;
+$uni-img-size-lg: 40px;
 
 /* Border Radius */
 $uni-border-radius-sm: 2px;
@@ -65,12 +87,12 @@ $uni-spacing-col-base: 8px;
 $uni-spacing-col-lg: 12px;
 
 /* 透明度 */
-$uni-opacity-disabled: 0.3; // 组件禁用态的透明度
+$uni-opacity-disabled: 0.3; //组件禁用态的透明度
 
 /* 文章场景相关 */
-$uni-color-title: #2C405A; // 文章标题颜色
-$uni-font-size-title:20px;
-$uni-color-subtitle: #555555; // 二级标题颜色
-$uni-font-size-subtitle:26px;
-$uni-color-paragraph: #3F536E; // 文章段落颜色
-$uni-font-size-paragraph:15px;
+$uni-color-title: #3A4149; // 文章标题颜色
+$uni-font-size-title: 20px;
+$uni-color-subtitle: #5C6470; // 二级标题颜色
+$uni-font-size-subtitle: 26px;
+$uni-color-paragraph: #3A4149; // 文章段落颜色
+$uni-font-size-paragraph: 15px;
