@@ -33,7 +33,15 @@ go run ./cmd/migrate -dir serverdb/migrations -status   # 查看已应用版本
 go run ./cmd/api                                        # 默认监听 APP_PORT=9200
 ```
 
-直接依赖只有 Gin、pgx、jwt/v5、minio-go、godotenv、x/crypto 等几项。Redis 客户端（`internal/cache`）是手写的精简 RESP 实现，只覆盖本项目用到的命令，没有为它引入第三方库。
+### 接口文档（Swagger UI）
+
+后端启动后访问 `http://localhost:9200/swagger/index.html`，文档 JSON 在 `/swagger.json`。UI 里点右上角 Authorize 填 `Bearer <access_token>` 即可调试需登录的接口。设 `SWAGGER_ENABLED=false` 可关闭。
+
+服务器/容器部署时访问 `http://<host>:9200/swagger/index.html`：nginx 已放行 `/swagger/` 与 `/swagger.json` 到后端。注意 `docker/nginx/locations.conf` 是**打进 nginx 镜像**的（不是挂载），更新后要重建 web 镜像才会生效：`docker compose --profile app up -d --build`。接口清单是公开的，生产环境可用 `SWAGGER_ENABLED=false` 关闭。
+
+文档由 `internal/router/router.go` 自动生成（不是手写注解）：改动路由后执行 `python internal/swagger/gen_swagger.py` 重新生成，`go test ./internal/swagger` 会检查文档是否漏掉新路由。生成的 JSON 通过 `go:embed` 打进二进制，容器部署无需额外文件。
+
+直接依赖只有 Gin、pgx、jwt/v5、minio-go、godotenv、x/crypto、gin-swagger 等几项。Redis 客户端（`internal/cache`）是手写的精简 RESP 实现，只覆盖本项目用到的命令，没有为它引入第三方库。
 
 入口分三个：`cmd/api` 常驻服务、`cmd/migrate` 在线迁移、`cmd/dbprobe` 连通性排查。
 `serverdb/init.sql` 是唯一全量基线（已合并原 `0001`~`0021` 的净效果），新库执行它即可；

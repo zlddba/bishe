@@ -3,19 +3,25 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	AppPort   int
-	AppSlot   string
-	DBHost    string
-	DBPort    int
-	DBName    string
-	DBUser    string
-	DBPass    string
-	JWTSecret string
+	AppPort int
+	AppSlot string
+	// SwaggerEnabled 控制是否挂载 Swagger UI 与 /swagger.json 文档，默认开启。
+	SwaggerEnabled bool
+	// ServerScheme 后端启动时的初始协议：http 或 https。
+	// 证书与开关本身在后台管理页面里管，这个只兜底初始状态。
+	ServerScheme string
+	DBHost       string
+	DBPort       int
+	DBName       string
+	DBUser       string
+	DBPass       string
+	JWTSecret    string
 	// JWTAccessTTLMinutes 访问令牌有效期，默认 30 分钟。
 	// 桌面端（KMP ApiClient）和后台（axios 拦截器）都会在用访问令牌撞上 401 时
 	// 拿 refresh_token 静默续期并重放一次，所以有效期可以设得比较短。
@@ -47,6 +53,8 @@ func Load() *Config {
 	return &Config{
 		AppPort:             getInt("APP_PORT", 9200),
 		AppSlot:             getStr("APP_SLOT", "blue"),
+		SwaggerEnabled:      getBool("SWAGGER_ENABLED", true),
+		ServerScheme:        strings.ToLower(getStr("SERVER_SCHEME", "")),
 		DBHost:              getStr("DB_HOST", "localhost"),
 		DBPort:              getInt("DB_PORT", 5432),
 		DBName:              getStr("DB_NAME", "patnest_db"),
@@ -73,6 +81,27 @@ func Load() *Config {
 func (c *Config) DBDSN() string {
 	return "postgres://" + c.DBUser + ":" + c.DBPass + "@" + c.DBHost + ":" + strconv.Itoa(c.DBPort) + "/" + c.DBName +
 		"?sslmode=disable&timezone=Asia/Shanghai"
+}
+
+// Scheme 返回对外提供服务的协议：https 或 http。
+func (c *Config) Scheme() string {
+	if c.TLSOn() {
+		return "https"
+	}
+	return "http"
+}
+
+// TLSOn 判断后端是否应当在启动时就开启 HTTPS。
+//
+// 现在的分工：
+//   - 证书与开关都在后台管理页面管（后台上传证书 + 页面上开关）；
+//   - .env 的 SERVER_SCHEME 只决定「启动时的初始状态」，
+//     写 https 表示「一启动就要求后端能接 HTTPS」（证书不可用则启动失败）；
+//   - 页面上把开关关掉后，初始状态就不再强制。
+//
+// 未设置时返回 false：默认明文，由后台开关决定要不要开 HTTPS。
+func (c *Config) TLSOn() bool {
+	return strings.ToLower(c.ServerScheme) == "https"
 }
 
 func getStr(key, def string) string {

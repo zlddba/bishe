@@ -23,9 +23,15 @@ func auditClientIP(c *gin.Context) string {
 }
 
 // writeAudit 统一写后台审计日志（含来源 IP）。
+//
+// 审计写失败不能连累业务：db.Pool 为 nil（测试环境、或 DB 初始化前）时直接跳过，
+// 否则一次操作成功却因为写审计 panic，接口返回 500，用户会以为操作失败。
 func writeAudit(c *gin.Context, action, targetType string, targetID int64, detail string) {
 	if detail == "" {
 		detail = "{}"
+	}
+	if db.Pool == nil {
+		return
 	}
 	_, _ = db.Pool.Exec(context.Background(),
 		"SELECT fn_audit($1, $2, $3, NULLIF($4::bigint, 0::bigint), $5::jsonb, NULLIF($6, '')::inet)",

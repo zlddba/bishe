@@ -14,6 +14,10 @@ $script:ComposeCmd = Resolve-ComposeCommand
 $script:Engine = Resolve-ContainerEngine
 $env:APP_VERSION = $Version
 
+Assert-EngineRunning "[web]"
+
+Ensure-NginxMountFiles
+
 Write-Host "[web] Building image patnest-web:$Version" -ForegroundColor Cyan
 Invoke-Compose @("--profile", "app", "build", "--pull", "nginx")
 

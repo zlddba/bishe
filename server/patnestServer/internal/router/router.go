@@ -318,6 +318,7 @@ func Setup() *gin.Engine {
 			// --- HTTPS 证书（上传后由 nginx 容器守护脚本校验并 reload）---
 			admin.GET("/system/tls", handler.AdminGetTLS)
 			admin.POST("/system/tls", handler.AdminUploadTLS)
+			admin.POST("/system/tls/backend", handler.AdminSetBackendTLS)
 			admin.DELETE("/system/tls", handler.AdminDeleteTLS)
 
 			admin.GET("/push-tasks", handler.AdminListPushTasks)

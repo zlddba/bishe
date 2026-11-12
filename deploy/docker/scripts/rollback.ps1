@@ -13,6 +13,10 @@ $script:ComposeCmd = Resolve-ComposeCommand
 $script:Engine = Resolve-ContainerEngine
 $env:APP_VERSION = $Version
 
+Assert-EngineRunning "[rollback]"
+
+Ensure-NginxMountFiles
+
 $inspect = Invoke-NativeCommand -Command $script:Engine -Arguments @("image", "inspect", "patnest-api:$Version") -Quiet -AllowFail
 if ($inspect.ExitCode -ne 0) { throw "Image patnest-api:$Version not found locally." }
 
@@ -29,6 +33,8 @@ if (-not (Wait-Healthy -Slot $target -Retries $HealthRetries)) {
 }
 
 Set-UpstreamSlot -Slot $target
+# Proxy protocol must match the backend's own protocol (http/https).
+Set-ApiProxy | Out-Null
 Invoke-NativeCommand -Command $script:Engine -Arguments @("exec", "patnest-nginx", "nginx", "-t") | Out-Null
 Invoke-NativeCommand -Command $script:Engine -Arguments @("exec", "patnest-nginx", "nginx", "-s", "reload") | Out-Null
 

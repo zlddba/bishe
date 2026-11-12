@@ -156,6 +156,8 @@ export const adminApi = {
   getTLS: () => request.get('/admin/system/tls'),
   uploadTLS: (data) => request.post('/admin/system/tls', data),
   removeTLS: () => request.delete('/admin/system/tls'),
+  // 后端自己的端口是否同时接受 HTTPS（页面开关，切换即时生效）
+  setBackendTLS: (data) => request.post('/admin/system/tls/backend', data),
   getUpdates: () => request.get('/admin/updates'),
   scanUpdates: () => request.post('/admin/updates/scan'),
   uploadUpdate: (file, onUploadProgress) => {

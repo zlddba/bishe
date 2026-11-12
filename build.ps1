@@ -1,3 +1,6 @@
+# Build a versioned deploy package: admin dist + Go binaries + container files.
+# All scripts in this repository are ASCII-only; see common.ps1 for the reason.
+
 [CmdletBinding()]
 param(
     [string]$Version = "",
@@ -155,19 +158,17 @@ Copy-Item (Join-Path $TplDir "README.md") $PkgDir -Force
 Copy-Item (Join-Path $TplDir "Dockerfile.api") (Join-Path $PkgDir "docker") -Force
 Copy-Item (Join-Path $TplDir "Dockerfile.web") (Join-Path $PkgDir "docker") -Force
 Copy-Item (Join-Path $TplDir "Dockerfile.agent") (Join-Path $PkgDir "docker") -Force
-# 入口脚本必须落在包根：Dockerfile.agent 的 COPY 路径相对构建上下文（部署包根目录）。
 Copy-Item (Join-Path $TplDir "agent-entrypoint.sh") $PkgDir -Force
 Copy-Item (Join-Path $TplDir "nginx\default.conf") (Join-Path $PkgDir "docker\nginx") -Force
-# locations.conf 是 9200/443 共用规则，Dockerfile.web 会 COPY 它
 Copy-Item (Join-Path $TplDir "nginx\locations.conf") (Join-Path $PkgDir "docker\nginx") -Force
-# 证书热加载守护，会被放进 /docker-entrypoint.d/
-Copy-Item (Join-Path $TplDir "nginx\tls-watch.sh") (Join-Path $PkgDir "docker\nginx") -Force
+Copy-Item (Join-Path $TplDir "nginx\api_proxy.conf") (Join-Path $PkgDir "docker\nginx") -Force
+Copy-Item (Join-Path $TplDir "nginx\api_proxy.conf") (Join-Path $PkgDir "nginx") -Force
 Copy-Item (Join-Path $TplDir "nginx\upstream.conf") (Join-Path $PkgDir "nginx") -Force
-# 证书目录是运行时挂载源（compose 的 ./nginx/tls），必须带 https.conf 占位，
-# 否则新版 default.conf 的 include 找不到文件，nginx 起不来
 $tlsDir = Join-Path $PkgDir "nginx\tls"
 New-Item -ItemType Directory -Force -Path $tlsDir | Out-Null
-Copy-Item (Join-Path $TplDir "nginx\tls\https.conf") $tlsDir -Force
+if (Test-Path (Join-Path $TplDir "nginx\tls\.gitignore")) {
+    Copy-Item (Join-Path $TplDir "nginx\tls\.gitignore") $tlsDir -Force
+}
 Copy-Item (Join-Path $TplDir "scripts\*.sh") (Join-Path $PkgDir "scripts") -Force
 Copy-Item (Join-Path $TplDir "scripts\*.ps1") (Join-Path $PkgDir "scripts") -Force
 Copy-Item $distDir (Join-Path $PkgDir "web\dist") -Recurse -Force

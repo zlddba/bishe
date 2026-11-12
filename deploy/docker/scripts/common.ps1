@@ -36,6 +36,58 @@ function Resolve-ContainerEngine {
     throw "No container engine found (podman or docker)."
 }
 
+# Stop early with an actionable hint when the container engine is down.
+function Assert-EngineRunning {
+    param([string]$Step = "[install]")
+
+    $engine = Resolve-ContainerEngine
+    $probe = Invoke-NativeCommand -Command $engine -Arguments @("info", "--format", "{{.ServerVersion}}") -Quiet -AllowFail
+    if ($probe.ExitCode -eq 0) { return $true }
+
+    Write-Host ""
+    Write-Host "$Step container engine is not running; script stopped." -ForegroundColor Red
+    if ($engine -eq "docker") {
+        Write-Host "  Docker Desktop is not started, or the engine is still starting (tray icon shows starting)." -ForegroundColor Yellow
+        Write-Host "  Start Docker Desktop, wait until fully ready, then rerun this script." -ForegroundColor Yellow
+        Write-Host "  If it still fails, the engine likely crashed: restart Docker Desktop and retry." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Cannot reach $engine (socket down or insufficient permissions)." -ForegroundColor Yellow
+        Write-Host "  Check: systemctl status podman, or verify podman.sock path and permissions." -ForegroundColor Yellow
+    }
+    Write-Host ""
+    exit 1
+}
+
+# Compose bind-mounts nginx/upstream.conf and nginx/api_proxy.conf as live files.
+# If a source is missing Docker creates a directory instead and the mount fails:
+# "not a directory: are you trying to mount a directory onto a file (or vice-versa)?"
+function Ensure-NginxMountFiles {
+    $files = @{
+        "nginx\api_proxy.conf" = "proxy_pass http://patnest_api;`n"
+        "nginx\upstream.conf"  = "server api-blue:9201 max_fails=2 fail_timeout=5s;`n"
+    }
+    foreach ($rel in $files.Keys) {
+        $path = Join-Path (Get-PackageRoot) $rel
+        $dir = Split-Path -Parent $path
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+
+        if (Test-Path $path -PathType Container) {
+            $items = @(Get-ChildItem -Path $path -Force -ErrorAction SilentlyContinue)
+            if ($items.Count -gt 0) {
+                Write-Warning "$rel is a non-empty directory; check manually before continuing: $path"
+                continue
+            }
+            Remove-Item -Path $path -Recurse -Force
+            Write-Host "[fix] removed directory created by Docker at $rel" -ForegroundColor Yellow
+        }
+
+        if (-not (Test-Path $path -PathType Leaf)) {
+            Set-Content -Path $path -Value $files[$rel] -NoNewline -Encoding ascii
+            Write-Host "[fix] created missing mount source file $rel" -ForegroundColor Yellow
+        }
+    }
+}
+
 function Invoke-NativeCommand {
     param(
         [Parameter(Mandatory = $true)][string]$Command,
@@ -123,12 +175,48 @@ function Set-UpstreamSlot {
     Set-Content -Path $conf -Value $content -NoNewline -Encoding ascii
 }
 
+function Get-ApiScheme {
+    # Backend protocol: http (nginx terminates TLS) or https (backend does).
+    $scheme = (Get-EnvValue "SERVER_SCHEME" "http").ToLower()
+    if ($scheme -eq "https") { return "https" }
+    return "http"
+}
+
+function Set-ApiProxy {
+    # nginx -> backend proxy protocol must match the backend's own protocol.
+    # A plain-text handshake against a TLS-only upstream fails with 502.
+    $scheme = Get-ApiScheme
+    $conf = Join-Path (Get-PackageRoot) "nginx\api_proxy.conf"
+    $content = "proxy_pass ${scheme}://patnest_api;`n"
+    Set-Content -Path $conf -Value $content -NoNewline -Encoding ascii
+    return $scheme
+}
+
+function Get-HealthUrl {
+    param([string]$Slot)
+    # Probe from inside the API container, so it always uses 127.0.0.1.
+    $scheme = Get-ApiScheme
+    if ($scheme -eq "https") {
+        return "https://127.0.0.1:9201/health"
+    }
+    return "http://127.0.0.1:9201/health"
+}
+
+function Get-HealthWgetArgs {
+    # busybox wget needs --no-check-certificate: the cert is issued for the
+    # public domain, not for 127.0.0.1.
+    if ((Get-ApiScheme) -eq "https") {
+        return @("wget", "-qO-", "--no-check-certificate")
+    }
+    return @("wget", "-qO-")
+}
+
 function Wait-Healthy {
     param([string]$Slot, [int]$Retries = 30)
+    $wgetArgs = Get-HealthWgetArgs
+    $url = Get-HealthUrl $Slot
     for ($i = 1; $i -le $Retries; $i++) {
-        $probe = Invoke-NativeCommand -Command $script:Engine -Arguments @(
-            "exec", "patnest-api-$Slot", "wget", "-qO-", "http://127.0.0.1:9201/health"
-        ) -Quiet -AllowFail
+        $probe = Invoke-NativeCommand -Command $script:Engine -Arguments (@("exec", "patnest-api-$Slot") + $wgetArgs + @($url)) -Quiet -AllowFail
         if ($probe.ExitCode -eq 0) { return $true }
         Start-Sleep -Seconds 1
     }
@@ -137,9 +225,9 @@ function Wait-Healthy {
 
 function Get-Health {
     param([string]$Slot)
-    $probe = Invoke-NativeCommand -Command $script:Engine -Arguments @(
-        "exec", "patnest-api-$Slot", "wget", "-qO-", "http://127.0.0.1:9201/health"
-    ) -Quiet -AllowFail
+    $wgetArgs = Get-HealthWgetArgs
+    $url = Get-HealthUrl $Slot
+    $probe = Invoke-NativeCommand -Command $script:Engine -Arguments (@("exec", "patnest-api-$Slot") + $wgetArgs + @($url)) -Quiet -AllowFail
     if ($probe.ExitCode -ne 0 -or -not $probe.Output) { return $null }
     try {
         $raw = @($probe.Output | ForEach-Object { [string]$_ })

@@ -164,12 +164,12 @@
       </el-table>
     </section>
 
-    <!-- HTTPS 证书：上传后由 nginx 容器校验并热加载，失败自动回滚 -->
+    <!-- HTTPS 证书：后端 9200 端口自己终结 TLS，443 已关闭 -->
     <section class="tls-section">
       <div class="tls-head">
         <div>
           <h3>HTTPS 证书</h3>
-          <p>上传证书链与私钥，保存后自动校验并生效；校验失败会回滚，站点不受影响</p>
+          <p>上传证书链与私钥，保存后立即生效；证书用于后端自己的 HTTPS 监听</p>
         </div>
         <el-button :loading="tlsLoading" @click="loadTLS">刷新状态</el-button>
       </div>
@@ -186,11 +186,36 @@
           <span v-else>-</span>
         </el-descriptions-item>
         <el-descriptions-item label="签发者">{{ tls.issuer || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="上次生效" :span="2">
-          <span v-if="tls.last_reload">{{ reloadText }}</span>
-          <span v-else>-</span>
-        </el-descriptions-item>
+        <el-descriptions-item label="证书目录" :span="2">{{ tls.dir || '-' }}</el-descriptions-item>
       </el-descriptions>
+
+      <!-- 后端自己终结 TLS：开关一拨就生效，不用重启、不用改 .env -->
+      <div class="tls-backend">
+        <div class="tls-backend-text">
+          <div class="tls-backend-title">
+            后端同时接受 HTTPS
+            <span class="pn-tag" :class="backendTLSOn ? 'pn-tag-ok' : 'pn-tag-soft'">
+              {{ backendTLSOn ? '已开启' : '未开启' }}
+            </span>
+          </div>
+          <p class="tls-backend-desc">
+            开启后后端自己的端口（9200）同时接受 http 与 https，客户端可以直接用
+            <code>https://{{ (tls.domains || [])[0] || '你的域名' }}:9200</code> 访问。
+            站点只监听 9200，不再开放 443。切换即时生效，不需要重启服务。
+          </p>
+          <p v-if="!backendTLSAvailable" class="tls-backend-desc tls-backend-warn">
+            还没有可用证书，请先在上面上传证书链与私钥。
+          </p>
+        </div>
+        <el-switch
+          v-model="backendTLSOn"
+          :loading="backendTLSSaving"
+          :disabled="!backendTLSAvailable"
+          active-text="开启"
+          inactive-text="关闭"
+          @change="toggleBackendTLS"
+        />
+      </div>
 
       <el-alert
         v-if="tls.configured && tls.days_left !== undefined && tls.days_left < 15"
@@ -237,7 +262,7 @@
           @click="removeTLS"
         >移除证书</el-button>
         <span class="tls-hint">
-          保存后约 5 秒生效。生效结果看「上次生效」，失败时原配置保持不变。
+          保存后立即生效：证书是握手时现读的，新连接立刻用新证书，不需要重启。
         </span>
       </div>
     </section>
@@ -467,27 +492,39 @@ const tlsLoading = ref(false)
 const tlsSaving = ref(false)
 const tlsForm = reactive({ cert: '', key: '', server_name: '' })
 
-const reloadText = computed(() => {
-  const raw = tls.value.last_reload
-  if (!raw) return '-'
-  try {
-    const j = JSON.parse(raw)
-    const head = (j.ok ? '成功' : '失败') + (j.at ? ' · ' + j.at : '')
-    return j.ok ? head : `${head} · ${j.message || '未知错误'}`
-  } catch {
-    return raw
-  }
-})
+// 后端自身是否接收 HTTPS：开关在页面上拨，服务端即时生效
+const backendTLSOn = ref(false)
+const backendTLSAvailable = ref(false)
+const backendTLSSaving = ref(false)
 
 async function loadTLS() {
   tlsLoading.value = true
   try {
     const res = await adminApi.getTLS()
     tls.value = res.data || {}
+    const bt = tls.value.backend_tls || {}
+    backendTLSOn.value = !!bt.enabled
+    backendTLSAvailable.value = !!bt.available
   } catch (e) {
     // 证书未配置时接口也返回 200；这里出错多半是权限或网络，不额外打扰
   } finally {
     tlsLoading.value = false
+  }
+}
+
+// 切换后端自己的 HTTPS 开关。
+// 接口失败时把开关拨回原值，不然页面显示的状态和实际不一致。
+async function toggleBackendTLS(on) {
+  backendTLSSaving.value = true
+  try {
+    const res = await adminApi.setBackendTLS({ enabled: on })
+    ElMessage.success((res.data && res.data.message) || (on ? '已开启' : '已关闭'))
+    loadTLS()
+  } catch (e) {
+    backendTLSOn.value = !on
+    ElMessage.error(e.message || '切换失败')
+  } finally {
+    backendTLSSaving.value = false
   }
 }
 
@@ -502,10 +539,10 @@ async function saveTLS() {
       key: tlsForm.key.trim(),
       server_name: tlsForm.server_name.trim(),
     })
-    ElMessage.success('已提交，约 5 秒后自动生效')
+    ElMessage.success('证书已保存，立即生效')
     tlsForm.cert = ''
     tlsForm.key = ''
-    setTimeout(loadTLS, 5000)
+    loadTLS()
   } catch (e) {
     ElMessage.error(e.message || '保存失败')
   } finally {
@@ -515,17 +552,19 @@ async function saveTLS() {
 
 async function removeTLS() {
   try {
-    await ElMessageBox.confirm('移除后 443 停止监听，只能继续用 HTTP 访问。确定移除吗？', '移除证书', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      '移除后后端不再接受 HTTPS 连接，只能继续用 HTTP 访问（同时会关闭 HTTPS 开关）。确定移除吗？',
+      '移除证书',
+      { type: 'warning' }
+    )
   } catch {
     return
   }
   tlsSaving.value = true
   try {
     await adminApi.removeTLS()
-    ElMessage.success('已移除，约 5 秒后生效')
-    setTimeout(loadTLS, 5000)
+    ElMessage.success('已移除')
+    loadTLS()
   } catch (e) {
     ElMessage.error(e.message || '移除失败')
   } finally {
@@ -665,6 +704,41 @@ onUnmounted(stopPolling)
   color: var(--ink3, #9AA3AF);
 }
 .tls-desc { margin-bottom: 12px; }
+.tls-backend {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: #FAF7F8;
+  border: 1px solid var(--line, #EDE4E7);
+  border-radius: 10px;
+}
+.tls-backend-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink, #3A2A2F);
+  margin-bottom: 4px;
+}
+.tls-backend-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink3, #9AA3AF);
+}
+.tls-backend-desc code {
+  padding: 1px 5px;
+  background: #fff;
+  border: 1px solid var(--line, #EDE4E7);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink, #3A2A2F);
+}
+.tls-backend-warn { margin-top: 6px; color: #E6A23C; }
 .tls-actions {
   display: flex;
   align-items: center;

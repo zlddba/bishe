@@ -15,12 +15,19 @@ patnest-docker/
 ├── artifacts/              # 已编译的 Linux amd64 二进制
 ├── web/dist/               # 已构建的管理页面（含 version.json）
 ├── nginx/upstream.conf     # 蓝绿 active 槽位
+├── nginx/api_proxy.conf    # nginx→后端 的反代协议（后端跑 https 时发布脚本会改写它）
 ├── db/                     # 建库脚本与增量迁移
 ├── data/updates/           # 运行时生成：tmp / manual / queue / status / logs
 └── scripts/                # 安装 / 发布 / 迁移（.sh 与 .ps1 两套等价脚本）
 ```
 
-> **端口**：对外只暴露 `PUBLIC_PORT`（默认 `9200`，管理页面 + API）；API 的 `9201` 只在容器网络内，不需要在安全组放行。
+> **端口**：对外只暴露 `PUBLIC_PORT`（默认 `9200`，管理页面 + API）；**443 不开放**。
+> API 的 `9201` 只在容器网络内，不需要在安全组放行。
+
+> **协议**：证书在后台「系统更新 → HTTPS 证书」里上传；页面上的「后端同时接受 HTTPS」
+> 开关打开后，API 容器的 9200 端口同时收 http 与 https，客户端可以直连
+> `https://域名:9200`，nginx 的反代不受影响。`.env` 的 `SERVER_SCHEME` 只兜底
+> 启动那一刻的初始状态。
 
 ## 首次部署（Linux / macOS）
 

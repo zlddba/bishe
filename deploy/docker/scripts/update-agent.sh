@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Update agent: consumes queued update packages, backs up the current
+# version, runs release-api.sh / release-web.sh and writes task status.
+# Container mode clears stale agent.pid / agent.lock from the volume.
+
 # Host-side update agent (Linux). It only consumes data/updates/queue and calls
 # the existing release scripts, so the API container never needs docker access.
 set -uo pipefail
@@ -19,9 +23,6 @@ POLL_SECONDS="${POLL_SECONDS:-3}"
 
 mkdir -p "$UPDATES" "$QUEUE" "$PROCESSING" "$FAILED" "$STATUS_DIR" "$LOGS" "$BACKUPS"
 
-# 容器化运行时：卷里残留的 agent.pid / agent.lock 属于上一代容器进程。
-# 容器内 PID 会复用（常为 1），直接沿用会误判「已在运行」而静默退出，
-# 表现为「容器 Up 但心跳不更新」。由 entrypoint 设置 PATNEST_AGENT_CONTAINER=1。
 if [[ "${PATNEST_AGENT_CONTAINER:-0}" == "1" ]]; then
   rm -f "$PID_FILE"
   rm -rf "$UPDATES/agent.lock"
@@ -147,7 +148,7 @@ recover_interrupted() {
     backup="$BACKUPS/$id"
     [[ -d "$backup" ]] && restore_backup "$backup"
     write_status "$id" "failed" "interrupted" \
-      "更新代理重启，任务已中断并恢复旧文件" \
+      "update agent restarted; task interrupted and old files restored" \
       "$(job_get "$job" version)" "$(job_get "$job" targets)" \
       "$(job_get "$job" source)" "$(job_get "$job" created_at)" "$started" "$started"
     mv -f "$file" "$FAILED/$id.job" 2>/dev/null || true
@@ -173,7 +174,7 @@ process_job() {
   started="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
   if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$ ]]; then
-    write_status "$id" "failed" "failed" "版本号无效" "$version" "$targets" "$source" "$created" "$started" "$started"
+    write_status "$id" "failed" "failed" "invalid version" "$version" "$targets" "$source" "$created" "$started" "$started"
     mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
     return
   fi
@@ -186,28 +187,28 @@ process_job() {
     real_staging="$(realpath "$UPDATES/$staging" 2>/dev/null || true)"
   fi
   if [[ -z "$real_staging" || "$real_staging" != "$staging_root/"* ]]; then
-    write_status "$id" "failed" "failed" "暂存目录越界或不存在" "$version" "$targets" "$source" "$created" "$started" "$started"
+    write_status "$id" "failed" "failed" "staging directory missing or out of bounds" "$version" "$targets" "$source" "$created" "$started" "$started"
     mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
     return
   fi
 
   log "$id" "job $version targets=$targets"
   touch_heartbeat
-  write_status "$id" "running" "backup" "备份当前版本" "$version" "$targets" "$source" "$created" "$started" ""
+  write_status "$id" "running" "backup" "back up current version" "$version" "$targets" "$source" "$created" "$started" ""
   backup="$(backup_current "$id")"
 
-  write_status "$id" "running" "copy" "复制更新文件" "$version" "$targets" "$source" "$created" "$started" ""
+  write_status "$id" "running" "copy" "copy update files" "$version" "$targets" "$source" "$created" "$started" ""
   if [[ ",$targets," == *",api,"* ]]; then
     if [[ ! -s "$real_staging/artifacts/patnest-api" || ! -s "$real_staging/artifacts/patnest-migrate" ]]; then
       finished="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      write_status "$id" "failed" "failed" "更新包缺少后端程序" "$version" "$targets" "$source" "$created" "$started" "$finished"
+      write_status "$id" "failed" "failed" "update package missing backend binary" "$version" "$targets" "$source" "$created" "$started" "$finished"
       mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
       return
     fi
   fi
   if [[ ",$targets," == *",web,"* && ! -s "$real_staging/web/dist/index.html" ]]; then
     finished="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-    write_status "$id" "failed" "failed" "更新包缺少管理页面" "$version" "$targets" "$source" "$created" "$started" "$finished"
+    write_status "$id" "failed" "failed" "update package missing admin page" "$version" "$targets" "$source" "$created" "$started" "$finished"
     mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
     return
   fi
@@ -225,22 +226,22 @@ process_job() {
   fi
 
   if [[ ",$targets," == *",api,"* ]]; then
-    write_status "$id" "running" "release-api" "构建后端并执行蓝绿发布" "$version" "$targets" "$source" "$created" "$started" ""
+    write_status "$id" "running" "release-api" "build backend and run blue/green release" "$version" "$targets" "$source" "$created" "$started" ""
     if ! run_release "$id" release-api.sh "$version"; then
       restore_backup "$backup"
       finished="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      write_status "$id" "failed" "failed" "后端发布失败，请查看日志" "$version" "$targets" "$source" "$created" "$started" "$finished"
+      write_status "$id" "failed" "failed" "backend release failed; check logs" "$version" "$targets" "$source" "$created" "$started" "$finished"
       mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
       return
     fi
   fi
 
   if [[ ",$targets," == *",web,"* ]]; then
-    write_status "$id" "running" "release-web" "重建管理页面" "$version" "$targets" "$source" "$created" "$started" ""
+    write_status "$id" "running" "release-web" "rebuild admin page" "$version" "$targets" "$source" "$created" "$started" ""
     if ! run_release "$id" release-web.sh "$version"; then
       restore_backup "$backup"
       finished="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      write_status "$id" "failed" "failed" "页面发布失败，请查看日志" "$version" "$targets" "$source" "$created" "$started" "$finished"
+      write_status "$id" "failed" "failed" "admin page release failed; check logs" "$version" "$targets" "$source" "$created" "$started" "$finished"
       mv -f "$claimed" "$FAILED/$id.job" 2>/dev/null || true
       return
     fi
@@ -248,7 +249,7 @@ process_job() {
 
   update_env_version "$version"
   finished="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  write_status "$id" "success" "done" "更新完成" "$version" "$targets" "$source" "$created" "$started" "$finished"
+  write_status "$id" "success" "done" "update complete" "$version" "$targets" "$source" "$created" "$started" "$finished"
   log "$id" "success"
   rm -f "$claimed"
   rm -rf "$real_staging"

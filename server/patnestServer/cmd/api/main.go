@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"patnestServer/internal/amap"
+	"patnestServer/internal/backendtls"
 	"patnestServer/internal/cache"
 	"patnestServer/internal/config"
 	"patnestServer/internal/db"
@@ -18,6 +20,8 @@ import (
 	"patnestServer/internal/middleware"
 	"patnestServer/internal/router"
 	"patnestServer/internal/storage"
+	"patnestServer/internal/swagger"
+	"patnestServer/internal/tlsmux"
 	"patnestServer/internal/version"
 )
 
@@ -100,6 +104,10 @@ func main() {
 
 	// --- Setup Router ---
 	r := router.Setup()
+	if cfg.SwaggerEnabled {
+		swagger.Register(r)
+		log.Printf("[Swagger] UI: %s (doc: %s)", swagger.IndexURL, swagger.DocPath)
+	}
 	log.Println("[Router] All routes registered.")
 
 	// 待支付超时自动取消（每 60 秒扫一次，超过 30 分钟未支付即取消并释放床位）
@@ -116,6 +124,23 @@ func main() {
 
 	// --- Start HTTP Server ---
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
+
+	// 后端 TLS：证书在后台管理页面上传，开关也在页面上切。
+	// .env 的 SERVER_SCHEME=https 只决定启动时的初始状态。
+	tlsMgr := backendtls.Default()
+	if err := tlsMgr.Init(cfg.TLSOn()); err != nil {
+		log.Fatalf("[TLS] %v", err)
+	}
+	log.Printf("[TLS] 后端 HTTPS: %s（证书与开关在后台「系统更新 → HTTPS 证书」里管理）",
+		onOff(tlsMgr.Enabled()))
+
+	// 同一个端口同时收 http 与 https：开关打开后客户端可以用 https:// 直连，
+	// nginx 的明文反代也不受影响，不需要为了切协议重启后端。
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("[Server] 监听 %s 失败: %v", addr, err)
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           r,
@@ -125,13 +150,26 @@ func main() {
 		IdleTimeout:       90 * time.Second,
 	}
 
+	// 蓝绿双槽位各跑一个实例：页面上的开关只会打到其中一个，
+	// 这里轮询落盘的开关文件把状态同步过来。
+	stopTLSWatch := make(chan struct{})
+	go tlsMgr.Watch(stopTLSWatch, func(on bool) {
+		log.Printf("[TLS] 后端 HTTPS 已切换为 %s", onOff(on))
+	})
+	defer close(stopTLSWatch)
+
 	go func() {
 		log.Println("=========================================")
 		log.Printf("  PatNest API %s (%s) listening on %s", info.Version, info.Slot, addr)
+		log.Printf("  Protocol: http（%s 时同时接受 https）", onOff(tlsMgr.Enabled()))
 		log.Printf("  Health: http://localhost%s/health", addr)
 		log.Printf("  Version: http://localhost%s/api/v1/version", addr)
+		if cfg.SwaggerEnabled {
+			log.Printf("  Swagger: http://localhost%s%s", addr, swagger.IndexURL)
+		}
 		log.Println("=========================================")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+		if err := srv.Serve(tlsmux.New(ln, tlsMgr)); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[Server] Failed: %v", err)
 		}
 	}()
@@ -149,6 +187,14 @@ func main() {
 		log.Fatalf("[Server] Forced shutdown: %v", err)
 	}
 	log.Println("[Server] Exited cleanly.")
+}
+
+// onOff 把布尔值转成日志里好读的中文。
+func onOff(b bool) string {
+	if b {
+		return "开启"
+	}
+	return "关闭"
 }
 
 func connectDBWithRetry(dsn string, attempts int, wait time.Duration) error {

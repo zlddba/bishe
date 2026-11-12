@@ -11,6 +11,9 @@
 // - 演示：http://<公网IP>:9200/api/v1
 // - 正式：https://petnest.example.com/api/v1
 // 注意：健康检查挂在 /health（不在 /api/v1 下），见 system_api.js
+//
+// 协议要跟后端一致：后端 .env 的 SERVER_SCHEME 是 http 就用 http://，
+// 是 https 就必须换成 https://（证书域名要和这里对得上，自签证书要先装进信任库）。
 // ---------------------------------------------------------------------------
 // export const API_BASE_URL = 'http://192.168.3.100:9200/api/v1'
 export const API_BASE_URL = 'http://10.109.248.94:9200/api/v1'

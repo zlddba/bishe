@@ -1,0 +1,6 @@
+# 复制为 /etc/nginx/patnest/api_proxy.conf
+#
+# nginx → 后端 的反代协议。后端跑明文就保持 http，后端自己终结 TLS 就改成 https
+# （发布脚本 deploy-backend.sh / rollback.sh 会按 API_SCHEME 自动重写这个文件，
+#   这里只是首次部署时的初值）。
+proxy_pass http://patnest_api;

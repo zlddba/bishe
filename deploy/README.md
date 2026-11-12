@@ -25,10 +25,23 @@
 2. 拷贝 `systemd/patnest-api@.service` 到 `/etc/systemd/system/`，
    `systemctl daemon-reload`。
 3. 拷贝 `nginx/patnest.conf` 到 `/etc/nginx/conf.d/`，
-   `nginx/upstream.conf.example` 到 `/etc/nginx/patnest/upstream.conf`。
+   `nginx/upstream.conf.example` 到 `/etc/nginx/patnest/upstream.conf`，
+   `nginx/api_proxy.conf.example` 到 `/etc/nginx/patnest/api_proxy.conf`
+   （反代协议文件，缺失时 nginx 起不来）。
 4. 把 `systemd/slot.blue.example`、`slot.green.example` 去掉 `.example` 拷到
    `/opt/patnest/api/shared/`。
 5. 复制 `env.example` 为 `deploy/.env` 并填写，脚本执行前 `source` 它。
+
+## 后端协议（http / https）
+
+证书与开关都在后台管理页面里管（「系统更新 → HTTPS 证书」）：
+
+- 上传证书链与私钥 → 落盘到 `TLS_DIR`（默认 `/var/lib/patnest/tls`）；
+- 打开「后端同时接受 HTTPS」→ 后端 9200 端口同时收 http 与 https，
+  客户端可直连 `https://域名:9200`，**切换即时生效，不用重启**。
+
+`deploy/.env` 的 `API_SCHEME` 只在你想让 nginx 用 https 连上游时才需要（默认 http）。
+因为后端两种协议都收，这个值配错也不会连不上。
 
 ## 日常发布
 

@@ -1,9 +1,4 @@
 # 证书与私钥绝不入库
 *.pem
-reload.request
-reload.status
-https.conf.new
-https.conf.bak
-
-# 保留占位文件：nginx 启动时要 include https.conf，文件不存在会启动失败
-!https.conf
+# 后端 HTTPS 开关（运行时状态，由后台页面写入）
+backend_tls

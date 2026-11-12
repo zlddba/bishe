@@ -1,3 +1,6 @@
+# First install: build images, run migrations, start redis/nginx/api-blue,
+# then start the update agent per AGENT_MODE (container/host/none).
+
 param(
     [string]$Version = "",
     [int]$HealthRetries = 60,
@@ -33,6 +36,10 @@ $script:ComposeCmd = Resolve-ComposeCommand
 $script:Engine = Resolve-ContainerEngine
 $env:APP_VERSION = $Version
 
+Assert-EngineRunning "[install]"
+
+Ensure-NginxMountFiles
+
 New-Item -ItemType Directory -Force -Path "data\redis" | Out-Null
 
 Write-Host "[install] Building images patnest-api:$Version / patnest-web:$Version" -ForegroundColor Cyan
@@ -46,6 +53,9 @@ Invoke-Compose @("--profile", "tools", "run", "--rm", "migrate")
 
 Write-Host "[install] Starting redis / nginx / api-blue" -ForegroundColor Cyan
 Invoke-Compose @("--profile", "app", "up", "-d", "redis", "nginx", "api-blue")
+
+# Proxy protocol must match the backend's own protocol (http/https).
+Set-ApiProxy | Out-Null
 
 Write-Host "[install] Waiting for api-blue health check ..." -ForegroundColor Cyan
 if (-not (Wait-Healthy -Slot "blue" -Retries $HealthRetries)) {
@@ -71,10 +81,6 @@ foreach ($dir in @("tmp", "inbox", "manual", "queue", "processing", "failed", "s
     New-Item -ItemType Directory -Force -Path (Join-Path $updates $dir) | Out-Null
 }
 
-# ---- 更新代理（容器化）--------------------------------------------------
-# 代理跑在容器里：挂 docker.sock + 把部署包挂到 /pkg，容器内的 entrypoint 会反查
-# daemon 侧真实路径，再以它作为 compose 项目目录，所以 Windows 不再需要同路径挂载。
-# 不在宿主机上启动任何常驻进程，也不再写开机启动快捷方式。
 $agentMode = Get-EnvValue "AGENT_MODE" "container"
 
 function Set-EnvValue {
@@ -95,7 +101,6 @@ function Set-EnvValue {
 }
 
 function Stop-HostAgent {
-    # 清理上一版遗留在宿主机上的 PowerShell 代理，避免两个消费者抢同一个 queue。
     $pidFile = Join-Path $updates "agent.pid"
     if (Test-Path $pidFile) {
         $agentPid = Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -125,7 +130,6 @@ switch ($agentMode) {
         }
     }
     default {
-        # Windows 路径写进 .env 时统一用正斜杠，compose 才能正确拆出容器内目标路径。
         $hostPath = ($root -replace '\\', '/')
         Set-EnvValue "PACKAGE_HOST_PATH" $hostPath
         Stop-HostAgent

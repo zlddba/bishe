@@ -19,7 +19,16 @@ x-api: &api
     - redis
   restart: unless-stopped
   healthcheck:
-    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9201/health || exit 1"]
+    # 探活地址跟着 SERVER_SCHEME 走：
+    # http → http://127.0.0.1:9201/health；https → https:// + 跳过证书校验（证书是给域名签的）
+    test:
+      - CMD-SHELL
+      - >-
+        if [ "$${SERVER_SCHEME}" = "https" ]; then
+          wget -qO- --no-check-certificate https://127.0.0.1:9201/health;
+        else
+          wget -qO- http://127.0.0.1:9201/health;
+        fi || exit 1
     interval: 15s
     timeout: 5s
     retries: 5
@@ -60,6 +69,9 @@ services:
       APP_PORT: "9201"
       APP_SLOT: "blue"
       REDIS_ADDR: "redis:6379"
+      # 后端启动时的初始协议：http（默认）或 https。
+      # 真正的开关在后台「系统更新 → HTTPS 证书」里，页面上切即时生效。
+      SERVER_SCHEME: "${SERVER_SCHEME:-http}"
       UPDATE_DIR: "/var/lib/patnest/updates"
 
   api-green:
@@ -70,6 +82,7 @@ services:
       APP_PORT: "9201"
       APP_SLOT: "green"
       REDIS_ADDR: "redis:6379"
+      SERVER_SCHEME: "${SERVER_SCHEME:-http}"
       UPDATE_DIR: "/var/lib/patnest/updates"
 
   nginx:
@@ -86,13 +99,13 @@ services:
         MINIO_BUCKET: "${MINIO_BUCKET:-patnest-uploads}"
     container_name: patnest-nginx
     ports:
+      # 只监听 9200：HTTPS 由后端自己在 9200 上终结（同一个端口同时收 http 与 https），
+      # nginx 只负责管理页面与 /api 反代，不再开放 443。
       - "${PUBLIC_PORT:-9200}:9200"
-      # HTTPS：证书由后台「系统更新 → HTTPS 证书」上传，未配置时 443 不监听
-      - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./nginx/upstream.conf:/etc/nginx/patnest/upstream.conf:ro
-      # 证书目录：API 写、nginx 读，tls-watch.sh 校验通过后才 reload
-      - ./nginx/tls:/etc/nginx/patnest/tls
+      # 反代协议：后端跑 https 时这里要跟着换，发布脚本按 SERVER_SCHEME 重写
+      - ./nginx/api_proxy.conf:/etc/nginx/patnest/api_proxy.conf:ro
     depends_on:
       - api-blue
     restart: unless-stopped

@@ -96,6 +96,9 @@ CSV 导出、文件下载等非 JSON 响应直接透传，不缓冲。
 
 ## 三、HTTPS 证书
 
+> **站点只监听 9200，443 已关闭。**
+> HTTPS 由后端进程自己在 9200 上终结——同一个端口同时收 http 和 https。
+
 ### 后台操作
 
 「系统更新」页底部 → **HTTPS 证书**：
@@ -103,7 +106,8 @@ CSV 导出、文件下载等非 JSON 响应直接透传，不缓冲。
 1. 「证书链」粘贴 `fullchain.pem` 全文（站点证书 + 中间证书，按顺序拼接）；
 2. 「私钥」粘贴 `privkey.pem` 全文；
 3. 域名可留空（自动取证书里的第一个域名）；
-4. 点「保存并生效」，约 5 秒后看「上次生效」是否显示成功。
+4. 点「保存并生效」，**立即生效**，不需要重启；
+5. 打开「**后端同时接受 HTTPS**」开关——后端的 9200 端口开始接受 https 请求。
 
 保存时会校验：
 
@@ -113,29 +117,54 @@ CSV 导出、文件下载等非 JSON 响应直接透传，不缓冲。
 
 ### 生效机制
 
-后端**不直接操作 nginx**，只做三件事：写证书、生成 `https.conf.new`、写一个
-`reload.request` 信号。真正的 `nginx -t` + `nginx -s reload` 由 nginx 容器里的
-守护脚本（`deploy/docker/nginx/tls-watch.sh`）每 3 秒检查一次并执行。
+证书是**握手时现读**的（`tls.Config.GetCertificate`），带 mtime 缓存：
 
-这样设计的原因：让 API 直接 reload 另一个容器，需要挂 `docker.sock`，
-等于把宿主机 root 权限交给一个 Web 进程，为一张证书不值得。
+- 重新上传证书 → 新的连接立刻用新证书，不用重启后端；
+- 开启/关闭开关 → 即时生效（内存状态直接改）；
+- 开关落盘在 `TLS_DIR/backend_tls`，蓝绿双槽位的另一个实例每 5 秒同步一次。
 
-**失败会回滚**：新配置先写成 `.new`，守护脚本校验通过才替换；`nginx -t` 失败时
-自动恢复上一版并 reload，站点保持原样，错误信息写进 `reload.status`，
-后台「上次生效」会显示失败原因。所以后台填错一行配置不会把线上搞挂。
+nginx 不再参与：它只监听 9200 提供管理页面与 `/api` 反代，不终结 TLS、
+不监听 443，也不需要证书热加载守护脚本。
 
-### 443 端口
+### 同一端口两种协议
 
-`compose.yaml` 已映射 `${HTTPS_PORT:-443}:443`。未配置证书时
-`deploy/docker/nginx/tls/https.conf` 只有注释，443 不会监听。
+后端在 9200 上按连接的第一个字节判断协议：
+
+| 首字节 | 判定 | 处理 |
+|---|---|---|
+| `0x16` | TLS 握手记录 | 交给 `tls.Server` 握手 |
+| ASCII 字母 | 明文 HTTP 请求 | 直接按 HTTP 处理 |
+
+所以 `http://域名:9200` 和 `https://域名:9200` 都能用，切换开关不影响明文客户端，
+nginx 的反代也照旧（明文或 https 都行）。
+
+> 代价：走嗅探的连接 `http.Request.TLS` 为 nil（`http.Server` 认不出 `*tls.Conn`）。
+> 仓里没有任何地方依赖 `Request.TLS`——协议判断一律走 `X-Forwarded-Proto`——所以无实际影响。
+
+几个细节：
+
+- **没有证书时开关打不开**：接口会返回 400 提示先上传证书，不会出现
+  "显示已开启但握手全失败"；
+- **移除证书会一并关掉开关**：否则后端会显示"已开启"但所有握手都失败。
+
+### 客户端怎么连
+
+| 客户端 | 地址 |
+|---|---|
+| 小程序 / 桌面端直连后端 | `https://域名:9200/api/v1`（开关打开后） |
+| 经 nginx 的管理页面 | `http://域名:9200` |
+| 对象存储图片 | `http(s)://域名:9200/files/...`（nginx 反代，与证书无关） |
+
+> 小程序要求合法域名 + HTTPS 证书，所以正式环境用第一种：客户端基址改成
+> `https://`，域名必须与证书 SAN 对得上（自签证书要先装进系统信任库）。
 
 ### 限制
 
 - **不自动续期**。Let's Encrypt 需要 ACME 客户端 + HTTP-01 验证 + 定时任务，
   当前实现只支持手动上传；到期前 15 天后台会提示，届时重新上传即可。
-- **systemd 部署（非容器）暂不支持自动生效**：API 需要 sudo 权限 reload nginx。
-  该场景下把证书放到 `/etc/nginx/patnest/tls/`，手工 `nginx -s reload`。
-- 私钥以明文存放于宿主机磁盘（`deploy/docker/nginx/tls/`），已在 `.gitignore`
+- **不启用 HTTP/2**：嗅探出来的连接只协商到 HTTP/1.1（nginx 那条路才有 h2）。
+- 私钥以明文存放于宿主机磁盘（Docker 部署为 `deploy/docker/nginx/tls/`，
+  systemd 部署为 `TLS_DIR`，默认 `/var/lib/patnest/tls`），已在 `.gitignore`
   中排除。宿主机权限收紧即可，不要提交到仓库。
 
 ## 四、验证清单
@@ -151,9 +180,10 @@ curl -I https://<你的域名>/files/uploads/2026/11/xxx.jpg
 #    期望 0
 psql "$DSN" -c "SELECT count(*) FROM sitters WHERE cover_photo_url ~ '^https?://';"
 
-# 4. HTTPS 是否生效
-curl -I https://<你的域名>/
-openssl s_client -connect <你的域名>:443 -servername <你的域名> </dev/null 2>/dev/null | openssl x509 -noout -subject -dates
+# 4. HTTPS 是否生效（后端 9200 同时收 http 与 https）
+curl -I http://<你的域名>:9200/health
+curl -I https://<你的域名>:9200/health
+openssl s_client -connect <你的域名>:9200 -servername <你的域名> </dev/null 2>/dev/null | openssl x509 -noout -subject -dates
 
 # 5. nginx 配置语法（容器内）
 docker exec patnest-nginx nginx -t

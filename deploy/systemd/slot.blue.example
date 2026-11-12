@@ -1,3 +1,10 @@
 # 复制为 /opt/patnest/api/shared/slot.blue
 APP_SLOT=blue
 APP_PORT=9200
+
+# 协议相关的配置（SERVER_SCHEME / TLS_CERT_FILE / TLS_KEY_FILE）写在
+# /opt/patnest/api/shared/.env 里，两个槽位共用，不用每个 slot 重复配。
+# SERVER_SCHEME=http  → 明文（前面有 nginx 终止 TLS 时用这个）
+# SERVER_SCHEME=https → 后端自己在 9200 上终结 TLS，此时证书必须给全：
+#   TLS_CERT_FILE=/etc/patnest/tls/fullchain.pem
+#   TLS_KEY_FILE=/etc/patnest/tls/privkey.pem
