@@ -229,15 +229,22 @@ func AdminCreateOrder(c *gin.Context) {
 	var orderNo string
 	_ = tx.QueryRow(context.Background(), "SELECT fn_generate_order_no()").Scan(&orderNo)
 
+	// paid_at 必须在 Go 侧算好再传参：orders.payment_status 是枚举类型，
+	// 之前把 $11 同时用作枚举列值和 `$11::text` 比较，pgx 推导出两种类型
+	// （42P08 inconsistent types deduced），导致后台直建订单必然失败。
+	var paidAt interface{}
+	if paymentStatus == "paid" {
+		paidAt = time.Now()
+	}
+
 	var orderID int64
 	err = tx.QueryRow(context.Background(),
 		`INSERT INTO orders (order_no, owner_id, sitter_id, status, start_date, end_date, total_days,
 		 pet_count, estimated_amount, total_amount, payment_status, remark, paid_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-		         CASE WHEN $11::text = 'paid' THEN now() ELSE NULL END)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::payment_status, $12, $13)
 		 RETURNING id`,
 		orderNo, req.OwnerID, req.SitterID, status, startDate, endDate, totalDays,
-		petCount, estimated, totalAmount, paymentStatus, nilIfEmpty(req.Remark)).Scan(&orderID)
+		petCount, estimated, totalAmount, paymentStatus, nilIfEmpty(req.Remark), paidAt).Scan(&orderID)
 	if err != nil {
 		InternalError(c, "创建订单失败: "+err.Error())
 		return
