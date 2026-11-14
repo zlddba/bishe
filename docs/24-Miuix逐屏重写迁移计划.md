@@ -42,7 +42,9 @@
 - [x] **批次 4**：机构端 —— `D18SitterWorkspace`、`DSitterOrders`、`DSitterMoments`、`DSitterProfile`、`D26ShopProfile`、`D27Capacity`、`D29/D30/D31`（DScreensB 机构端 9 屏 + D31SitterReviews）
 - [x] **批次 5**：详情与二级页 —— `D06Dynamics`、`D16Addresses`、`D17Settings`、`D20Tickets`、`DTicketChat`、`D21Points`、`D24MapPicker`、`D25RoleSwitch`（D24MapPicker 本就是全屏地图无骨架）
 - [x] **批次 6**：剩余散屏 —— `D32~D39`、`D42~D45`、`D46~D60` 全部（DScreensC x15、DScreensD x21 处骨架）
-- [ ] **批次 7（收尾）**：`DesignApp` 壳（NavigationBar / NavigationRail / Toast）换 Miuix、删除旧设计系统（DComponents 中已被替代的组件）、`docs/README` 与本文件收尾记录
+- [x] **批次 7（收尾）**：`DCard` 底层换 Miuix Card（100+ 调用点零改动）；旧骨架 `DFrame` / `DLazyFrame` 定义删除（零调用）。
+  - **保留自绘的组件及理由**：导航壳（`DNavigationRail` / `DBottomTabs`）与 Toast——`AppIcon` 是 Canvas 自绘（非 ImageVector，Miuix 导航 item 强依赖 ImageVector），且现有选中态（BrandSoft 胶囊 + 动画）为定制设计；两者已走统一 DColor token 体系，随 MiuixTheme 深浅色联动。
+  - **统一输入**：`DMiuixField` 为全项目唯一输入组件（40 处调用），普通/密码双分支共用 `DMiuixFieldBox` 外观；骨架 `DMiuixScrollScaffold` / `DMiuixListScaffold` 为唯一页面骨架（67 处调用）。
 
 ## 批次验收标准（每批都要过）
 
