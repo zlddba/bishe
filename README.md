@@ -2,6 +2,8 @@
 
 宠物寄养服务预约系统，毕业设计项目。一个仓库按目录分模块，三条角色线：**主人**（找机构、下单寄养、支付、评价）、**机构**（开店、排期与容量、定价、接单、发动态）、**管理员**（审核、订单与资金、内容、系统运维）。
 
+当前版本：**v2.0.0**（首个正式版，发布说明见 [docs/release/v2.0.0.md](docs/release/v2.0.0.md)）。
+
 线上环境：`https://www.linkzdsada.dpdns.org:9200`（API 与管理后台同域，`/swagger/index.html` 为接口文档）。
 
 ## 技术栈
@@ -120,15 +122,17 @@ tag 推送后流水线依次执行：
 | `patnest-desktop-deb / -msi / -dmg` | 对应系统的桌面安装包 |
 | `patnest-uniapp-project` | `patnest-uniapp-<version>.zip`，小程序工程源码包（不含 `unpackage/`） |
 
-需要的仓库配置（Settings → Secrets and variables → Actions）：
+需要的仓库配置：**Settings → Secrets and variables → Actions**，全部填在 **Repository 级**（不是 Environment 级，工作流没有声明 `environment:`，填 Environment 会读不到）。
 
-| 名称 | 类型 | 必填 | 用途 |
+| 名称 | 填到 | 必填 | 用途 |
 | --- | --- | --- | --- |
-| `PATNEST_KEYSTORE_BASE64` | Secret | 是 | release keystore 的 base64 |
-| `PATNEST_STORE_PASSWORD` / `PATNEST_KEY_PASSWORD` | Secret | 是 | keystore 与 key 口令 |
-| `PATNEST_KEY_ALIAS` | Secret | 否 | 默认 `key0` |
-| `PATNEST_API_BASE` | Variable | 是 | 例：`https://www.linkzdsada.dpdns.org:9200/api/v1` |
-| `PATNEST_AMAP_ANDROID_KEY` | Secret | 否 | 留空时 App 退回瓦片底图 |
+| `PATNEST_KEYSTORE_BASE64` | Secrets（Repository secret） | 是 | release keystore 的 base64 |
+| `PATNEST_STORE_PASSWORD` / `PATNEST_KEY_PASSWORD` | Secrets（Repository secret） | 是 | keystore 与 key 口令 |
+| `PATNEST_KEY_ALIAS` | Secrets（Repository secret） | 否 | 默认 `key0` |
+| `PATNEST_API_BASE` | Variables（Repository variable） | 是 | 例：`https://www.linkzdsada.dpdns.org:9200/api/v1` |
+| `PATNEST_AMAP_ANDROID_KEY` | Secrets（Repository secret） | 否 | 留空时 App 退回瓦片底图 |
+
+`GITHUB_TOKEN` 不用建，由 Actions 内置并在 `release` job 通过 `permissions: contents: write` 授权。
 
 私有仓库按分钟计费（Linux 1×、Windows 2×、macOS 10×），一次完整发布约 30~55 分钟，所以只在打 tag 时跑，不跟随每次 push。细节见 `docs/23-GitHub-Actions打包.md`。
 
@@ -143,7 +147,7 @@ tag 推送后流水线依次执行：
 | 模块 | 状态 |
 | --- | --- |
 | server | 主链路完成：账号与权限分层、机构资质、订单与资金、容量台账、优惠券/积分/邀请码、钱包、评价、动态、工单与售后、结算、审计与限流、地理编码、Swagger 自动生成、TOTP、Let's Encrypt 自动证书 |
-| webadmin | 19 个页面可用：经营看板、机构/订单/宠物、内容与评价、优惠券、公告与推送、售后与结算、钱包、用户与权限、审计、系统更新、账号安全（TOTP） |
+| webadmin | 18 个业务页面：经营看板、机构/订单/宠物、内容与评价、优惠券、公告与推送、售后与结算、钱包、用户与权限、审计、系统更新、账号安全（TOTP） |
 | app | Desktop 主人端 + 机构端完整；Android 主人/机构双工作台；金额精度、列表分页、加购与积分、接单入口已补齐 |
 | uniapp | 28 页已接后端：登录注册、首页与筛选、机构详情、下单（含优惠券/积分/加购）、订单全流程、宠物档案、钱包、动态、收藏、通知、工单、退款、设置 |
 | 质量 | 接口联通测试 253 个调用点零遗漏、线上 160 项检查、18 步业务闭环，见 `docs/21-系统测试报告.md` |

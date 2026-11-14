@@ -40,20 +40,56 @@
 base64 -w0 app/patnestApp/buildkeys/patnestapp_release.jks > release.jks.b64
 ```
 
-把 `release.jks.b64` 的内容填到仓库 **Settings → Secrets and variables → Actions → Secrets**。
+把 `release.jks.b64` 的内容填到 **Settings → Secrets and variables → Actions → Secrets 标签 → New repository secret**，名字用 `PATNEST_KEYSTORE_BASE64`（**Repository secret，不是 Environment secret**，原因见 2.2）。
 
 ### 2.2 Secrets / Variables 清单
 
-| 名称 | 类型 | 必填 | 用途 |
-| --- | --- | --- | --- |
-| `PATNEST_KEYSTORE_BASE64` | Secret | 是 | release keystore 的 base64 |
-| `PATNEST_STORE_PASSWORD` | Secret | 是 | keystore 密码 |
-| `PATNEST_KEY_PASSWORD` | Secret | 是 | key 密码 |
-| `PATNEST_KEY_ALIAS` | Secret | 否 | 默认 `key0` |
-| `PATNEST_API_BASE` | Variable 或 Secret | 是 | 例：`https://www.linkzdsada.dpdns.org:9200/api/v1` |
-| `PATNEST_AMAP_ANDROID_KEY` | Secret | 否 | 留空时 App 自动退回后端瓦片底图 |
+**结论：全部填在 Repository 级，不要填 Environment 级。**
 
-`PATNEST_API_BASE` 建议放 **Variables**（不是敏感信息，日志里也能看到，方便排查）；工作流优先读 Variables，没有再读 Secrets。
+路径：仓库页 → **Settings → Secrets and variables → Actions**，页面上有两个标签：
+
+- **Secrets** 标签 → `New repository secret`（敏感值，写入后不可回读）
+- **Variables** 标签 → `New repository variable`（明文，日志里可见，便于排查）
+
+| 名称 | 填到哪个标签 | 类型 | 必填 | 用途 |
+| --- | --- | --- | --- | --- |
+| `PATNEST_KEYSTORE_BASE64` | Secrets | Secret | 是 | release keystore 的 base64 |
+| `PATNEST_STORE_PASSWORD` | Secrets | Secret | 是 | keystore 密码 |
+| `PATNEST_KEY_PASSWORD` | Secrets | Secret | 是 | key 密码 |
+| `PATNEST_KEY_ALIAS` | Secrets | Secret | 否 | 默认 `key0` |
+| `PATNEST_API_BASE` | **Variables** | Variable | 是 | 例：`https://www.linkzdsada.dpdns.org:9200/api/v1` |
+| `PATNEST_AMAP_ANDROID_KEY` | Secrets | Secret | 否 | 留空时 App 自动退回后端瓦片底图 |
+
+`PATNEST_API_BASE` 放 Variables 即可（不是敏感信息）；工作流写的是 `vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE`，所以放 Secret 也能读到，只是没必要。
+
+`GITHUB_TOKEN` **不用建**：`release` job 里的 `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` 是 Actions 内置的临时令牌，由 `permissions: contents: write` 授权。
+
+#### 为什么不能填 Environment secrets
+
+Environment secrets 只有在 job 显式声明 `environment: <环境名>` 时才会被注入。本工作流的 `verify / bundle / miniapp / android / desktop / release` 六个 job **都没有写 `environment:`**，所以：
+
+- 填到 Environment 里的密钥，`${{ secrets.XXX }}` 取到的是**空字符串**；
+- 表现是 Android 构建在 `Decode keystore` 一步报 `缺少 Secrets.PATNEST_KEYSTORE_BASE64，release 构建无法签名`，而不是报「secret 不存在」——很容易误判成没填。
+
+仓库级密钥对所有 job、所有分支/tag 生效，这也是托管构建最省事的做法。
+
+#### 如果确实想用 Environment（可选，多一层审批）
+
+适合「发布必须人工点同意」的场景。改法是三处一起改，缺一处就会读不到：
+
+1. **Settings → Environments → New environment**，命名 `release`（建议勾 Required reviewers，并把 Deployment branches 限制为 `release/*` 与 `v*` tag）；
+2. 把上面 5 个 Secret 建在 `release` 环境下，同时删掉仓库级的同名 Secret（同名时 Environment 级会覆盖仓库级，留着容易误判到底读的是哪一份）；
+3. 给**需要这些密钥的 job**加一行 `environment: release`。当前只有 `android` 真正读密钥，`release` job 用的是内置 token：
+
+```yaml
+  android:
+    name: Android APK
+    needs: verify
+    environment: release        # 加了这行，${{ secrets.* }} 才会去 release 环境里找
+    runs-on: ubuntu-latest
+```
+
+如果 `PATNEST_API_BASE` 放成了 **Environment variable**（而不是仓库变量），`android` 也必须加 `environment: release`，否则 `vars.PATNEST_API_BASE` 取不到，会退回默认的 `http://127.0.0.1:9200/api/v1`——打出来的 APK 连不上后端，而且构建日志一切正常，属于最难查的一类问题。
 
 ### 2.3 本地开发不受影响
 

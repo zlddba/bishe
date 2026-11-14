@@ -215,6 +215,9 @@ jobs:
           AMAP_KEY: ${{ secrets.PATNEST_AMAP_ANDROID_KEY }}
         run: |
           set -euo pipefail
+          if [[ -z "${API_BASE:-}" ]]; then
+            echo "::warning::未配置 PATNEST_API_BASE（Variables 或 Secrets），APK 将指向本机地址，装到手机上连不上后端"
+          fi
           API="${API_BASE:-http://127.0.0.1:9200/api/v1}"
           printf 'PATNEST_API_BASE=%s\nPATNEST_AMAP_ANDROID_KEY=%s\n' "$API" "${AMAP_KEY:-}" > .env
           echo "API_BASE=$API"
