@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -103,6 +104,12 @@ fun DSitterMap(nav: DNav) {
     val addrText = sitter.addr.ifBlank { "该机构未填写详细地址" }
     val myDistance = myLoc?.let { distanceMeters(it.latitude, it.longitude, lat, lng) }
 
+    // 液态玻璃浮层的前提：地图能被 backdrop 采样。
+    // 瓦片路径是 Compose Canvas 绘制 ✓；高德 SDK 路径是 AndroidView 独立 View 层，
+    // LayerBackdrop 采不到——SDK 模式显式给 null，浮层自动退回原实心卡片。
+    val useAmapSdk = remember(context) { AmapBridge.hasKey(context) }
+    val mapBackdrop = rememberDGlassBackdrop()
+
     // 定位成功后的收尾：画蓝点，必要时把两点一起框进屏幕
     suspend fun applyMyLocation(point: DevicePoint, fit: Boolean) {
         myLoc = point
@@ -159,11 +166,13 @@ fun DSitterMap(nav: DNav) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(DColor.Bg).onSizeChanged { mapSize = it }) {
-        DMapView(
-            latitude = centerLat,
-            longitude = centerLng,
-            modifier = Modifier.fillMaxSize(),
+    CompositionLocalProvider(LocalDGlassBackdrop provides if (useAmapSdk) null else mapBackdrop) {
+        Box(Modifier.fillMaxSize().background(DColor.Bg).onSizeChanged { mapSize = it }) {
+            DMapView(
+                latitude = centerLat,
+                longitude = centerLng,
+                // 地图绘制（瓦片/标记）记录进玻璃 backdrop：上下浮层模糊的就是地图本身
+                modifier = Modifier.fillMaxSize().dGlassBackdropSource(mapBackdrop),
             zoom = zoom,
             interactive = true,
             rounded = false,
@@ -195,51 +204,79 @@ fun DSitterMap(nav: DNav) {
             },
         )
 
-        // 顶部浮层：返回 + 机构名与地址
+        // 顶部浮层：返回 + 机构名与地址（液态玻璃浮在地图上，
+        // 瓦片模式下能看见道路从玻璃下流过；SDK 模式退回实心卡片）
         Row(
             Modifier.fillMaxWidth().statusBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 40dp 而不是 36dp：浮在地图上，太小的圆钮点击容错差，手指容易擦边点空
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(DColor.Scrim)
-                    .clickable { nav.back() },
-                contentAlignment = Alignment.Center,
+            DGlassSurface(
+                modifier = Modifier.size(40.dp).clickable { nav.back() },
+                shape = CircleShape,
+                tint = Color.White.copy(alpha = 0.22f),
+                blurRadius = 16f,
+                cornerDp = 20.dp,
+                fallbackColor = DColor.Scrim,
+                fallbackBorderColor = Color.Transparent,
             ) {
-                AppIcon(AppIcon.Back, Modifier.size(19.dp), DColor.White)
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(AppIcon.Back, Modifier.size(19.dp), DColor.White)
+                }
             }
             Spacer(Modifier.width(10.dp))
-            Column(
-                Modifier.weight(1f).clip(DShape.Md).background(DColor.Card)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            DGlassSurface(
+                modifier = Modifier.weight(1f),
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.35f),
+                blurRadius = 16f,
+                cornerDp = 8.dp,
+                fallbackColor = DColor.Card,
             ) {
-                Text(
-                    sitter.name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DColor.Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    addrText,
-                    fontSize = 11.sp,
-                    color = DColor.Ink3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        sitter.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DColor.Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        addrText,
+                        fontSize = 11.sp,
+                        color = DColor.Ink3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
 
-        // 底部浮层：地址 + 复制 + 导航
+        // 底部浮层：地址 + 复制 + 导航（液态玻璃）
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .navigationBarsPadding().padding(14.dp),
         ) {
-            DCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            DGlassSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = DShape.Lg,
+                tint = DColor.Card.copy(alpha = 0.35f),
+                blurRadius = 16f,
+                cornerDp = 12.dp,
+                fallbackColor = DColor.Card,
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text("机构地址", fontSize = 11.sp, color = DColor.Ink3)
                         Spacer(Modifier.height(3.dp))
@@ -285,6 +322,7 @@ fun DSitterMap(nav: DNav) {
                 }
             }
         }
+    }
     }
 }
 
