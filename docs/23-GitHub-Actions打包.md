@@ -301,3 +301,12 @@ cd app/patnestApp && ./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :de
 Release 正文与 `docs/release/v2.0.0.md` 逐字一致（忽略换行符后比对通过，2353 字），验证了「发布文档即 Release 正文」这条约定。
 
 > 经验：Gradle 版本号现在从 `PATNEST_VERSION` 注入（`packageVersion` / `versionName`），`versionCode` 用 `github.run_number` 保证单调递增；升级 Gradle 时务必同步 `gradle-wrapper.properties` 的 `distributionSha256Sum`。
+
+### v2.0.1 发布排错
+
+第四次运行（v2.0.1）七个构建 job 全绿，但 `release` job 失败：`dist/*` 里混进了 `dist/desktopApp/`、`dist/dist/` 这两个**目录**，被当成附件传给 `gh release create`，报 `read dist/dist: is a directory`。原因是 `upload-artifact` 对多个 glob 会保留公共前缀之外的目录层级。
+
+两处修正：
+
+1. `linux` job 把 deb / rpm / tar.gz / AppImage 四种产物统一复制到 `app/patnestApp/out/`，上传路径改为单 glob `app/patnestApp/out/*`；
+2. `release` job 改用 `find dist -type f` 递归收集**文件**，用数组传给 `gh release create/upload`，并在附件数为 0 时拒绝发布空 Release。

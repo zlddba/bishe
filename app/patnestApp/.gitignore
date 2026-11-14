@@ -22,5 +22,6 @@ node_modules/
 
 # 桌面端绿色版 / AppImage 的本地打包输出（CI 里由 linux job 生成）
 /dist/
+/out/
 /PatNest.AppDir/
 *.AppImage

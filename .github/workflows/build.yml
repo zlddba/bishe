@@ -305,11 +305,13 @@ jobs:
           APPDIR="$(find "$BIN/app" -mindepth 1 -maxdepth 1 -type d | head -n1)"
           [[ -n "$APPDIR" ]] || { echo "::error::找不到 createDistributable 产出的 app-image 目录"; exit 1; }
           NAME="patnest-desktop-${VERSION}-linux-x64"
+          mkdir -p out
 
           # 绿色版：解压后直接运行 bin/ 下的启动器，自带 lib/runtime，无需安装 Java
-          mkdir -p "dist/$NAME"
-          cp -a "$APPDIR/." "dist/$NAME/"
-          tar -czf "dist/$NAME.tar.gz" -C dist "$NAME"
+          mkdir -p "out/$NAME"
+          cp -a "$APPDIR/." "out/$NAME/"
+          tar -czf "out/$NAME.tar.gz" -C out "$NAME"
+          rm -rf "out/$NAME"
 
           # AppImage：把 app-image 整体挂到 AppDir/usr，启动器仍按相对路径找自带 JVM
           mkdir -p PatNest.AppDir/usr
@@ -321,17 +323,17 @@ jobs:
           curl -fsSL -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x /tmp/appimagetool
           (cd /tmp && ./appimagetool --appimage-extract > /dev/null)
-          ARCH=x86_64 /tmp/squashfs-root/AppRun PatNest.AppDir "dist/PatNest-${VERSION}-x86_64.AppImage"
-          ls -lh dist
+          ARCH=x86_64 /tmp/squashfs-root/AppRun PatNest.AppDir "out/PatNest-${VERSION}-x86_64.AppImage"
+
+          # 四种产物统一放到 out/，上传时不会带出嵌套目录
+          cp "$BIN"/deb/*.deb out/
+          cp "$BIN"/rpm/*.rpm out/
+          ls -lh out
 
       - uses: actions/upload-artifact@v4
         with:
           name: patnest-desktop-linux
-          path: |
-            app/patnestApp/desktopApp/build/compose/binaries/main/deb/*.deb
-            app/patnestApp/desktopApp/build/compose/binaries/main/rpm/*.rpm
-            app/patnestApp/dist/*.tar.gz
-            app/patnestApp/dist/*.AppImage
+          path: app/patnestApp/out/*
           if-no-files-found: error
           retention-days: 14
 
@@ -412,13 +414,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ls -lh dist
+          # upload-artifact 会按各 glob 的公共前缀保留目录层级，
+          # 所以 dist/ 下可能是 dist/desktopApp/... 和 dist/dist/... 这样的嵌套结构。
+          # 必须只取「文件」，直接 dist/* 会把目录当附件传给 gh 并报错。
+          mapfile -t ASSETS < <(find dist -type f -print | sort)
+          if (( ${#ASSETS[@]} == 0 )); then
+            echo "::error::没有找到任何构建产物，拒绝发布空 Release"
+            exit 1
+          fi
+          printf '附件 %s 个：\n' "${#ASSETS[@]}"
+          printf '  %s\n' "${ASSETS[@]}"
           TITLE="PatNest 宠栖 ${VERSION}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::notice::$TAG 已存在 Release，按发布文档覆盖更新"
             gh release edit "$TAG" --title "$TITLE" --notes-file "$DOC"
-            gh release upload "$TAG" dist/* --clobber
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
-            gh release create "$TAG" --title "$TITLE" --notes-file "$DOC" dist/*
+            gh release create "$TAG" --title "$TITLE" --notes-file "$DOC" "${ASSETS[@]}"
           fi
           echo "发布完成：$(gh release view "$TAG" --json url -q .url)"
