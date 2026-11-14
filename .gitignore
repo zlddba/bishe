@@ -31,7 +31,7 @@ target/
 release/
 .gocache/
 .gotmp
-.workbuddy
+.workbuddy/
 release.jks.b64
 
 # ===== 个人材料（论文/报告原稿，不入库）=====
