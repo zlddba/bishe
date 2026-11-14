@@ -24,6 +24,7 @@ import top.yukonga.miuix.kmp.blur.blendColors
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.colorControls
 import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.noiseDither
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
