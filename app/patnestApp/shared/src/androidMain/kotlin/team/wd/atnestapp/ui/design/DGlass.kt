@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.blur.BlurBlendMode
@@ -26,7 +25,6 @@ import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.colorControls
 import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.noiseDither
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
@@ -175,9 +173,12 @@ private const val LIQUID_REFRACTION_AGSL = """
     float4 shade(float2 local, float d, float2 gradient, float edge) {
         float depth = clamp(-d / edge, 0.0, 1.0);
         float shaped = edgeCurve(depth, 2.0);
+        // 官方 kMaxBevelSlope=1.7：闭式导数在轮廓处趋于数千，不封顶法线会立起来，
+        // 折射在边缘产生极端采样——这就是外圈环带异常的来源之一
+        float slope = min(edgeCurveSlope(depth, 2.0), 1.7);
         float3 normal = (shaped >= 1.0)
             ? float3(0.0, 0.0, 1.0)
-            : normalize(float3(gradient * edgeCurveSlope(depth, 2.0), 1.0));
+            : normalize(float3(gradient * slope, 1.0));
         float2 refractUv = local;
         if (shaped < 1.0) {
             float3 bent = refract(float3(0.0, 0.0, -1.0), normal, 1.0 / max(in_glass.w, 1.0));
@@ -220,18 +221,6 @@ private const val LIQUID_REFRACTION_AGSL = """
 """
 
 private const val LIQUID_SHADER_KEY = "patnest_liquid_refraction_v2"
-
-/** 按主题选官方边缘光预设（上半受光、下半衰减，模拟玻璃折光）。 */
-@Composable
-private fun rememberDGlassHighlight(): Highlight =
-    if (DColor.Bg.luminance() < 0.5f) Highlight.GlassStrokeMiddleDark
-    else Highlight.GlassStrokeMiddleLight
-
-/** 矮表面（结算栏 / Tab / 输入栏）用细光晕：Middle 光晕在矮面上会盖住大半高度。 */
-@Composable
-private fun rememberDGlassBarHighlight(): Highlight =
-    if (DColor.Bg.luminance() < 0.5f) Highlight.GlassStrokeSmallDark
-    else Highlight.GlassStrokeSmallLight
 
 /**
  * 液态玻璃效果链（官方 textureBlurEffect 顺序 + 折射）：
@@ -324,7 +313,7 @@ fun DGlassPanel(
                     blurRadius = blurRadius,
                     cornerDp = cornerDp,
                     refraction = refraction,
-                    highlight = rememberDGlassHighlight(),
+                    highlight = null,
                 )
                 .background(tint),
         ) {
@@ -380,7 +369,7 @@ fun DGlassSurface(
                     blurRadius = blurRadius,
                     cornerDp = cornerDp,
                     refraction = refraction,
-                    highlight = rememberDGlassBarHighlight(),
+                    highlight = null,
                     surfaceAlpha = surfaceAlpha,
                 )
                 .background(tint),
