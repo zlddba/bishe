@@ -1198,6 +1198,10 @@ fun DPullRefresh(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    // 内容列的对齐方式。DFrame / DLazyFrame 在宽屏会把正文限宽后居中，
+    // 这里的容器（嵌套滚动 Box）是全宽的，必须把同样的对齐传进来——
+    // 否则宽屏下限宽的正文会贴到左边，与居中的顶栏、底栏脱节。
+    contentAlignment: Alignment = Alignment.TopCenter,
     content: @Composable () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -1254,8 +1258,8 @@ fun DPullRefresh(
     }
 
     Box(modifier.nestedScroll(connection)) {
-        // 内容随手势整体下移，露出顶部指示条
-        Box(Modifier.fillMaxSize().graphicsLayer { translationY = dragOffset }) {
+        // 内容随手势整体下移，露出顶部指示条；对齐方式与外层骨架保持一致
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = dragOffset }, contentAlignment = contentAlignment) {
             content()
         }
         Box(

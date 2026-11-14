@@ -54,6 +54,8 @@
 | `release/v2.0.0.md` | 首个正式版：三端能力全貌、部署包 / APK / 桌面安装包 / 小程序工程、部署与安装、已知限制 |
 | `release/v2.0.1.md` | 维护版：桌面端开箱即用（无需 `.env` / 无需安装 Java）、Linux 新增 rpm / AppImage / tar.gz |
 | `release/v2.0.2.md` | 维护版：双架构矩阵（服务端 / Linux / Windows 补 arm64）、Android 收窄为仅 arm64-v8a、产物命名统一 |
+| `release/v2.0.3.md` | 维护版：KMP 全列表页下拉刷新、后端代录评价状态同步 |
+| `release/v2.0.4.md` | 维护版：平板下拉刷新对齐修复、容量日历宽屏适配 |
 
 ## 设计稿（HTML）
 

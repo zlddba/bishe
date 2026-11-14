@@ -1748,15 +1748,20 @@ fun D27Capacity(nav: DNav) {
                         cells.chunked(7).forEach { week ->
                             Row(Modifier.fillMaxWidth()) {
                                 week.forEach { item ->
-                                    if (item == null) {
-                                        Spacer(Modifier.weight(1f))
-                                    } else {
-                                        B_DayCell(
-                                            day = B_dayOfMonth(item.date),
-                                            tone = B_capacityTone(item.full, item.available),
-                                            selected = item.date == current?.date,
-                                            modifier = Modifier.weight(1f),
-                                        ) { selectedDate = item.date }
+                                    // 每列仍均分占位（触控区一致），但格子本身限宽居中：
+                                    // 平板上 7 列均分会把格子拉成 130dp 宽的色块。
+                                    Box(
+                                        Modifier.weight(1f),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        if (item != null) {
+                                            B_DayCell(
+                                                day = B_dayOfMonth(item.date),
+                                                tone = B_capacityTone(item.full, item.available),
+                                                selected = item.date == current?.date,
+                                                modifier = Modifier.widthIn(max = 44.dp).fillMaxWidth(),
+                                            ) { selectedDate = item.date }
+                                        }
                                     }
                                 }
                                 // 末行不足 7 个时补齐占位，保持列宽一致
