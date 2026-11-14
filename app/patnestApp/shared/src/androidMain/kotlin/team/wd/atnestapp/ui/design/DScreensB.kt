@@ -860,7 +860,7 @@ fun DTicketChat(nav: DNav) {
                 DGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = DShape.Lg,
-                    tint = DColor.Card.copy(alpha = 0.60f),
+                    tint = DColor.Card.copy(alpha = 0.32f),
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp),
@@ -1023,7 +1023,7 @@ fun D22PaySuccess(nav: DNav) {
                 DGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = DShape.Lg,
-                    tint = DColor.Card.copy(alpha = 0.60f),
+                    tint = DColor.Card.copy(alpha = 0.32f),
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),

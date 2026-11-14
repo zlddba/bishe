@@ -114,15 +114,17 @@ fun DGlassPanel(
  * 当前骨架记录的页面背景；取不到（或设备不支持）就退化为 [fallbackColor] 实体面，
  * 布局与内容零差异。浮层组件（结算栏 / 底部 Tab / Toast）统一走这里。
  *
+ * tint 刻意压得很低（0.30）：玻璃要「通透」——底下的内容要能清晰透出来，
+ * 只靠模糊让它变软；tint 给高了就变成奶白磨砂板，看不出玻璃感。
  * tint 用 DColor.Card.copy(alpha=…) 这类跟随主题的色，深色模式下不会发灰发白。
  */
 @Composable
 fun DGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = DShape.Lg,
-    tint: Color = DColor.Card.copy(alpha = 0.55f),
+    tint: Color = DColor.Card.copy(alpha = 0.30f),
     blurRadius: Float = 24f,
-    border: Color? = Color.White.copy(alpha = 0.30f),
+    border: Color? = Color.White.copy(alpha = 0.25f),
     fallbackColor: Color = DColor.Card,
     fallbackBorderColor: Color = DColor.Line,
     content: @Composable BoxScope.() -> Unit,
