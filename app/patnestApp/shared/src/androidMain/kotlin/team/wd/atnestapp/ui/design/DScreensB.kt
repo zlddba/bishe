@@ -1315,6 +1315,7 @@ fun D24MapPicker(nav: DNav) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                }
             }
         }
 
