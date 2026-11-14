@@ -156,7 +156,13 @@ fun DesignApp(apiBase: String) {
                     }
                     Row(
                         Modifier.fillMaxSize()
-                            .then(if (isGlassSupported) Modifier.dGlassBackdropSource(rootBackdrop) else Modifier),
+                            // Toast 的玻璃背景同样要求不透明采样层（官方背景采样规则）
+                            .then(
+                                if (isGlassSupported) Modifier
+                                    .dGlassBackdropSource(rootBackdrop)
+                                    .background(DColor.Bg)
+                                else Modifier,
+                            ),
                     ) {
                         if (window.showRail) DNavigationRail(activeTab, nav)
                         Box(Modifier.weight(1f).fillMaxHeight()) {

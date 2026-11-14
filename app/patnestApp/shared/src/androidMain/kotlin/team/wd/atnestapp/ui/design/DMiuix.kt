@@ -325,8 +325,16 @@ fun DMiuixScrollScaffold(
     CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
         Box(Modifier.fillMaxSize().background(DColor.Bg)) {
             // 内容层：整层绘制都记录进 backdrop（顶栏底色 + 滚动正文），
-            // 玻璃浮层模糊的就是这一层
-            Column(Modifier.fillMaxSize().dGlassBackdropSource(backdrop)) {
+            // 玻璃浮层模糊的就是这一层。
+            // 官方 blur 指南明确警告：layerBackdrop 只记录自身绘制，不含父级背景——
+            // 页面底色必须画在这一层内部，否则卡片之间是透明像素，
+            // 模糊把透明黑扩散开，玻璃浮层会出现发灰发黑的「脏带」。
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .dGlassBackdropSource(backdrop)
+                    .background(DColor.Bg),
+            ) {
                 if (title != null) {
                     DMiuixTopBar(nav, title, backable, actions)
                 } else if (!immersiveTop) {
@@ -408,7 +416,13 @@ fun DMiuixListScaffold(
     val backdrop = rememberDGlassBackdrop()
     CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
         Box(Modifier.fillMaxSize().background(DColor.Bg)) {
-            Column(Modifier.fillMaxSize().dGlassBackdropSource(backdrop)) {
+            // 同 ScrollScaffold：被记录的层必须自带不透明底色（官方背景采样要求）
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .dGlassBackdropSource(backdrop)
+                    .background(DColor.Bg),
+            ) {
                 if (title != null) {
                     DMiuixTopBar(nav, title, backable, actions)
                 } else if (!immersiveTop) {

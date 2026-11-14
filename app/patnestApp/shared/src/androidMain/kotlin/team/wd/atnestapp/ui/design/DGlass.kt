@@ -99,6 +99,12 @@ private fun rememberDGlassHighlight(): Highlight =
     if (DColor.Bg.luminance() < 0.5f) Highlight.GlassStrokeMiddleDark
     else Highlight.GlassStrokeMiddleLight
 
+/** 矮表面（结算栏 / Tab / 输入栏）用细光晕：Middle 光晕在矮面上会盖住大半高度。 */
+@Composable
+private fun rememberDGlassBarHighlight(): Highlight =
+    if (DColor.Bg.luminance() < 0.5f) Highlight.GlassStrokeSmallDark
+    else Highlight.GlassStrokeSmallLight
+
 /**
  * 玻璃面板（登录页表单卡等 Column 内容场景），显式传入背景记录器。
  *
@@ -172,7 +178,7 @@ fun DGlassSurface(
                     shape = shape,
                     blurRadius = blurRadius,
                     colors = rememberDGlassOptics(),
-                    highlight = rememberDGlassHighlight(),
+                    highlight = rememberDGlassBarHighlight(),
                 )
                 .background(tint),
             content = content,
