@@ -96,8 +96,9 @@ android {
         applicationId = "team.wd.atnestapp"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0.0"
+        // 版本号随发布 tag 走：CI 构建时注入 PATNEST_VERSION / PATNEST_VERSION_CODE
+        versionCode = System.getenv("PATNEST_VERSION_CODE")?.toIntOrNull() ?: 2
+        versionName = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.0"
 
         // 接口根地址：构建期从 .env 的 PATNEST_API_BASE 注入，运行时不可修改
         buildConfigField("String", "API_BASE", "\"$patnestApiBase\"")

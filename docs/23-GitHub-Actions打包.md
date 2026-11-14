@@ -270,4 +270,8 @@ cd app/patnestApp && ./gradlew :desktopApp:packageDistributionForCurrentOS
 2. **`Verification of Gradle distribution failed!`**（Windows 先暴露）：`gradle-wrapper.properties` 的 `distributionSha256Sum` 与官方不符，已按 `gradle-9.8.2-bin.zip.sha256` 改为 `21bd5da2…`。**以后升级 Gradle 必须同步改这个校验和**，否则三个系统的构建都会挂在下载后。
 3. **`android-actions/setup-android@v3` 失败**：该 action 会去安装已被 Google 下线的 `tools` 包，`sdkmanager` 返回 1。已移除，改为直接用 runner 自带的 `cmdline-tools/latest/bin/sdkmanager` 接受 license 并安装 `platforms;android-37`。
 
-另外确认：五个 Secret 与一个 Variable 都按 2.2 配在 Repository 级，`verify` 8 秒通过说明发布分支、tag、发布文档三项校验也齐全。修复提交后删除并重建同名 tag 触发第二次运行。
+另外确认：五个 Secret 与一个 Variable 都按 2.2 配在 Repository 级，`verify` 8 秒通过说明发布分支、tag、发布文档三项校验也齐全。
+
+4. **第二次运行**：Android APK 在 3m51s 构建成功；三个桌面 job 全部挂在 `:desktopApp:compileKotlin`——`WalletPage.kt:213` 的字符串插值写成了 `"当前可用余额 ¥$moneyText(balance)"`，缺花括号会被解析成「变量 `moneyText` + 字面量 `(balance)`」，编译器报 `Function invocation 'moneyText(...)' expected`。改为 `"…¥${moneyText(balance)}"`。这类错误本地不编译很难发现，也说明 CI 的必要性。
+
+每次修复都是：提交 → 快进 `release/v2.0.0` → 删除并重建同名 tag → 推送触发新一轮。

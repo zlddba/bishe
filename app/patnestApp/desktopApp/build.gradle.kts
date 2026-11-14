@@ -33,7 +33,8 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "team.wd.atnestapp"
-            packageVersion = "1.0.0"
+            // 与发布 tag 对齐；本地构建默认 2.0.0，CI 用 PATNEST_VERSION 覆盖
+            packageVersion = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.0"
             // DataStore 落盘时用到 java.base 之外的内部 API。jpackage 产物默认只带最小模块集，
             // 不显式声明的话，装完运行会抛异常（IDE 里跑得起来，打包后才炸）。
             modules("jdk.unsupported", "jdk.unsupported.desktop")

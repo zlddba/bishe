@@ -210,7 +210,7 @@ private fun WithdrawDialog(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "当前可用余额 ¥$moneyText(balance)",
+                    "当前可用余额 ¥${moneyText(balance)}",
                     color = PatNestColors.Ink3, fontSize = 12.sp,
                 )
                 Spacer(Modifier.height(14.dp))

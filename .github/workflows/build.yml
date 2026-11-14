@@ -244,6 +244,9 @@ jobs:
       - name: Assemble release
         working-directory: app/patnestApp
         env:
+          PATNEST_VERSION: ${{ needs.verify.outputs.version }}
+          # versionCode 必须是单调递增的整数；用 workflow 的运行序号天然满足
+          PATNEST_VERSION_CODE: ${{ github.run_number }}
           PATNEST_RELEASE_STORE_PASSWORD: ${{ secrets.PATNEST_STORE_PASSWORD }}
           PATNEST_RELEASE_KEY_PASSWORD: ${{ secrets.PATNEST_KEY_PASSWORD }}
           PATNEST_RELEASE_KEY_ALIAS: ${{ secrets.PATNEST_KEY_ALIAS }}
@@ -296,6 +299,8 @@ jobs:
       - name: Package
         working-directory: app/patnestApp
         shell: bash
+        env:
+          PATNEST_VERSION: ${{ needs.verify.outputs.version }}
         run: sh ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
