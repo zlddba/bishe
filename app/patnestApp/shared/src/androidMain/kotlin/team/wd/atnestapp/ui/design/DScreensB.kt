@@ -404,7 +404,7 @@ fun DSitterMoments(nav: DNav) {
     ) {
         if (store.sitterDynamics.isEmpty()) {
             DEmpty("还没有发布过动态", "去发布一条") { nav.go(DScreen.PublishDynamic) }
-            return@DFrame
+            return@DMiuixScrollScaffold
         }
         DPad {
             Spacer(Modifier.height(12.dp))
