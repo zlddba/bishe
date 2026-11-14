@@ -279,7 +279,7 @@ fun D03SitterDetail(nav: DNav) {
         return
     }
     val fav = store.isFavorite(sitter.id)
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = null,
         backable = false,
@@ -1286,7 +1286,7 @@ fun D10Checkout(nav: DNav) {
         1 -> "balance"
         else -> "mock"
     }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "收银台",
         bottomBar = {

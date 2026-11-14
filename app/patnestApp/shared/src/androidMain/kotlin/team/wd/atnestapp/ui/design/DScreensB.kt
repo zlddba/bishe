@@ -644,7 +644,7 @@ fun D19OrderDetail(nav: DNav) {
         return
     }
     val finished = order.rawStatus in setOf("completed", "evaluated", "cancelled", "rejected")
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "订单详情",
         actions = { DTag(order.status, dOrderTone(order.rawStatus)) },
