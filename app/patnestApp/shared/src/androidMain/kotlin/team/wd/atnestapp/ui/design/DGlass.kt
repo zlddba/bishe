@@ -240,9 +240,9 @@ private fun Modifier.liquidGlassDraw(
             BlurColors(
                 blendColors = listOf(
                     // Screen 混合：提亮但不遮底（对比 SrcOver 的奶白效果）
-                    BlendColorEntry(Color.White.copy(alpha = 0.16f), BlurBlendMode.Screen),
+                    BlendColorEntry(Color.White.copy(alpha = 0.10f), BlurBlendMode.Screen),
                     // Overlay 压暗：模糊内容过曝时保住对比
-                    BlendColorEntry(Color.Black.copy(alpha = 0.06f), BlurBlendMode.Overlay),
+                    BlendColorEntry(Color.Black.copy(alpha = 0.04f), BlurBlendMode.Overlay),
                 ),
             ),
         )
@@ -291,8 +291,8 @@ fun DGlassPanel(
     backdrop: LayerBackdrop,
     modifier: Modifier = Modifier,
     shape: Shape = DShape.Lg,
-    tint: Color = Color.White.copy(alpha = 0.22f),
-    blurRadius: Float = 24f,
+    tint: Color = Color.White.copy(alpha = 0.16f),
+    blurRadius: Float = 18f,
     cornerDp: Dp = 12.dp,
     refraction: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
@@ -340,8 +340,8 @@ fun DGlassPanel(
 fun DGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = DShape.Lg,
-    tint: Color = DColor.Card.copy(alpha = 0.10f),
-    blurRadius: Float = 24f,
+    tint: Color = DColor.Card.copy(alpha = 0.06f),
+    blurRadius: Float = 18f,
     cornerDp: Dp = 12.dp,
     refraction: Boolean = true,
     fallbackColor: Color = DColor.Card,
