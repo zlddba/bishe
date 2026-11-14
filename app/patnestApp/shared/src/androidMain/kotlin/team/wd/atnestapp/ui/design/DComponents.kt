@@ -45,7 +45,6 @@ import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -1191,7 +1191,9 @@ fun DDropdown(
  * 不依赖 accompanist，也不要求 material3 版本自带 PullToRefresh；
  * LazyColumn 与 Column(verticalScroll) 都适用（通过 nestedScroll 交接手势）。
  *
- * 视觉：内容整体随手势下移（translationY），顶部露出带转圈的指示条。
+ * 视觉：内容整体随手势下移（translationY），顶部露出文字指示条（下拉刷新 / 松手刷新 /
+ * 正在刷新…）。刻意不放转圈图标——转圈组件只要可见就会一直自转，收回逻辑一旦有
+ * 疏漏就会变成「刷新完还在转」；纯文字随收随走没有这个观感问题。
  */
 @Composable
 fun DPullRefresh(
@@ -1238,8 +1240,23 @@ fun DPullRefresh(
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // 刷新中指示器钉在固定高度，不受 fling 收回逻辑影响
+                if (currentRefreshing) return available
                 if (dragOffset >= thresholdPx) {
+                    // 先把指示器钉住再触发刷新：不能等外部 loading 标志变 true 才钉，
+                    // 否则快速完成的刷新 / 守卫早退的加载都等不到那个状态。
+                    dragOffset = snapPx
                     currentOnRefresh()
+                    // 兜底收回：onRefresh 的实现可能根本没产生加载（比如上一次
+                    // 加载还在进行中，store 的「加载中直接 return」守卫命中），
+                    // 这时不会有任何刷新态变化来收回指示器。150ms 后仍未进入
+                    // 刷新态就自己收回去。
+                    scope.launch {
+                        delay(150)
+                        if (!currentRefreshing && dragOffset > 0f) {
+                            animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
+                        }
+                    }
                 } else if (dragOffset > 0f) {
                     scope.launch { animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v } }
                 }
@@ -1248,12 +1265,18 @@ fun DPullRefresh(
         }
     }
 
-    // 刷新开始/结束时钉住或收起指示器
-    LaunchedEffect(refreshing) {
-        if (refreshing) {
-            dragOffset = snapPx
-        } else if (dragOffset > 0f) {
-            animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
+    // 刷新态变化时钉住 / 收回。用 snapshotFlow 持续观察而不是 LaunchedEffect(refreshing)：
+    // 旧实现的问题在于「观察 key 变化」——快速完成的刷新（true→false 在下一帧重组前
+    // 就结束）根本不会让重组观察到 true，key 不变 LaunchedEffect 不重跑，指示器
+    // 就永远收不回去，也就是「刷新完还一直转」的根因。snapshotFlow 对状态值的
+    // 任何变化都会发值，且 false 分支只看 dragOffset>0，不依赖「曾经见过 true」。
+    LaunchedEffect(Unit) {
+        snapshotFlow { currentRefreshing }.collect { r ->
+            if (r) {
+                dragOffset = snapPx
+            } else if (dragOffset > 0f) {
+                animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
+            }
         }
     }
 
@@ -1268,19 +1291,19 @@ fun DPullRefresh(
                 .fillMaxWidth()
                 .height(with(density) { dragOffset.toDp() }),
         ) {
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (currentRefreshing) "正在刷新…" else "松手刷新",
-                    fontSize = 12.sp,
-                    color = DColor.Ink3,
-                )
-            }
+            // 只有文字，不放转圈图标：CircularProgressIndicator 只要可见就一直自转，
+            // 一旦收回逻辑有疏漏就会变成「刷新完还在转」；纯文字随收随走没有这个问题。
+            Text(
+                when {
+                    currentRefreshing -> "正在刷新…"
+                    dragOffset >= thresholdPx -> "松手刷新"
+                    dragOffset > 0f -> "下拉刷新"
+                    else -> ""
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+                fontSize = 12.sp,
+                color = DColor.Ink3,
+            )
         }
     }
 }

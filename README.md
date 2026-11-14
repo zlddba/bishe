@@ -4,9 +4,9 @@
 
 | 项 | 当前值 |
 | --- | --- |
-| 最新版本 | **v2.0.4**（2026-11-14 发布） |
+| 最新版本 | **v2.0.5**（2026-11-14 发布） |
 | 首个正式版 | v2.0.0 |
-| 发布说明 | [docs/release/v2.0.4.md](docs/release/v2.0.4.md) |
+| 发布说明 | [docs/release/v2.0.5.md](docs/release/v2.0.5.md) |
 | 安装包 / 部署包 | [GitHub Releases](https://github.com/zlddba/bishe/releases) |
 | 线上环境 | `https://www.linkzdsada.dpdns.org:9200`（API 与管理后台同域，`/swagger/index.html` 为接口文档） |
 
@@ -178,6 +178,7 @@ Artifact 保留 14 天；正式分发走对应 tag 的 Release 页。APK 上传�
 | v2.0.2 | 2026-11-14 | 双架构矩阵：服务端 / Linux / Windows 补 arm64，Android 收窄为仅 arm64-v8a，产物命名统一 | [v2.0.2.md](docs/release/v2.0.2.md) |
 | v2.0.3 | 2026-11-14 | KMP 全列表页下拉刷新 + 页面 / 逻辑修复（后端代录评价状态同步） | [v2.0.3.md](docs/release/v2.0.3.md) |
 | v2.0.4 | 2026-11-14 | 平板下拉刷新对齐修复、容量日历宽屏适配 | [v2.0.4.md](docs/release/v2.0.4.md) |
+| v2.0.5 | 2026-11-14 | 下拉刷新指示条收回修复、转圈图标改为纯文字提示 | [v2.0.5.md](docs/release/v2.0.5.md) |
 
 私有仓库按分钟计费（Linux 1×、Windows 2×、macOS 10×）：双架构矩阵让 job 数从 8 增至 11，一次完整发布墙钟约 8~12 分钟，累计计费约为原来的 1.5~2 倍，所以只在打 tag 时跑，不跟随每次 push。细节与历次排错记录见 `docs/23-GitHub-Actions打包.md`。
 
