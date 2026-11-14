@@ -832,7 +832,7 @@ fun D06Dynamics(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadOwnerDynamics() }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "寄养动态",
         activeTab = DTab.Dynamics,
@@ -882,7 +882,7 @@ fun D07Profile(nav: DNav) {
         store.loadPets()
     }
     val staying = store.orders.count { it.rawStatus == "accepted" || it.rawStatus == "staying" }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = null,
         activeTab = DTab.Profile,

@@ -63,7 +63,7 @@ fun D31SitterReviews(nav: DNav) {
         val rounded = (average * 10).roundToInt() / 10.0
         if (rounded % 1.0 == 0.0) "${rounded.toLong()}.0" else rounded.toString()
     }
-    DFrame(nav = nav, title = "我的评价", backable = true, refreshing = reviewsRefreshing,
+    DMiuixScrollScaffold(nav = nav, title = "我的评价", backable = true, refreshing = reviewsRefreshing,
         onRefresh = {
             reviewsRefreshing = true
             scope.launch { store.loadSitterReviews(); reviewsRefreshing = false }
@@ -155,7 +155,7 @@ fun D32DynamicDetail(nav: DNav) {
     val scope = rememberCoroutineScope()
     val dynamic = store.selectedDynamic
     if (dynamic == null) {
-        DFrame(nav = nav, title = "动态详情") {
+        DMiuixScrollScaffold(nav = nav, title = "动态详情") {
             DEmpty("动态不存在或已删除", "返回") { nav.back() }
         }
         return
@@ -167,7 +167,7 @@ fun D32DynamicDetail(nav: DNav) {
             if (store.sendDynamicComment(dynamic.id, draft)) draft = ""
         }
     }
-    DFrame(nav = nav, title = "动态详情") {
+    DMiuixScrollScaffold(nav = nav, title = "动态详情") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
@@ -273,7 +273,7 @@ fun D33PetHistory(nav: DNav) {
     val store = DLocalStore.current
     val pet = store.viewingPet
     LaunchedEffect(pet?.id) { pet?.let { store.loadPetStays(it) } }
-    DFrame(nav = nav, title = "${pet?.name ?: "宠物"} · 寄养记录") {
+    DMiuixScrollScaffold(nav = nav, title = "${pet?.name ?: "宠物"} · 寄养记录") {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (store.petStays.isEmpty()) {
@@ -321,7 +321,7 @@ fun D34RefundProgress(nav: DNav) {
     LaunchedEffect(Unit) { store.loadRefunds() }
     var expanded by remember { mutableStateOf(0L) }
     val first = store.refunds.firstOrNull()
-    DFrame(nav = nav, title = "退款进度", backable = true) {
+    DMiuixScrollScaffold(nav = nav, title = "退款进度", backable = true) {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (store.refunds.isEmpty()) {
@@ -451,7 +451,7 @@ fun D35Addons(nav: DNav) {
     var price by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("次") }
     val editingAddon = store.myAddons.firstOrNull { it.id == editing }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "加购服务",
         backable = true,
@@ -588,7 +588,7 @@ fun D36HolidayRules(nav: DNav) {
     var endDate by remember { mutableStateOf("") }
     var multiplier by remember { mutableStateOf("1.2") }
     val basePrice = store.myShop?.dailyPrice ?: 0.0
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "节假日定价",
         backable = true,
@@ -697,7 +697,7 @@ fun D37SitterOrderDetail(nav: DNav) {
     val scope = rememberCoroutineScope()
     val order = store.selectedReceivedOrder
     if (order == null) {
-        DFrame(nav = nav, title = "订单详情", backable = true) {
+        DMiuixScrollScaffold(nav = nav, title = "订单详情", backable = true) {
             DPad {
                 // 这一页只会从机构工作台点进来，退回上一页就是工作台；
                 // 用 go() 会再压一个新工作台，退两次都是工作台
@@ -707,7 +707,7 @@ fun D37SitterOrderDetail(nav: DNav) {
         return
     }
     val finished = order.status == "completed"
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "订单详情",
         backable = true,
@@ -860,7 +860,7 @@ fun D38SearchResults(nav: DNav) {
             else -> filtered
         }
     }
-    DFrame(nav = nav, title = null, backable = false) {
+    DMiuixScrollScaffold(nav = nav, title = null, backable = false) {
         DPad {
             Spacer(Modifier.height(8.dp))
             C_SplitRow(
@@ -1004,7 +1004,7 @@ fun D39Announcements(nav: DNav) {
         val type = notice.type.lowercase()
         type.contains("announce") || type.contains("notice") || type == "system"
     }
-    DFrame(nav = nav, title = "平台公告", backable = false) {
+    DMiuixScrollScaffold(nav = nav, title = "平台公告", backable = false) {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (announcements.isEmpty()) {
@@ -1154,12 +1154,12 @@ fun D42PetDetail(nav: DNav) {
     val scope = rememberCoroutineScope()
     val pet = store.viewingPet
     if (pet == null) {
-        DFrame(nav = nav, title = "宠物详情") {
+        DMiuixScrollScaffold(nav = nav, title = "宠物详情") {
             DEmpty("还没有选择宠物", "我的宠物") { nav.go(DScreen.Pets) }
         }
         return
     }
-    DFrame(nav = nav, title = pet.name) {
+    DMiuixScrollScaffold(nav = nav, title = pet.name) {
         DPad {
             Spacer(Modifier.height(14.dp))
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1245,7 +1245,7 @@ fun D43ClaimCenter(nav: DNav) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadCoupons() }
     val claimable = store.coupons?.claimable.orEmpty()
-    DFrame(nav = nav, title = "领券中心") {
+    DMiuixScrollScaffold(nav = nav, title = "领券中心") {
         DPad {
             Spacer(Modifier.height(10.dp))
             Text("领取后可在下单时抵扣", fontSize = 11.5.sp, color = DColor.Ink3)
@@ -1364,7 +1364,7 @@ fun D45Support(nav: DNav) {
         "宠物疫苗没打全能寄养吗？" to "需完成狂犬疫苗与猫三联接种并上传疫苗本，通过核验后方可寄养。",
         "如何成为寄养机构？" to "在「角色切换」中选择机构端，提交店铺资料与资质，审核通过即可接单。",
     )
-    DFrame(nav = nav, title = "联系客服", backable = true) {
+    DMiuixScrollScaffold(nav = nav, title = "联系客服", backable = true) {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {

@@ -74,7 +74,7 @@ fun D16Addresses(nav: DNav) {
     val phone = dMaskPhone(
         profile?.contactPhone?.takeIf { it.isNotBlank() } ?: profile?.phone,
     )
-    DFrame(nav = nav, title = "地址管理") {
+    DMiuixScrollScaffold(nav = nav, title = "地址管理") {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (address.isBlank()) {
@@ -114,7 +114,7 @@ fun D16Addresses(nav: DNav) {
 @Composable
 fun D17Settings(nav: DNav) {
     val store = DLocalStore.current
-    DFrame(nav = nav, title = "设置") {
+    DMiuixScrollScaffold(nav = nav, title = "设置") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard(padding = 0.dp) {
@@ -173,7 +173,7 @@ fun D18SitterWorkspace(nav: DNav) {
     }
     val shop = store.myShop
     // 机构身份下的「首页」：底部导航换成工作台 / 订单 / 动态 / 我的这一套
-    DFrame(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false, refreshing = store.shopLoading, onRefresh = { scope.launch { store.loadMyShop(force = true); store.loadSitterStats() } }) {
+    DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false, refreshing = store.shopLoading, onRefresh = { scope.launch { store.loadMyShop(force = true); store.loadSitterStats() } }) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 16.dp),
@@ -331,7 +331,7 @@ fun DSitterOrders(nav: DNav) {
         }
     }
 
-    DFrame(nav = nav, title = "接单管理", activeTab = DTab.SitterOrders, refreshing = store.receivedOrdersLoading, onRefresh = { scope.launch { store.loadReceivedOrders(force = true) } }) {
+    DMiuixScrollScaffold(nav = nav, title = "接单管理", activeTab = DTab.SitterOrders, refreshing = store.receivedOrdersLoading, onRefresh = { scope.launch { store.loadReceivedOrders(force = true) } }) {
         DPad {
             Spacer(Modifier.height(12.dp))
             DCard {
@@ -396,7 +396,7 @@ fun DSitterMoments(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadSitterDynamics() }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "机构动态",
         activeTab = DTab.SitterMoments,
@@ -465,7 +465,7 @@ fun DSitterProfile(nav: DNav) {
     val ongoing = remember(orders) {
         orders.count { it.status == "accepted" || it.status == "staying" }
     }
-    DFrame(nav = nav, title = null, activeTab = DTab.SitterProfile, backable = false) {
+    DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterProfile, backable = false) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
@@ -751,7 +751,7 @@ fun D20Tickets(nav: DNav) {
     var title by remember { mutableStateOf("") }
     var detail by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { store.loadTickets() }
-    DFrame(nav = nav, title = "售后工单") {
+    DMiuixScrollScaffold(nav = nav, title = "售后工单") {
         if (store.tickets.isEmpty()) {
             DPad {
                 Spacer(Modifier.height(16.dp))
@@ -880,7 +880,7 @@ fun DTicketChat(nav: DNav) {
         }
     } else null
 
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "工单会话",
         actions = {
@@ -939,7 +939,7 @@ fun D21Points(nav: DNav) {
     val balance = store.pointsBalance
     val gained = store.pointsHistory.filter { it.change > 0 }.sumOf { it.change }
     val spent = store.pointsHistory.filter { it.change < 0 }.sumOf { -it.change }
-    DFrame(nav = nav, title = null, backable = false, refreshing = refreshing, onRefresh = { refreshing = true; scope.launch { store.loadPoints(); refreshing = false } }) {
+    DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = refreshing, onRefresh = { refreshing = true; scope.launch { store.loadPoints(); refreshing = false } }) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
@@ -1077,7 +1077,7 @@ fun D23SitterCompare(nav: DNav) {
         "容量" to list.map { it.cap },
         "区域" to list.map { it.addr.split("区").firstOrNull()?.plus("区") ?: "—" },
     )
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "机构对比",
         actions = { DTag("已选 ${list.size} 家", DTagTone.Brand) },
@@ -1412,7 +1412,7 @@ fun D25RoleSwitch(nav: DNav) {
         }
     }
 
-    DFrame(nav = nav, title = "切换身份") {
+    DMiuixScrollScaffold(nav = nav, title = "切换身份") {
         DPad {
             Spacer(Modifier.height(14.dp))
             Row(
@@ -1574,7 +1574,7 @@ fun D26ShopProfile(nav: DNav) {
         shop?.latitude != null && shop.longitude != null -> "${shop.latitude}, ${shop.longitude}"
         else -> "未定位"
     }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "店铺资料",
         actions = {
@@ -1715,7 +1715,7 @@ fun D27Capacity(nav: DNav) {
         mutableStateOf(current?.capacity ?: 3)
     }
     val monthLabel = current?.date?.let { B_monthLabel(it) } ?: "容量日历"
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "容量日历",
         actions = { Text(monthLabel, fontSize = 12.sp, color = DColor.Ink3) },
@@ -1986,7 +1986,7 @@ fun D29SitterIncome(nav: DNav) {
     val activeLabel = presets.firstOrNull {
         it.second.first == store.earningsFrom && it.second.second == store.earningsTo
     }?.first ?: if (store.earningsFrom.isBlank()) "近 30 天" else ""
-    DFrame(nav = nav, title = null, backable = false, refreshing = store.earningsLoading, onRefresh = { scope.launch { store.loadEarnings(force = true); store.loadSettlements(); store.loadSitterStats(); store.loadSettleWindow() } }) {
+    DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = store.earningsLoading, onRefresh = { scope.launch { store.loadEarnings(force = true); store.loadSettlements(); store.loadSitterStats(); store.loadSettleWindow() } }) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
@@ -2130,7 +2130,7 @@ fun D30SitterCoupons(nav: DNav) {
             else -> true
         }
     }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "我的优惠券",
         actions = {

@@ -92,7 +92,7 @@ fun D46SitterOnboarding(nav: DNav) {
     }
     val pickLicense = rememberPhotoPicker { fileName, bytes -> upload(fileName, bytes, "license") }
     val pickIdCard = rememberPhotoPicker { fileName, bytes -> upload(fileName, bytes, "idcard") }
-    DFrame(nav = nav, title = null) {
+    DMiuixScrollScaffold(nav = nav, title = null) {
         DPad {
             Spacer(Modifier.height(8.dp))
             Text("机构入驻申请", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = DColor.Ink)
@@ -224,7 +224,7 @@ private fun DUploadRow(
 /* ㉫ 用户协议 / 隐私政策 */
 @Composable
 fun D47Agreements(nav: DNav) {
-    DFrame(nav = nav, title = "用户协议") {
+    DMiuixScrollScaffold(nav = nav, title = "用户协议") {
         DPad {
             Spacer(Modifier.height(16.dp))
             D_AgreementSection(
@@ -258,12 +258,12 @@ fun D48OrderCancel(nav: DNav) {
     var other by remember { mutableStateOf("") }
 
     if (order == null) {
-        DFrame(nav = nav, title = "取消订单") {
+        DMiuixScrollScaffold(nav = nav, title = "取消订单") {
             DEmpty("还没有选择订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
     }
-    DFrame(nav = nav, title = "取消订单") {
+    DMiuixScrollScaffold(nav = nav, title = "取消订单") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
@@ -321,7 +321,7 @@ fun D49ReviewAppend(nav: DNav) {
     val review = store.selectedReview
     val reviewId = review?.id ?: store.lastReviewId
     var content by remember { mutableStateOf("") }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "追评",
         actions = { DTag("24h 内", DTagTone.Brand) },
@@ -393,7 +393,7 @@ fun D50Invite(nav: DNav) {
     val code = invite?.inviteCode?.takeIf { it.isNotBlank() } ?: "—"
     val rewardPoints = invite?.pointsPerInvite ?: 100
     val shareText = "我在宠栖 PetNest 给毛孩子找寄养，用我的邀请码 $code 注册，我们各得 $rewardPoints 积分。"
-    DFrame(nav = nav, title = null) {
+    DMiuixScrollScaffold(nav = nav, title = null) {
         D_HeroBlock(roundedBottom = true) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -504,7 +504,7 @@ fun D51SitterDashboard(nav: DNav) {
     val stats = store.sitterStats
     val trend = stats?.trend.orEmpty()
     val revenueValues = trend.map { it.revenue }
-    DFrame(nav = nav, title = null) {
+    DMiuixScrollScaffold(nav = nav, title = null) {
         D_HeroBlock(roundedBottom = false) {
             Text(
                 store.myShop?.name?.takeIf { it.isNotBlank() } ?: "经营看板",
@@ -603,7 +603,7 @@ fun D52SearchHistory(nav: DNav) {
         history = (listOf(trimmed) + history).distinct().take(12)
         nav.go(DScreen.SearchResults)
     }
-    DFrame(nav = nav, title = null) {
+    DMiuixScrollScaffold(nav = nav, title = null) {
         DPad {
             Spacer(Modifier.height(8.dp))
             DFieldInput(
@@ -660,7 +660,7 @@ fun D52SearchHistory(nav: DNav) {
 /* ㉱ 空状态合集（订单 / 宠物 / 收藏） */
 @Composable
 fun D53EmptyStates(nav: DNav) {
-    DFrame(nav = nav, title = null) {
+    DMiuixScrollScaffold(nav = nav, title = null) {
         DPad {
             Spacer(Modifier.height(8.dp))
             Text("空状态", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = DColor.Ink)
@@ -695,7 +695,7 @@ fun D53EmptyStates(nav: DNav) {
 fun D54PointsLedger(nav: DNav) {
     val store = DLocalStore.current
     LaunchedEffect(Unit) { store.loadPoints() }
-    DFrame(nav = nav, title = "积分明细") {
+    DMiuixScrollScaffold(nav = nav, title = "积分明细") {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (store.pointsHistory.isEmpty()) {
@@ -721,12 +721,12 @@ fun D55CouponDetail(nav: DNav) {
     val store = DLocalStore.current
     val coupon = store.selectedCoupon
     if (coupon == null) {
-        DFrame(nav = nav, title = "优惠券详情") {
+        DMiuixScrollScaffold(nav = nav, title = "优惠券详情") {
             DEmpty("券信息不存在", "返回") { nav.back() }
         }
         return
     }
-    DFrame(nav = nav, title = "优惠券详情") {
+    DMiuixScrollScaffold(nav = nav, title = "优惠券详情") {
         DPad {
             Spacer(Modifier.height(18.dp))
             DCard {
@@ -781,12 +781,12 @@ fun D56OrderReschedule(nav: DNav) {
     var startDate by remember(order?.id) { mutableStateOf(order?.startDate.orEmpty()) }
     var endDate by remember(order?.id) { mutableStateOf(order?.endDate.orEmpty()) }
     if (order == null) {
-        DFrame(nav = nav, title = "订单改期") {
+        DMiuixScrollScaffold(nav = nav, title = "订单改期") {
             DEmpty("还没有选择订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
     }
-    DFrame(nav = nav, title = "订单改期") {
+    DMiuixScrollScaffold(nav = nav, title = "订单改期") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
@@ -889,12 +889,12 @@ fun D57OrderExtend(nav: DNav) {
     val order = store.selectedOrder
     var endDate by remember(order?.id) { mutableStateOf(order?.endDate.orEmpty()) }
     if (order == null) {
-        DFrame(nav = nav, title = "订单续费") {
+        DMiuixScrollScaffold(nav = nav, title = "订单续费") {
             DEmpty("还没有选择订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
     }
-    DFrame(nav = nav, title = "订单续费") {
+    DMiuixScrollScaffold(nav = nav, title = "订单续费") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
@@ -969,7 +969,7 @@ fun D58SitterGallery(nav: DNav) {
         sitter?.coverPhoto?.takeIf { it.isNotBlank() }?.let { add(it) }
         addAll(sitter?.photos.orEmpty().filter { it.isNotBlank() })
     }.distinct()
-    DFrame(nav = nav, title = "${sitter?.name ?: "机构"} · 相册") {
+    DMiuixScrollScaffold(nav = nav, title = "${sitter?.name ?: "机构"} · 相册") {
         DPad {
             Spacer(Modifier.height(14.dp))
             if (photos.isEmpty()) {
@@ -1015,12 +1015,12 @@ fun D59ReviewDetail(nav: DNav) {
     val review = store.selectedReview
         ?: store.detailReviews.firstOrNull()
     if (review == null) {
-        DFrame(nav = nav, title = "评价详情") {
+        DMiuixScrollScaffold(nav = nav, title = "评价详情") {
             DEmpty("还没有评价内容", "返回") { nav.back() }
         }
         return
     }
-    DFrame(nav = nav, title = "评价详情") {
+    DMiuixScrollScaffold(nav = nav, title = "评价详情") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
@@ -1167,7 +1167,7 @@ fun D60Wallet(nav: DNav) {
         }
     }
 
-    DFrame(nav = nav, title = "钱包余额") {
+    DMiuixScrollScaffold(nav = nav, title = "钱包余额") {
         DPad {
             Spacer(Modifier.height(14.dp))
             Column(
@@ -1366,7 +1366,7 @@ fun D61SettingsDetail(nav: DNav) {
     var passwordOpen by remember { mutableStateOf(false) }
     var oldPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
-    DFrame(nav = nav, title = "账号与安全") {
+    DMiuixScrollScaffold(nav = nav, title = "账号与安全") {
         DPad {
             Spacer(Modifier.height(16.dp))
             DCard(padding = 0.dp) {
