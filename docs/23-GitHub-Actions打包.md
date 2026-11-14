@@ -310,3 +310,14 @@ Release 正文与 `docs/release/v2.0.0.md` 逐字一致（忽略换行符后比�
 
 1. `linux` job 把 deb / rpm / tar.gz / AppImage 四种产物统一复制到 `app/patnestApp/out/`，上传路径改为单 glob `app/patnestApp/out/*`；
 2. `release` job 改用 `find dist -type f` 递归收集**文件**，用数组传给 `gh release create/upload`，并在附件数为 0 时拒绝发布空 Release。
+
+### v2.0.1 发布结果
+
+第五次运行 `43566275863` 全绿（约 5m50s），<https://github.com/zlddba/bishe/releases/tag/v2.0.1> 生成正式 Release，9 个附件：部署包、APK、小程序工程包、deb、rpm、AppImage、tar.gz、msi、dmg。Release 正文与 `docs/release/v2.0.1.md` 逐字一致（忽略换行符，2446 字）。
+
+Linux 四种格式由同一个 `linux` job 产出，实际文件名：
+
+- `team.wd.atnestapp_2.0.1_amd64.deb`（110 MB）
+- `team.wd.atnestapp-2.0.1-1.x86_64.rpm`（111 MB）
+- `PatNest-2.0.1-x86_64.AppImage`（121 MB）
+- `patnest-desktop-2.0.1-linux-x64.tar.gz`（120 MB）
