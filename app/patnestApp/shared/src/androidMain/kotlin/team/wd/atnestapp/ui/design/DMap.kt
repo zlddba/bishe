@@ -156,6 +156,50 @@ fun DMapZoomPad(
     }
 }
 
+/**
+ * 液态玻璃缩放按钮组：全屏地图页专用。
+ * 只能画在记录层之外（浮层），玻璃模糊的就是脚下的地图瓦片。
+ */
+@Composable
+fun DMapGlassZoomPad(
+    zoom: Int,
+    onZoomChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DMapGlassCircle(modifier = Modifier.clickable {
+            onZoomChange((zoom + 1).coerceAtMost(MAP_ZOOM_MAX))
+        }) {
+            Text("+", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+        }
+        DMapGlassCircle(modifier = Modifier.clickable {
+            onZoomChange((zoom - 1).coerceAtLeast(MAP_ZOOM_MIN))
+        }) {
+            Text("−", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+        }
+    }
+}
+
+@Composable
+internal fun DMapGlassCircle(
+    modifier: Modifier = Modifier,
+    content: @Composable (BoxScope.() -> Unit)? = null,
+) {
+    DGlassSurface(
+        modifier = modifier.size(34.dp),
+        shape = CircleShape,
+        tint = DColor.Card.copy(alpha = 0.30f),
+        blurRadius = 14f,
+        cornerDp = 17.dp,
+        surfaceAlpha = 0.55f,
+        fallbackColor = DColor.Card,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            content?.invoke(this)
+        }
+    }
+}
+
 @Composable
 private fun DMapZoomButton(text: String, onClick: () -> Unit) {
     Box(

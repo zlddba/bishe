@@ -176,7 +176,7 @@ fun D18SitterWorkspace(nav: DNav) {
     // 机构身份下的「首页」：底部导航换成工作台 / 订单 / 动态 / 我的这一套
     DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false, refreshing = store.shopLoading, onRefresh = { scope.launch { store.loadMyShop(force = true); store.loadSitterStats() } }) {
         Column(
-            Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            Modifier.fillMaxWidth().dGlassHero()
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 16.dp),
         ) {
             Row(
@@ -468,7 +468,7 @@ fun DSitterProfile(nav: DNav) {
     }
     DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterProfile, backable = false) {
         Column(
-            Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            Modifier.fillMaxWidth().dGlassHero()
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -952,7 +952,8 @@ fun D21Points(nav: DNav) {
     val spent = store.pointsHistory.filter { it.change < 0 }.sumOf { -it.change }
     DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = refreshing, onRefresh = { refreshing = true; scope.launch { store.loadPoints(); refreshing = false } }) {
         Column(
-            Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
+            // 底部大圆角形状交给 dGlassHero 统一裁切；cornerDp=0 避免把上缘也磨圆
+            Modifier.fillMaxWidth().dGlassHero(shape = B_HeroBottomShape, cornerDp = 0.dp)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text("我的积分", fontSize = 12.sp, color = DColor.White.copy(alpha = 0.85f))
@@ -1243,19 +1244,17 @@ fun D24MapPicker(nav: DNav) {
             },
             // 手势缩放后把级别同步回来，缩放按钮的基准才跟得上真实视野
             onZoomChange = { zoom = it },
-            corner = {
-                // 控件贴右侧中部，避开顶部信息条和底部面板
-                Column(
-                    Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    DMapZoomPad(zoom = zoom, onZoomChange = { zoom = it })
-                }
-            },
         )
 
         // 屏幕正中的准心：尖端对准地图中心，所以整体上移半个高度
         DMapCenterPin(Modifier.align(Alignment.Center).offset(y = (-21).dp))
+
+        // 右侧缩放按钮（液态玻璃，画在记录层之外防止自采样）
+        DMapGlassZoomPad(
+            zoom = zoom,
+            onZoomChange = { zoom = it },
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
+        )
 
         // 顶部浮层：返回 + 标题与当前所在区
         Row(
@@ -1474,7 +1473,13 @@ fun D25RoleSwitch(nav: DNav) {
         DPad {
             Spacer(Modifier.height(14.dp))
             Row(
-                Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.Card)
+                Modifier.fillMaxWidth()
+                    .dGlassSurface(
+                        shape = DShape.Lg,
+                        tint = DColor.Card.copy(alpha = 0.58f),
+                        blurRadius = 16f,
+                        cornerDp = 12.dp,
+                    )
                     .border(1.dp, DColor.Line, DShape.Lg)
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1532,7 +1537,13 @@ fun D25RoleSwitch(nav: DNav) {
                 },
             ) { expanded ->
                 Row(
-                    Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.Card)
+                    Modifier.fillMaxWidth()
+                        .dGlassSurface(
+                            shape = DShape.Lg,
+                            tint = DColor.Card.copy(alpha = 0.58f),
+                            blurRadius = 16f,
+                            cornerDp = 12.dp,
+                        )
                         .border(1.dp, DColor.Line, DShape.Lg)
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2046,7 +2057,8 @@ fun D29SitterIncome(nav: DNav) {
     }?.first ?: if (store.earningsFrom.isBlank()) "近 30 天" else ""
     DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = store.earningsLoading, onRefresh = { scope.launch { store.loadEarnings(force = true); store.loadSettlements(); store.loadSitterStats(); store.loadSettleWindow() } }) {
         Column(
-            Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
+            // 底部大圆角形状交给 dGlassHero 统一裁切；cornerDp=0 避免把上缘也磨圆
+            Modifier.fillMaxWidth().dGlassHero(shape = B_HeroBottomShape, cornerDp = 0.dp)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text(
@@ -2478,7 +2490,13 @@ private fun B_SelectField(
             modifier = Modifier.fillMaxWidth(),
         ) { expanded ->
             Row(
-                Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+                Modifier.fillMaxWidth()
+                    .dGlassSurface(
+                        shape = DShape.Md,
+                        tint = DColor.Card.copy(alpha = 0.58f),
+                        blurRadius = 14f,
+                        cornerDp = 8.dp,
+                    )
                     .border(1.dp, DColor.Line, DShape.Md)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,

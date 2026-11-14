@@ -292,13 +292,19 @@ private fun DMiuixFieldBox(
     onToggleReveal: () -> Unit,
     inner: @Composable () -> Unit,
 ) {
+    val glass = isGlassSupported && LocalDGlassAmbient.current != null
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = if (multiline) 88.dp else 46.dp)
-            .clip(DShape.Md)
-            .background(DColor.Card)
-            .border(1.dp, DColor.Line, DShape.Md)
+            // 输入框也走环境玻璃：文字压在 62% 卡片底上，边框与折射给出玻璃层次
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.62f),
+                blurRadius = 14f,
+                cornerDp = 8.dp,
+            )
+            .border(1.dp, if (glass) DColor.White.copy(alpha = 0.18f) else DColor.Line, DShape.Md)
             .padding(
                 start = 14.dp,
                 end = if (showRevealToggle) 8.dp else 14.dp,

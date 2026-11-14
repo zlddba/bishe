@@ -341,7 +341,12 @@ fun D34RefundProgress(nav: DNav) {
                     val open = expanded == refund.id
                     Box(
                         Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                            .clip(DShape.Lg).background(DColor.Card)
+                            .dGlassSurface(
+                                shape = DShape.Lg,
+                                tint = DColor.Card.copy(alpha = 0.58f),
+                                blurRadius = 16f,
+                                cornerDp = 12.dp,
+                            )
                             .border(1.dp, DColor.Line, DShape.Lg)
                             .clickable { expanded = if (open) 0L else refund.id }
                             .padding(14.dp),
@@ -868,7 +873,13 @@ fun D38SearchResults(nav: DNav) {
                 gap = 10.dp,
                 fixed = {
                     Box(
-                        Modifier.size(36.dp).clip(DShape.Md).background(DColor.Card)
+                        Modifier.size(36.dp)
+                            .dGlassSurface(
+                                shape = DShape.Md,
+                                tint = DColor.Card.copy(alpha = 0.58f),
+                                blurRadius = 14f,
+                                cornerDp = 8.dp,
+                            )
                             .clickable { nav.back() },
                         contentAlignment = Alignment.Center,
                     ) {

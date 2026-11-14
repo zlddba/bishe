@@ -857,7 +857,13 @@ private fun DDateStep(
         Text(label, fontSize = 12.sp, color = DColor.Ink3)
         Spacer(Modifier.height(6.dp))
         Row(
-            Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+            Modifier.fillMaxWidth()
+                .dGlassSurface(
+                    shape = DShape.Md,
+                    tint = DColor.Card.copy(alpha = 0.58f),
+                    blurRadius = 14f,
+                    cornerDp = 8.dp,
+                )
                 .border(1.dp, DColor.Line, DShape.Md)
                 .padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -907,7 +913,13 @@ fun D57OrderExtend(nav: DNav) {
         DPad {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape).background(DColor.Card)
+                    Modifier.size(32.dp)
+                        .dGlassSurface(
+                            shape = CircleShape,
+                            tint = DColor.Card.copy(alpha = 0.55f),
+                            blurRadius = 12f,
+                            cornerDp = 16.dp,
+                        )
                         .border(1.dp, DColor.Line, CircleShape)
                         .clickable {
                             runCatching { java.time.LocalDate.parse(endDate).plusDays(-1) }
@@ -926,7 +938,13 @@ fun D57OrderExtend(nav: DNav) {
                     modifier = Modifier.weight(1f),
                 )
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape).background(DColor.Card)
+                    Modifier.size(32.dp)
+                        .dGlassSurface(
+                            shape = CircleShape,
+                            tint = DColor.Card.copy(alpha = 0.55f),
+                            blurRadius = 12f,
+                            cornerDp = 16.dp,
+                        )
                         .border(1.dp, DColor.Line, CircleShape)
                         .clickable {
                             runCatching { java.time.LocalDate.parse(endDate).plusDays(1) }
@@ -1521,8 +1539,14 @@ private fun D_AgreementSection(title: String, lines: List<String>) {
 @Composable
 private fun D_DangerOutlineButton(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.fillMaxWidth().height(44.dp).clip(DShape.Md)
-            .background(DColor.Card).border(1.dp, DColor.Danger, DShape.Md)
+        Modifier.fillMaxWidth().height(44.dp)
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.58f),
+                blurRadius = 14f,
+                cornerDp = 8.dp,
+            )
+            .border(1.dp, DColor.Danger, DShape.Md)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1594,7 +1618,13 @@ private fun D_ServiceRow(label: String, value: String) {
 @Composable
 private fun D_SearchChip(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.clip(DShape.Pill).background(DColor.Card)
+        Modifier
+            .dGlassSurface(
+                shape = DShape.Pill,
+                tint = DColor.Card.copy(alpha = 0.55f),
+                blurRadius = 12f,
+                cornerDp = 20.dp,
+            )
             .border(1.dp, DColor.Line, DShape.Pill)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),

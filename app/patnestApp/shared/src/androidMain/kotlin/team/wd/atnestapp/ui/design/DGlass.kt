@@ -12,6 +12,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -188,6 +189,11 @@ private const val LIQUID_REFRACTION_AGSL = """
         float4 col = sampleBackdrop(refractUv);
         float l = lumaOf(col.rgb);
         col.rgb = mix(float3(l), col.rgb, in_satBri.x) + float3(in_satBri.y * col.a);
+        // 固定方向的高光：法线在边缘立起来时才会点亮，中心平面几乎为零。
+        // 比整圈 highlight 环带自然——只出现受光侧，不会在暗部镀一圈灰边。
+        float3 lightDir = normalize(float3(-0.5, -0.8, 0.6));
+        float spec = pow(max(dot(normal, lightDir), 0.0), 24.0);
+        col.rgb += spec * mix(0.03, 0.10, 1.0 - shaped);
         // 底缘极淡的加性辉光：玻璃厚度在底部的受光感（官方 inner bottom）
         float bottom = smoothstep(1.0, 0.0, 1.0 - local.y / max(in_size.y, 1.0));
         col.rgb += bottom * bottom * 0.03;
@@ -221,7 +227,7 @@ private const val LIQUID_REFRACTION_AGSL = """
     }
 """
 
-private const val LIQUID_SHADER_KEY = "patnest_liquid_refraction_v2"
+private const val LIQUID_SHADER_KEY = "patnest_liquid_refraction_v3"
 
 /**
  * 液态玻璃效果链（官方 textureBlurEffect 顺序 + 折射）：
@@ -283,6 +289,100 @@ private fun Modifier.liquidGlassDraw(
     },
     highlight = { highlight },
 )
+
+/**
+ * 挂一层液态玻璃的底层修饰符（内部使用）。
+ *
+ * 与 [dGlassSurface] 的区别是只负责光学层，不带 tint / fallback，
+ * 调用方自己决定玻璃上面叠什么颜色。所有 backdrop 都必须由调用方显式传入，
+ * 避免再次出现「玻璃在记录层内采样自己」的首帧崩溃。
+ */
+internal fun Modifier.dLiquidGlass(
+    backdrop: LayerBackdrop,
+    shape: Shape,
+    blurRadius: Float = 14f,
+    cornerDp: Dp = 12.dp,
+    surfaceAlpha: Float = 1f,
+    refraction: Boolean = true,
+): Modifier = liquidGlassDraw(
+    backdrop = backdrop,
+    shape = shape,
+    blurRadius = blurRadius,
+    cornerDp = cornerDp,
+    refraction = refraction,
+    highlight = null,
+    surfaceAlpha = surfaceAlpha,
+)
+
+/**
+ * 内容流玻璃的标准入口：卡片、输入框、搜索条、chip 这类嵌在页面里的表面。
+ *
+ * 默认采样 [LocalDGlassAmbient]（窗口底层的装饰背景），而不是页面自己的
+ * [LocalDGlassBackdrop]——后者包含当前内容层，嵌在里面的玻璃采样它就是
+ * GPU 反馈环路，Adreno + MIUI 会直接原生段错误。内容玻璃永远只采环境层。
+ *
+ * 支持玻璃时画光学层 + [tint]；不支持（API < 33 / 没有环境记录）时
+ * 退化为 [fallbackColor] 实体面。两种分支的布局完全一致。
+ */
+@Composable
+fun Modifier.dGlassSurface(
+    backdrop: LayerBackdrop? = LocalDGlassAmbient.current,
+    shape: Shape = DShape.Lg,
+    tint: Color = DColor.Card.copy(alpha = 0.60f),
+    blurRadius: Float = 16f,
+    cornerDp: Dp = 12.dp,
+    surfaceAlpha: Float = 1f,
+    refraction: Boolean = true,
+    fallbackColor: Color = DColor.Card,
+): Modifier {
+    if (!isGlassSupported || backdrop == null) {
+        return this.clip(shape).background(fallbackColor)
+    }
+    return this
+        .clip(shape)
+        .dLiquidGlass(
+            backdrop = backdrop,
+            shape = shape,
+            blurRadius = blurRadius,
+            cornerDp = cornerDp,
+            surfaceAlpha = surfaceAlpha,
+            refraction = refraction,
+        )
+        .background(tint)
+}
+
+/**
+ * 品牌渐变 hero 头的玻璃版本。
+ *
+ * hero 位于滚动内容里，绝不能采样页面记录层；这里固定走环境玻璃，
+ * 上面再叠 68% 品牌渐变——玻璃负责折射与边缘光，渐变负责品牌色与白字可读性。
+ *
+ * 不支持玻璃时就是原来的实色品牌渐变，布局零差异。
+ *
+ * @param shape 与 hero 实际裁切形状一致（我的页矩形 / 积分页底部大圆角）
+ * @param cornerDp 折射 SDF 的圆角；[shape] 的圆角与它不必逐角相同，
+ *   SDF 只影响边缘折射带，最终仍由 [shape] 裁切
+ */
+@Composable
+fun Modifier.dGlassHero(
+    shape: Shape = RectangleShape,
+    cornerDp: Dp = 0.dp,
+    gradientAlpha: Float = 0.68f,
+): Modifier {
+    val ambient = LocalDGlassAmbient.current
+    if (!isGlassSupported || ambient == null) {
+        return this.clip(shape).background(DColor.HeroGradient)
+    }
+    return this
+        .clip(shape)
+        .dLiquidGlass(
+            backdrop = ambient,
+            shape = shape,
+            blurRadius = 20f,
+            cornerDp = cornerDp,
+        )
+        .background(DColor.HeroGradient, alpha = gradientAlpha)
+}
 
 /**
  * 玻璃面板（登录页表单卡等 Column 内容场景），显式传入背景记录器。
@@ -357,9 +457,12 @@ fun DGlassSurface(
     surfaceAlpha: Float = 1f,
     fallbackColor: Color = DColor.Card,
     fallbackBorderColor: Color = DColor.Line,
+    // 默认采样页面级记录（浮层：顶栏 / 底栏 / 结算栏 / Toast）；
+    // 内容流里的玻璃必须显式传 LocalDGlassAmbient，不能沿用默认值，
+    // 否则又会在记录层内部采样自己。见 dGlassSurface 的注释。
+    backdrop: LayerBackdrop? = LocalDGlassBackdrop.current,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val backdrop = LocalDGlassBackdrop.current
     if (isGlassSupported && backdrop != null) {
         Box(
             modifier

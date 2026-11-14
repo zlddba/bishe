@@ -890,7 +890,8 @@ fun D07Profile(nav: DNav) {
         backable = false,
     ) {
         Column(
-            Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            // 环境玻璃 + 68% 品牌渐变：hero 在滚动内容里，只采窗口底层装饰层
+            Modifier.fillMaxWidth().dGlassHero()
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1717,7 +1718,12 @@ private fun A_QuickEntry(icon: AppIcon, label: String, modifier: Modifier = Modi
     Box(
         modifier
             .padding(horizontal = 4.dp)
-            .clip(DShape.Md).background(DColor.Card)
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.58f),
+                blurRadius = 14f,
+                cornerDp = 8.dp,
+            )
             .border(1.dp, DColor.Line, DShape.Md)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
@@ -2061,7 +2067,13 @@ private fun A_SelectField(
             modifier = Modifier.fillMaxWidth(),
         ) { expanded ->
             Row(
-                Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+                Modifier.fillMaxWidth()
+                    .dGlassSurface(
+                        shape = DShape.Md,
+                        tint = DColor.Card.copy(alpha = 0.58f),
+                        blurRadius = 14f,
+                        cornerDp = 8.dp,
+                    )
                     .border(1.dp, DColor.Line, DShape.Md)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2149,7 +2161,13 @@ private fun A_DateStepper(
         Text(label, fontSize = 12.sp, color = DColor.Ink3)
         Spacer(Modifier.height(6.dp))
         Row(
-            Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Card)
+            Modifier.fillMaxWidth()
+                .dGlassSurface(
+                    shape = DShape.Md,
+                    tint = DColor.Card.copy(alpha = 0.58f),
+                    blurRadius = 14f,
+                    cornerDp = 8.dp,
+                )
                 .border(1.dp, DColor.Line, DShape.Md)
                 .padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

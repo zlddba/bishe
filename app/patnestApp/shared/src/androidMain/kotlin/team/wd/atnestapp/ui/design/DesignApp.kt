@@ -147,10 +147,26 @@ fun DesignApp(apiBase: String) {
                 // 页内骨架会 provide 自己的 backdrop 遮蔽这份，各浮层总模糊自己正下方的内容。
                 // 根级也 provide：不走骨架的页面（地图空态等）的玻璃顶栏才有背景可采样
                 val rootBackdrop = rememberDGlassBackdrop()
+                // 环境玻璃层：内容流里的卡片 / 输入框 / hero 头只采样这一层装饰背景。
+                // 它是页面内容的兄弟节点，不包含任何玻璃，彻底避开「记录层内采样自己」
+                // 的 GPU 反馈环路（上一版首帧 SIGSEGV 的根因）。
+                val ambientBackdrop = rememberDGlassBackdrop()
                 CompositionLocalProvider(
                     LocalDWindow provides window,
                     LocalDGlassBackdrop provides rootBackdrop,
+                    LocalDGlassAmbient provides ambientBackdrop,
                 ) {
+                    // 先画环境装饰层（全屏），再画不透明的页面内容。
+                    // 页面本身看不见它，但玻璃卡片会从这一层采样品牌光斑与光带。
+                    if (isGlassSupported) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .dGlassBackdropSource(ambientBackdrop),
+                        ) {
+                            DGlassAmbientLayer()
+                        }
+                    }
                     // 宽屏导航栏常驻，需要知道该高亮哪一项：二级页的 tab 为 null，
                     // 栏内不高亮任何一项，但仍可一键跳到别的 Tab。
                     val backStackEntry by navController.currentBackStackEntryAsState()

@@ -188,21 +188,22 @@ fun DSitterMap(nav: DNav) {
             // 手势缩放后把级别同步回来：不回写的话上层还拿着旧级别，
             // 之后任何一次相机下发都会把用户缩放好的视野弹回去
             onZoomChange = { zoom = it },
-            corner = {
-                Column(
-                    Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    DMapZoomPad(zoom = zoom, onZoomChange = { zoom = it })
-                    DMyLocationButton(locating = locating) { requestMyLocation() }
-                    DMapLocateButton(enabled = moved) {
-                        centerLat = lat
-                        centerLng = lng
-                        zoom = 16
-                    }
-                }
-            },
         )
+
+        // 右侧控件组：缩放 / 定位 / 回中（液态玻璃，浮在地图上）。
+        // 必须画在记录层之外——corner 槽在 DMapView 内部会被记进 backdrop 自采样
+        Column(
+            Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            DMapGlassZoomPad(zoom = zoom, onZoomChange = { zoom = it })
+            DMyLocationButton(locating = locating) { requestMyLocation() }
+            DMapLocateButton(enabled = moved) {
+                centerLat = lat
+                centerLng = lng
+                zoom = 16
+            }
+        }
 
         // 顶部浮层：返回 + 机构名与地址（液态玻璃浮在地图上，
         // 瓦片模式下能看见道路从玻璃下流过；SDK 模式退回实心卡片）
@@ -347,16 +348,22 @@ private val D_MyBlue = Color(0xFF1A73E8)
 @Composable
 private fun DMyLocationButton(locating: Boolean, onClick: () -> Unit) {
     val tint = if (locating) DColor.Ink3 else D_MyBlue
-    Box(
-        Modifier.size(34.dp).clip(CircleShape).background(DColor.Card)
-            .clickable(enabled = !locating, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    DGlassSurface(
+        modifier = Modifier.size(34.dp).clickable(enabled = !locating, onClick = onClick),
+        shape = CircleShape,
+        tint = DColor.Card.copy(alpha = 0.30f),
+        blurRadius = 14f,
+        cornerDp = 17.dp,
+        surfaceAlpha = 0.55f,
+        fallbackColor = DColor.Card,
     ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(18.dp)) {
             val r = size.minDimension / 2f
             drawCircle(tint.copy(alpha = 0.22f), radius = r)
             drawCircle(tint, radius = r * 0.56f)
             drawCircle(DColor.White, radius = r * 0.2f)
+        }
         }
     }
 }
@@ -370,11 +377,16 @@ private fun DMyLocationButton(locating: Boolean, onClick: () -> Unit) {
 @Composable
 private fun DMapLocateButton(enabled: Boolean, onClick: () -> Unit) {
     val tint = if (enabled) DColor.Brand else DColor.Ink3
-    Box(
-        Modifier.size(34.dp).clip(CircleShape).background(DColor.Card)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    DGlassSurface(
+        modifier = Modifier.size(34.dp).clickable(enabled = enabled, onClick = onClick),
+        shape = CircleShape,
+        tint = DColor.Card.copy(alpha = 0.30f),
+        blurRadius = 14f,
+        cornerDp = 17.dp,
+        surfaceAlpha = 0.55f,
+        fallbackColor = DColor.Card,
     ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(18.dp)) {
             val r = size.minDimension / 2f
             drawCircle(tint, radius = r * 0.62f, style = Stroke(width = 1.6f))
@@ -397,6 +409,7 @@ private fun DMapLocateButton(enabled: Boolean, onClick: () -> Unit) {
                     strokeWidth = 1.8f,
                 )
             }
+        }
         }
     }
 }
