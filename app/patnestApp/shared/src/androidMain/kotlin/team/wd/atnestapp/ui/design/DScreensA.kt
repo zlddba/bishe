@@ -1109,7 +1109,8 @@ fun D09Login(nav: DNav) {
     val scope = rememberCoroutineScope()
     var account by remember { mutableStateOf(store.account) }
     var password by remember { mutableStateOf("") }
-    val gutter = LocalDWindow.current.gutter
+    val win = LocalDWindow.current
+    val gutter = win.gutter
 
     // 账号/密码统一走 DMiuixField：密码分支内部 BasicSecureTextField 走系统混淆渲染
     // （修复退格清空整框 bug），value/onValueChange 由组件内部桥接
@@ -1159,29 +1160,37 @@ fun D09Login(nav: DNav) {
         }
 
         // ② 返回钮（压在渐变上，图标用素材白）
-        Box(
-            Modifier
-                .statusBarsPadding()
-                .padding(start = gutter, top = 9.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(DColor.Scrim)
-                    .clickable { nav.back() },
-                contentAlignment = Alignment.Center,
-            ) {
-                AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+        // 与前景内容共用同一套限宽居中：平板上返回键跟着表单卡走，不孤零零贴窗口边。
+        Box(Modifier.matchParentSize(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.dPageWidth(win)) {
+                Box(
+                    Modifier
+                        .statusBarsPadding()
+                        .padding(start = gutter, top = 9.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(DColor.Scrim)
+                            .clickable { nav.back() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+                    }
+                }
             }
         }
 
         // ③ 前景滚动列：渐变上的欢迎文案（白）+ 骑跨渐变下缘的玻璃表单卡
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
+        // 宽屏限宽居中，与全项目其它页面的版式口径一致
+        Box(Modifier.matchParentSize(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                Modifier
+                    .dPageWidth(win)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+            ) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Spacer(Modifier.height(42.dp))
             Column(Modifier.padding(horizontal = gutter)) {
@@ -1240,6 +1249,7 @@ fun D09Login(nav: DNav) {
             }
             Spacer(Modifier.height(24.dp))
             Spacer(Modifier.navigationBarsPadding())
+            }
         }
     }
 }

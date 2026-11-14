@@ -56,7 +56,6 @@ import team.wd.atnestapp.ui.components.AppIcon
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.PullToRefresh
-import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 
 /**
@@ -67,8 +66,59 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
  */
 
 /**
- * 表单页骨架：Scaffold + TopAppBar（返回键）+ 滚动正文（gutter 边距）。
+ * 三个骨架（Form / Scroll / List）共用的统一顶栏。
+ *
+ * 统一三件事，平板和手机都成立：
+ * - 限宽居中：顶栏包在 dPageWidth 里，背景涂页面底色，视觉上无缝但标题、
+ *   返回键和操作按钮的左/右缘与限宽后的正文对齐，不再贴窗口最左边；
+ * - 标题边距用 win.gutter（手机 18dp / 平板 24 / 32dp），与 DPad 正文边距一致，
+ *   不再是 Miuix 默认的 26dp（之前和正文 18dp 差 8dp，肉眼可见错位）；
+ * - 状态栏避让由 TopAppBar 自己处理（defaultWindowInsetsPadding 默认开）。
+ */
+@Composable
+internal fun DMiuixTopBar(
+    nav: DNav,
+    title: String,
+    backable: Boolean,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    val win = LocalDWindow.current
+    Box(
+        Modifier.fillMaxWidth().background(DColor.Bg),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(Modifier.dPageWidth(win)) {
+            TopAppBar(
+                title = title,
+                color = DColor.Bg,
+                navigationIcon = if (backable) {
+                    {
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .clickable { nav.back() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+                        }
+                    }
+                } else {
+                    {}
+                },
+                actions = actions,
+                titlePadding = win.gutter,
+                navigationIconPadding = win.gutter,
+                actionIconPadding = win.gutter,
+            )
+        }
+    }
+}
+
+/**
+ * 表单页骨架：统一顶栏 + 滚动正文（gutter 边距）。
  * 替代 `DFrame(nav, title) { DPad { ... } }` 结构。
+ * 正文与 Scroll/List 骨架同款限宽：平板上表单不会拉通整个窗口。
  */
 @Composable
 fun DMiuixFormScaffold(
@@ -76,33 +126,21 @@ fun DMiuixFormScaffold(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = title,
-                navigationIcon = {
-                    Box(
-                        Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .clickable { nav.back() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
-                    }
-                },
+    val win = LocalDWindow.current
+    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+        DMiuixTopBar(nav, title, backable = true, actions = {})
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                Modifier
+                    .dPageWidth(win)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = win.gutter, vertical = 14.dp),
+                content = content,
             )
-        },
-        containerColor = DColor.Bg,
-    ) { padding ->
-        Column(
-            Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = LocalDWindow.current.gutter, vertical = 14.dp),
-            content = content,
-        )
+        }
     }
 }
 
@@ -282,26 +320,7 @@ fun DMiuixScrollScaffold(
     val win = LocalDWindow.current
     Column(Modifier.fillMaxSize().background(DColor.Bg)) {
         if (title != null) {
-            TopAppBar(
-                title = title,
-                color = DColor.Bg,
-                navigationIcon = if (backable) {
-                    {
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .clickable { nav.back() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
-                        }
-                    }
-                } else {
-                    {}
-                },
-                actions = actions,
-            )
+            DMiuixTopBar(nav, title, backable, actions)
         } else if (!immersiveTop) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
@@ -347,6 +366,7 @@ fun DMiuixListScaffold(
     title: String? = null,
     activeTab: DTab? = null,
     backable: Boolean = true,
+    immersiveTop: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
     refreshing: Boolean? = null,
@@ -358,27 +378,8 @@ fun DMiuixListScaffold(
     val win = LocalDWindow.current
     Column(Modifier.fillMaxSize().background(DColor.Bg)) {
         if (title != null) {
-            TopAppBar(
-                title = title,
-                color = DColor.Bg,
-                navigationIcon = if (backable) {
-                    {
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .clickable { nav.back() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
-                        }
-                    }
-                } else {
-                    {}
-                },
-                actions = actions,
-            )
-        } else if (win.isCompact) {
+            DMiuixTopBar(nav, title, backable, actions)
+        } else if (!immersiveTop) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -118,43 +117,6 @@ internal tailrec fun Context.findActivity(): Activity? = when (this) {
 /** 宽屏下把内容限宽到 [DWindow.contentMaxWidth]，窄屏原样放行（顶栏/骨架共用）。 */
 internal fun Modifier.dPageWidth(win: DWindow): Modifier =
     if (win.hasContentLimit) this.widthIn(max = win.contentMaxWidth) else this
-
-@Composable
-fun DTopBar(
-    title: String,
-    nav: DNav,
-    backable: Boolean = true,
-    actions: @Composable RowScope.() -> Unit = {},
-) {
-    val win = LocalDWindow.current
-    // 外层只负责让开状态栏，内层 Row 与正文共用同一套限宽和边距：
-    // 宽屏下标题才不会贴在左边、正文却居中。
-    Box(
-        Modifier.fillMaxWidth().statusBarsPadding(),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Row(
-            // statusBarsPadding 由外层处理，这里只管 48dp 的内容高度，
-            // 顶栏总占位仍是「状态栏 + 48dp」，与改造前一致。
-            Modifier.dPageWidth(win).fillMaxWidth().height(48.dp)
-                .padding(horizontal = win.gutter),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (backable) {
-                Box(
-                    Modifier.size(30.dp).clip(CircleShape).clickable { nav.back() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
-                }
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
-            Spacer(Modifier.weight(1f))
-            actions()
-        }
-    }
-}
 
 @Composable
 fun DBottomTabs(active: DTab, nav: DNav) {

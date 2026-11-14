@@ -76,8 +76,9 @@ fun DSitterMap(nav: DNav) {
     // 没带机构（冷启动直落本页）或机构没填坐标：给一条能走回去的空状态，不留白屏
     if (sitter == null || lat == null || lng == null) {
         Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-            // DTopBar 自己就带 statusBarsPadding，这里不要再套一层
-            DTopBar("机构位置", nav)
+            // DMiuixTopBar 自己就带状态栏避让，这里不要再套一层；
+            // 顶栏与全项目三个骨架共用同一实现，样式统一。
+            DMiuixTopBar(nav, "机构位置", backable = true, actions = {})
             DPad {
                 Spacer(Modifier.height(30.dp))
                 DEmpty("该机构还没有填写位置", "返回详情") { nav.back() }
