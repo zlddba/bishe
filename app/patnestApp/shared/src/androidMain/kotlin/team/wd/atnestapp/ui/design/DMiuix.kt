@@ -30,7 +30,11 @@ import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -41,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -67,14 +72,17 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
  */
 
 /**
- * 三个骨架（Form / Scroll / List）共用的统一顶栏。
+ * 三个骨架（Form / Scroll / List）共用的统一顶栏——液态玻璃悬浮形态。
  *
- * 统一三件事，平板和手机都成立：
- * - 限宽居中：顶栏包在 dPageWidth 里，背景涂页面底色，视觉上无缝但标题、
- *   返回键和操作按钮的左/右缘与限宽后的正文对齐，不再贴窗口最左边；
- * - 标题边距用 win.gutter（手机 18dp / 平板 24 / 32dp），与 DPad 正文边距一致，
- *   不再是 Miuix 默认的 26dp（之前和正文 18dp 差 8dp，肉眼可见错位）；
- * - 状态栏避让由 TopAppBar 自己处理（defaultWindowInsetsPadding 默认开）。
+ * 骨架把顶栏悬浮在正文之上，正文从玻璃顶栏下滚过（官方 GlassTopAppBar 的
+ * 标准形态）。统一三件事，平板和手机都成立：
+ * - 限宽居中：顶栏包在 fillMaxWidth + dPageWidth 里，玻璃带与限宽后的正文对齐；
+ * - 标题边距用 win.gutter（手机 18dp / 平板 24 / 32dp），与 DPad 正文边距一致；
+ * - 状态栏避让由 TopAppBar 自己处理（defaultWindowInsetsPadding 默认开），
+ *   玻璃带连状态栏区域一起覆盖，滚上来的内容在状态栏后面也能透出。
+ *
+ * 顶栏玻璃 tint 故意比浮层高（40%）：大标题文字要直接压在玻璃上，
+ * 通用 3% 的极限档会让标题和滚过的正文文字互相打架。
  */
 @Composable
 internal fun DMiuixTopBar(
@@ -85,39 +93,49 @@ internal fun DMiuixTopBar(
 ) {
     val win = LocalDWindow.current
     Box(
-        Modifier.fillMaxWidth().background(DColor.Bg),
+        Modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter,
     ) {
         Box(Modifier.fillMaxWidth().dPageWidth(win)) {
-            TopAppBar(
-                title = title,
-                color = DColor.Bg,
-                navigationIcon = if (backable) {
-                    {
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .clickable { nav.back() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+            DGlassSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RectangleShape,
+                // 大标题直接压在玻璃上，40% 底色保可读；内容滚过仍清晰透出
+                tint = DColor.Bg.copy(alpha = 0.40f),
+                blurRadius = 22f,
+                cornerDp = 0.dp,
+            ) {
+                TopAppBar(
+                    title = title,
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth(),
+                    navigationIcon = if (backable) {
+                        {
+                            Box(
+                                Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .clickable { nav.back() },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+                            }
                         }
-                    }
-                } else {
-                    {}
-                },
-                actions = actions,
-                titlePadding = win.gutter,
-                navigationIconPadding = win.gutter,
-                actionIconPadding = win.gutter,
-            )
+                    } else {
+                        {}
+                    },
+                    actions = actions,
+                    titlePadding = win.gutter,
+                    navigationIconPadding = win.gutter,
+                    actionIconPadding = win.gutter,
+                )
+            }
         }
     }
 }
 
 /**
- * 表单页骨架：统一顶栏 + 滚动正文（gutter 边距）。
+ * 表单页骨架：液态玻璃顶栏（悬浮）+ 滚动正文（gutter 边距）。
  * 替代 `DFrame(nav, title) { DPad { ... } }` 结构。
  * 正文与 Scroll/List 骨架同款限宽：平板上表单不会拉通整个窗口。
  */
@@ -128,19 +146,43 @@ fun DMiuixFormScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
-    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-        DMiuixTopBar(nav, title, backable = true, actions = {})
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    val density = LocalDensity.current
+    val backdrop = rememberDGlassBackdrop()
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
+        Box(Modifier.fillMaxSize().background(DColor.Bg)) {
+            // 被记录的内容层自带不透明底色（官方背景采样要求）；
+            // 顶栏悬浮其上，表单从玻璃下滚过
             Column(
                 Modifier
-                    .dPageWidth(win)
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = win.gutter, vertical = 14.dp),
-                content = content,
-            )
+                    .dGlassBackdropSource(backdrop)
+                    .background(DColor.Bg),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Column(
+                        Modifier
+                            .dPageWidth(win)
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .imePadding()
+                            .navigationBarsPadding()
+                            // 顶栏垫片随内容滚动：初始位置在玻璃顶栏下方，
+                            // 上滚时表单真正穿进玻璃
+                            .padding(top = with(density) { topBarHeightPx.toDp() })
+                            .padding(horizontal = win.gutter, vertical = 14.dp),
+                        content = content,
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .onSizeChanged { topBarHeightPx = it.height },
+            ) {
+                DMiuixTopBar(nav, title, backable = true, actions = {})
+            }
         }
     }
 }
@@ -321,7 +363,11 @@ fun DMiuixScrollScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
+    val density = LocalDensity.current
     val backdrop = rememberDGlassBackdrop()
+    // 玻璃顶栏实测高度：正文内容垫同等顶部内边距（内边距随内容滚动——
+    // 初始位置在顶栏下方，向上滚动时正文才真正从玻璃顶栏下穿过去）
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
     CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
         Box(Modifier.fillMaxSize().background(DColor.Bg)) {
             // 内容层：整层绘制都记录进 backdrop（顶栏底色 + 滚动正文），
@@ -335,12 +381,11 @@ fun DMiuixScrollScaffold(
                     .dGlassBackdropSource(backdrop)
                     .background(DColor.Bg),
             ) {
-                if (title != null) {
-                    DMiuixTopBar(nav, title, backable, actions)
-                } else if (!immersiveTop) {
+                if (title == null && !immersiveTop) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 }
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                // 视口通顶：有顶栏时正文从屏幕顶部开始，才能滚进玻璃顶栏下面
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     val needBottomInset = bottomBar == null && activeTab == null
                     // 浮层悬在内容上方，正文尾部给足空间滚过玻璃
                     val bottomSlack = when {
@@ -355,6 +400,13 @@ fun DMiuixScrollScaffold(
                         .imePadding()
                         .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
                         .padding(bottom = 14.dp + bottomSlack)
+                        .then(
+                            // 顶栏垫片放在 verticalScroll 之后：随内容滚动（内容内边距），
+                            // 而不是视口 inset——后者会把正文裁在顶栏下方，永远穿不进玻璃
+                            if (title != null)
+                                Modifier.padding(top = with(density) { topBarHeightPx.toDp() })
+                            else Modifier,
+                        )
                     if (onRefresh != null) {
                         PullToRefresh(
                             isRefreshing = refreshing == true,
@@ -371,6 +423,18 @@ fun DMiuixScrollScaffold(
                     } else {
                         Column(colModifier, content = content)
                     }
+                }
+            }
+            // 顶部玻璃顶栏：悬浮在正文之上，正文从玻璃下滚过；
+            // 实测高度回传给正文做滚动内边距
+            if (title != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .onSizeChanged { topBarHeightPx = it.height },
+                ) {
+                    DMiuixTopBar(nav, title, backable, actions)
                 }
             }
             // 底部浮层：悬浮在内容之上（限宽居中），玻璃质感由各浮层组件自取 backdrop
@@ -414,6 +478,8 @@ fun DMiuixListScaffold(
 ) {
     val win = LocalDWindow.current
     val backdrop = rememberDGlassBackdrop()
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
         Box(Modifier.fillMaxSize().background(DColor.Bg)) {
             // 同 ScrollScaffold：被记录的层必须自带不透明底色（官方背景采样要求）
@@ -423,12 +489,11 @@ fun DMiuixListScaffold(
                     .dGlassBackdropSource(backdrop)
                     .background(DColor.Bg),
             ) {
-                if (title != null) {
-                    DMiuixTopBar(nav, title, backable, actions)
-                } else if (!immersiveTop) {
+                if (title == null && !immersiveTop) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 }
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                // 视口通顶：正文才能滚进玻璃顶栏下面
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     val needBottomInset = bottomBar == null && activeTab == null
                     val bottomSlack = when {
                         bottomBar != null -> 112.dp
@@ -440,6 +505,10 @@ fun DMiuixListScaffold(
                         .fillMaxSize()
                         .imePadding()
                         .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                    val listPadding = PaddingValues(
+                        top = if (title != null) with(density) { topBarHeightPx.toDp() } else 0.dp,
+                        bottom = 14.dp + bottomSlack,
+                    )
                     if (onRefresh != null) {
                         PullToRefresh(
                             isRefreshing = refreshing == true,
@@ -451,7 +520,7 @@ fun DMiuixListScaffold(
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 LazyColumn(
                                     scrollModifier,
-                                    contentPadding = PaddingValues(bottom = 14.dp + bottomSlack),
+                                    contentPadding = listPadding,
                                     content = content,
                                 )
                             }
@@ -459,10 +528,21 @@ fun DMiuixListScaffold(
                     } else {
                         LazyColumn(
                             scrollModifier,
-                            contentPadding = PaddingValues(bottom = 14.dp + bottomSlack),
+                            contentPadding = listPadding,
                             content = content,
                         )
                     }
+                }
+            }
+            // 顶部玻璃顶栏：悬浮在正文之上，实测高度回传给正文做滚动内边距
+            if (title != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .onSizeChanged { topBarHeightPx = it.height },
+                ) {
+                    DMiuixTopBar(nav, title, backable, actions)
                 }
             }
             if (bottomBar != null) {

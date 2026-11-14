@@ -144,9 +144,13 @@ fun DesignApp(apiBase: String) {
             BoxWithConstraints(Modifier.fillMaxSize().background(DColor.Bg)) {
                 val window = remember(maxWidth, maxHeight) { DWindow.of(maxWidth, maxHeight) }
                 // 根级玻璃背景：Toast 这类窗口级浮层模糊「整个界面」；
-                // 页内骨架会 provide 自己的 backdrop 遮蔽这份，各浮层总模糊自己正下方的内容
+                // 页内骨架会 provide 自己的 backdrop 遮蔽这份，各浮层总模糊自己正下方的内容。
+                // 根级也 provide：不走骨架的页面（地图空态等）的玻璃顶栏才有背景可采样
                 val rootBackdrop = rememberDGlassBackdrop()
-                CompositionLocalProvider(LocalDWindow provides window) {
+                CompositionLocalProvider(
+                    LocalDWindow provides window,
+                    LocalDGlassBackdrop provides rootBackdrop,
+                ) {
                     // 宽屏导航栏常驻，需要知道该高亮哪一项：二级页的 tab 为 null，
                     // 栏内不高亮任何一项，但仍可一键跳到别的 Tab。
                     val backStackEntry by navController.currentBackStackEntryAsState()
