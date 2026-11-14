@@ -333,6 +333,39 @@ fun DGlassPanel(
 }
 
 /**
+ * 修饰符版液态玻璃面：直接挂进容器现有修饰符链，不额外包一层 Box。
+ *
+ * 「主题色液态玻璃」的标准用法：挂上玻璃后，再叠一层**半透明**的品牌渐变/品牌色
+ * 背景（background(brush, alpha = 0.6f)）——玻璃层给折射、边缘光与模糊底，
+ * 品牌色覆盖给主题。Tab 根页的渐变 hero 头就是这个形态。
+ *
+ * 不支持玻璃（或无 backdrop）时是透明的 no-op：由调用方自己的半透明背景
+ * 在页面底色上承担观感，布局零差异。
+ */
+@Composable
+fun Modifier.dGlassPanelStyle(
+    shape: Shape = DShape.Lg,
+    tint: Color = Color.Transparent,
+    blurRadius: Float = 18f,
+    cornerDp: Dp = 0.dp,
+    refraction: Boolean = true,
+): Modifier {
+    val backdrop = LocalDGlassBackdrop.current
+    if (!isGlassSupported || backdrop == null) return this
+    return this
+        .clip(shape)
+        .liquidGlassDraw(
+            backdrop = backdrop,
+            shape = shape,
+            blurRadius = blurRadius,
+            cornerDp = cornerDp,
+            refraction = refraction,
+            highlight = null,
+        )
+        .background(tint)
+}
+
+/**
  * 通用液态玻璃面（任意内容、跟随主题的自动退化）。
  *
  * 与 [DGlassPanel] 的差别：不需要显式传 backdrop——从 [LocalDGlassBackdrop] 取

@@ -175,7 +175,9 @@ fun D18SitterWorkspace(nav: DNav) {
     // 机构身份下的「首页」：底部导航换成工作台 / 订单 / 动态 / 我的这一套
     DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false, refreshing = store.shopLoading, onRefresh = { scope.launch { store.loadMyShop(force = true); store.loadSitterStats() } }) {
         Column(
-            Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            Modifier.fillMaxWidth()
+                .dGlassPanelStyle()
+                .background(DColor.HeroGradient, alpha = 0.68f)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 16.dp),
         ) {
             Row(
@@ -467,7 +469,9 @@ fun DSitterProfile(nav: DNav) {
     }
     DMiuixScrollScaffold(nav = nav, title = null, activeTab = DTab.SitterProfile, backable = false) {
         Column(
-            Modifier.fillMaxWidth().background(DColor.HeroGradient)
+            Modifier.fillMaxWidth()
+                .dGlassPanelStyle()
+                .background(DColor.HeroGradient, alpha = 0.68f)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -951,7 +955,9 @@ fun D21Points(nav: DNav) {
     val spent = store.pointsHistory.filter { it.change < 0 }.sumOf { -it.change }
     DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = refreshing, onRefresh = { refreshing = true; scope.launch { store.loadPoints(); refreshing = false } }) {
         Column(
-            Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
+            Modifier.fillMaxWidth()
+                .dGlassPanelStyle(shape = B_HeroBottomShape)
+                .background(DColor.HeroGradient, alpha = 0.68f, shape = B_HeroBottomShape)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text("我的积分", fontSize = 12.sp, color = DColor.White.copy(alpha = 0.85f))
@@ -2009,7 +2015,9 @@ fun D29SitterIncome(nav: DNav) {
     }?.first ?: if (store.earningsFrom.isBlank()) "近 30 天" else ""
     DMiuixScrollScaffold(nav = nav, title = null, backable = false, refreshing = store.earningsLoading, onRefresh = { scope.launch { store.loadEarnings(force = true); store.loadSettlements(); store.loadSitterStats(); store.loadSettleWindow() } }) {
         Column(
-            Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
+            Modifier.fillMaxWidth()
+                .dGlassPanelStyle(shape = B_HeroBottomShape)
+                .background(DColor.HeroGradient, alpha = 0.68f, shape = B_HeroBottomShape)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Text(
