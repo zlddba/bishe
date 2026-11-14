@@ -235,6 +235,7 @@ private fun Modifier.liquidGlassDraw(
     cornerDp: Dp,
     refraction: Boolean,
     highlight: Highlight,
+    surfaceAlpha: Float = 1f,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -271,7 +272,7 @@ private fun Modifier.liquidGlassDraw(
                 setFloatUniform("in_radius", with(density) { cornerDp.toPx() } / ds)
                 setFloatUniform(
                     "in_glass",
-                    1f,
+                    surfaceAlpha,
                     with(density) { 10.dp.toPx() } / ds,
                     with(density) { 12.dp.toPx() } / ds,
                     1.45f,
@@ -350,6 +351,10 @@ fun DGlassSurface(
     blurRadius: Float = 12f,
     cornerDp: Dp = 12.dp,
     refraction: Boolean = true,
+    // 玻璃面自身不透明度：1 = 完全由模糊背景构成（页面玻璃）；
+    // <1 时让真实背景直接透出一部分——用于采样内容贫瘠的表面（如地图 SDK 模式），
+    // 模糊层给质感、透出的真实内容给细节，两种信息源互补
+    surfaceAlpha: Float = 1f,
     fallbackColor: Color = DColor.Card,
     fallbackBorderColor: Color = DColor.Line,
     content: @Composable BoxScope.() -> Unit,
@@ -366,6 +371,7 @@ fun DGlassSurface(
                     cornerDp = cornerDp,
                     refraction = refraction,
                     highlight = rememberDGlassBarHighlight(),
+                    surfaceAlpha = surfaceAlpha,
                 )
                 .background(tint),
             content = content,

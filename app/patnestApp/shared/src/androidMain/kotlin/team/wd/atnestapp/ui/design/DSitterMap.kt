@@ -104,10 +104,10 @@ fun DSitterMap(nav: DNav) {
     val addrText = sitter.addr.ifBlank { "该机构未填写详细地址" }
     val myDistance = myLoc?.let { distanceMeters(it.latitude, it.longitude, lat, lng) }
 
-    // 液态玻璃浮层的前提：地图能被 backdrop 采样。
-    // 瓦片路径是 Compose Canvas 绘制 ✓；高德 SDK 路径是 AndroidView 独立 View 层，
-    // LayerBackdrop 采不到——SDK 模式显式给 null，浮层自动退回原实心卡片。
-    val useAmapSdk = remember(context) { AmapBridge.hasKey(context) }
+    // 液态玻璃浮层：地图绘制层挂进 backdrop 记录（瓦片路径可完整采样）。
+    // 高德 SDK 路径是 AndroidView 独立 View 层，采不到地图细节——
+    // 此时模糊层只剩底色，靠 surfaceAlpha=0.55 让真实地图直接透出一半，
+    // 玻璃质感（折射/边缘光/模糊底）两种模式下观感一致，不再分叉。
     val mapBackdrop = rememberDGlassBackdrop()
 
     // 定位成功后的收尾：画蓝点，必要时把两点一起框进屏幕
@@ -166,7 +166,7 @@ fun DSitterMap(nav: DNav) {
         }
     }
 
-    CompositionLocalProvider(LocalDGlassBackdrop provides if (useAmapSdk) null else mapBackdrop) {
+    CompositionLocalProvider(LocalDGlassBackdrop provides mapBackdrop) {
         Box(Modifier.fillMaxSize().background(DColor.Bg).onSizeChanged { mapSize = it }) {
             DMapView(
                 latitude = centerLat,
@@ -218,6 +218,7 @@ fun DSitterMap(nav: DNav) {
                 tint = Color.White.copy(alpha = 0.22f),
                 blurRadius = 16f,
                 cornerDp = 20.dp,
+                surfaceAlpha = 0.55f,
                 fallbackColor = DColor.Scrim,
                 fallbackBorderColor = Color.Transparent,
             ) {
@@ -235,6 +236,7 @@ fun DSitterMap(nav: DNav) {
                 tint = DColor.Card.copy(alpha = 0.35f),
                 blurRadius = 16f,
                 cornerDp = 8.dp,
+                surfaceAlpha = 0.55f,
                 fallbackColor = DColor.Card,
             ) {
                 Column(
@@ -271,6 +273,7 @@ fun DSitterMap(nav: DNav) {
                 tint = DColor.Card.copy(alpha = 0.35f),
                 blurRadius = 16f,
                 cornerDp = 12.dp,
+                surfaceAlpha = 0.55f,
                 fallbackColor = DColor.Card,
             ) {
                 Row(
