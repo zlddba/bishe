@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -301,8 +302,10 @@ fun DMiuixPrimaryButton(
 
 /**
  * 滚动列骨架：Miuix 版 DFrame（title=null + immersiveTop 时可做沉浸 hero 页）。
- * 结构与 DFrame 同构：TopAppBar / 状态栏 spacer → PullToRefresh(滚动列) → 底部 Tab。
- * content 直接是 ColumnScope，页内继续用 DPad / DCard 等内容组件。
+ *
+ * 结构：顶栏 → 内容层（整层记录进玻璃 backdrop）→ 底部浮层（结算栏 / Tab）。
+ * 浮层不再占位在内容下方，而是悬浮在内容之上——内容从玻璃结算栏 / Tab 下滚过，
+ * 玻璃模糊的才是真实滚动的页面。内容底部预留了浮层高度的呼吸空间，末尾卡片不会被遮死。
  */
 @Composable
 fun DMiuixScrollScaffold(
@@ -318,45 +321,67 @@ fun DMiuixScrollScaffold(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
-    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-        if (title != null) {
-            DMiuixTopBar(nav, title, backable, actions)
-        } else if (!immersiveTop) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            val needBottomInset = bottomBar == null && activeTab == null
-            val colModifier = Modifier
-                .dPageWidth(win)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
-                .padding(bottom = 14.dp)
-            if (onRefresh != null) {
-                PullToRefresh(
-                    isRefreshing = refreshing == true,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize(),
-                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
-                ) {
-                    // PullToRefresh 内部是 TopStart 的 Box：限宽正文必须在这里再居中一次，
-                    // 否则带刷新的页面在平板上靠左、不带刷新的页面居中，口径分裂
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    val backdrop = rememberDGlassBackdrop()
+    CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
+        Box(Modifier.fillMaxSize().background(DColor.Bg)) {
+            // 内容层：整层绘制都记录进 backdrop（顶栏底色 + 滚动正文），
+            // 玻璃浮层模糊的就是这一层
+            Column(Modifier.fillMaxSize().dGlassBackdropSource(backdrop)) {
+                if (title != null) {
+                    DMiuixTopBar(nav, title, backable, actions)
+                } else if (!immersiveTop) {
+                    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                }
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                    val needBottomInset = bottomBar == null && activeTab == null
+                    // 浮层悬在内容上方，正文尾部给足空间滚过玻璃
+                    val bottomSlack = when {
+                        bottomBar != null -> 112.dp
+                        activeTab != null && win.isCompact -> 92.dp
+                        else -> 0.dp
+                    }
+                    val colModifier = Modifier
+                        .dPageWidth(win)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .imePadding()
+                        .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                        .padding(bottom = 14.dp + bottomSlack)
+                    if (onRefresh != null) {
+                        PullToRefresh(
+                            isRefreshing = refreshing == true,
+                            onRefresh = onRefresh,
+                            modifier = Modifier.fillMaxSize(),
+                            refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                        ) {
+                            // PullToRefresh 内部是 TopStart 的 Box：限宽正文必须在这里再居中一次，
+                            // 否则带刷新的页面在平板上靠左、不带刷新的页面居中，口径分裂
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                Column(colModifier, content = content)
+                            }
+                        }
+                    } else {
                         Column(colModifier, content = content)
                     }
                 }
-            } else {
-                Column(colModifier, content = content)
+            }
+            // 底部浮层：悬浮在内容之上（限宽居中），玻璃质感由各浮层组件自取 backdrop
+            if (bottomBar != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Box(Modifier.dPageWidth(win)) { bottomBar() }
+                }
+            }
+            if (activeTab != null && win.isCompact) {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    DBottomTabs(activeTab, nav)
+                }
             }
         }
-        if (bottomBar != null) {
-            // 底部结算栏同样限宽：宽屏下按钮不会拉成通栏长条
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Box(Modifier.dPageWidth(win)) { bottomBar() }
-            }
-        }
-        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }
 
@@ -380,48 +405,67 @@ fun DMiuixListScaffold(
     content: LazyListScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
-    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-        if (title != null) {
-            DMiuixTopBar(nav, title, backable, actions)
-        } else if (!immersiveTop) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            val needBottomInset = bottomBar == null && activeTab == null
-            val scrollModifier = Modifier
-                .dPageWidth(win)
-                .fillMaxSize()
-                .imePadding()
-                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
-            if (onRefresh != null) {
-                PullToRefresh(
-                    isRefreshing = refreshing == true,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize(),
-                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
-                ) {
-                    // 同 ScrollScaffold：PullToRefresh 是 TopStart 排布，限宽列表要再居中
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    val backdrop = rememberDGlassBackdrop()
+    CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
+        Box(Modifier.fillMaxSize().background(DColor.Bg)) {
+            Column(Modifier.fillMaxSize().dGlassBackdropSource(backdrop)) {
+                if (title != null) {
+                    DMiuixTopBar(nav, title, backable, actions)
+                } else if (!immersiveTop) {
+                    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                }
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                    val needBottomInset = bottomBar == null && activeTab == null
+                    val bottomSlack = when {
+                        bottomBar != null -> 112.dp
+                        activeTab != null && win.isCompact -> 92.dp
+                        else -> 0.dp
+                    }
+                    val scrollModifier = Modifier
+                        .dPageWidth(win)
+                        .fillMaxSize()
+                        .imePadding()
+                        .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                    if (onRefresh != null) {
+                        PullToRefresh(
+                            isRefreshing = refreshing == true,
+                            onRefresh = onRefresh,
+                            modifier = Modifier.fillMaxSize(),
+                            refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                        ) {
+                            // 同 ScrollScaffold：PullToRefresh 是 TopStart 排布，限宽列表要再居中
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                LazyColumn(
+                                    scrollModifier,
+                                    contentPadding = PaddingValues(bottom = 14.dp + bottomSlack),
+                                    content = content,
+                                )
+                            }
+                        }
+                    } else {
                         LazyColumn(
                             scrollModifier,
-                            contentPadding = PaddingValues(bottom = 14.dp),
+                            contentPadding = PaddingValues(bottom = 14.dp + bottomSlack),
                             content = content,
                         )
                     }
                 }
-            } else {
-                LazyColumn(
-                    scrollModifier,
-                    contentPadding = PaddingValues(bottom = 14.dp),
-                    content = content,
-                )
+            }
+            if (bottomBar != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Box(Modifier.dPageWidth(win)) { bottomBar() }
+                }
+            }
+            if (activeTab != null && win.isCompact) {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    DBottomTabs(activeTab, nav)
+                }
             }
         }
-        if (bottomBar != null) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Box(Modifier.dPageWidth(win)) { bottomBar() }
-            }
-        }
-        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }

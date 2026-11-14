@@ -851,31 +851,42 @@ fun DTicketChat(nav: DNav) {
 
     val bottomBar: (@Composable () -> Unit)? = if (detail != null && !closed) {
         {
-            Row(
-                Modifier.fillMaxWidth().background(DColor.Card)
-                    .navigationBarsPadding()
-                    .padding(start = 14.dp, end = 14.dp, top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // 玻璃输入栏：对话气泡从玻璃下滚过（与 DFixBar 同款悬浮胶囊）
+            Box(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = LocalDWindow.current.gutter, vertical = 10.dp)
+                    .navigationBarsPadding(),
             ) {
-                Box(Modifier.weight(1f)) {
-                    DMiuixField(
-                        label = "继续追问",
-                        value = reply,
-                        onValueChange = { reply = it },
-                        placeholder = "补充说明或追问…",
-                        multiline = true,
-                        enabled = !store.ticketReplying,
-                    )
+                DGlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = DShape.Lg,
+                    tint = DColor.Card.copy(alpha = 0.60f),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            DMiuixField(
+                                label = "继续追问",
+                                value = reply,
+                                onValueChange = { reply = it },
+                                placeholder = "补充说明或追问…",
+                                multiline = true,
+                                enabled = !store.ticketReplying,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        DButton(
+                            if (store.ticketReplying) "发送中" else "发送",
+                            send,
+                            Modifier.width(84.dp),
+                            DButtonStyle.Primary,
+                            44.dp,
+                            !store.ticketReplying,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(10.dp))
-                DButton(
-                    if (store.ticketReplying) "发送中" else "发送",
-                    send,
-                    Modifier.width(84.dp),
-                    DButtonStyle.Primary,
-                    44.dp,
-                    !store.ticketReplying,
-                )
             }
         }
     } else null
@@ -1003,14 +1014,26 @@ fun D22PaySuccess(nav: DNav) {
         title = null,
         backable = false,
         bottomBar = {
-            Row(
-                Modifier.fillMaxWidth().background(DColor.Card)
-                    .padding(horizontal = LocalDWindow.current.gutter, vertical = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            // 与 DFixBar 同款玻璃悬浮胶囊：实心 Row 在玻璃体系里会显得突兀
+            Box(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = LocalDWindow.current.gutter, vertical = 10.dp)
+                    .navigationBarsPadding(),
             ) {
-                DButton("返回首页", { nav.tab(DTab.Home) }, Modifier.weight(1f), DButtonStyle.Ghost)
-                // replace：支付成功页不该留在栈里，否则从订单列表返回又看到「支付成功」
-                DButton("查看订单", { nav.replace(DScreen.Orders) }, Modifier.weight(1f))
+                DGlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = DShape.Lg,
+                    tint = DColor.Card.copy(alpha = 0.60f),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        DButton("返回首页", { nav.tab(DTab.Home) }, Modifier.weight(1f), DButtonStyle.Ghost)
+                        // replace：支付成功页不该留在栈里，否则从订单列表返回又看到「支付成功」
+                        DButton("查看订单", { nav.replace(DScreen.Orders) }, Modifier.weight(1f))
+                    }
+                }
             }
         },
     ) {

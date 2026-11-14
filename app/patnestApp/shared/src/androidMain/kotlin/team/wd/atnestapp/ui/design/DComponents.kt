@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -122,16 +123,21 @@ internal fun Modifier.dPageWidth(win: DWindow): Modifier =
 fun DBottomTabs(active: DTab, nav: DNav) {
     // 两套底栏：主人端「首页 / 找机构 / 寄养动态 / 我的」，
     // 机构端「工作台 / 订单 / 动态 / 我的」。同一个位置，两边是完全不同的页面。
+    // 玻璃 Tab 栏悬浮在内容之上（骨架已为正文预留底部空间），内容从玻璃下滚过。
     val isSitter = DLocalStore.current.isSitterMode
     val tabs = DTab.entries.filter { it.sitter == isSitter }
-    Row(
-        // 白底一直铺到屏幕最底部（手势条下面），按钮内容再用 navigationBarsPadding 顶上来。
-        Modifier.fillMaxWidth().background(DColor.Card)
-            .border(1.dp, DColor.Line, DShape.Sm)
-            .navigationBarsPadding()
-            .height(64.dp)
-            .padding(top = 8.dp),
-    ) {
+    Box(Modifier.fillMaxWidth()) {
+        DGlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            // 与玻璃面相接的只有上缘：顶部两个圆角，下缘贴屏幕底
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            tint = DColor.Card.copy(alpha = 0.60f),
+            border = Color.White.copy(alpha = 0.30f),
+            fallbackColor = DColor.Card,
+        ) {
+            Row(
+                Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp).padding(top = 8.dp),
+            ) {
         tabs.forEach { tab ->
             val on = tab == active
             val icon = tab.dIcon
@@ -165,7 +171,9 @@ fun DBottomTabs(active: DTab, nav: DNav) {
                 )
             }
         }
+        }
     }
+}
 }
 
 /**
@@ -740,22 +748,37 @@ fun DSearchBar(hint: String, onClick: () -> Unit = {}) {
     }
 }
 
-/** 设计稿里常见的「底部结算栏」。 */
+/**
+ * 设计稿里常见的「底部结算栏」——玻璃化后的悬浮胶囊条。
+ *
+ * 悬浮在骨架内容之上（骨架已为正文预留底部空间），内容从玻璃下滚过；
+ * 玻璃背景取 LocalDGlassBackdrop 记录的页面内容，Android 13 以下退化实体卡。
+ */
 @Composable
 fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().background(DColor.Card)
-            .border(1.dp, DColor.Line, DShape.Sm)
-            .navigationBarsPadding()
-            .padding(horizontal = LocalDWindow.current.gutter, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val gutter = LocalDWindow.current.gutter
+    Box(
+        Modifier.fillMaxWidth()
+            .padding(horizontal = gutter, vertical = 10.dp)
+            .navigationBarsPadding(),
     ) {
-        Column {
-            Text(amountLabel, fontSize = 11.5.sp, color = DColor.Ink3)
-            Text(amount, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = DColor.BrandInk)
+        DGlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = DShape.Lg,
+            tint = DColor.Card.copy(alpha = 0.60f),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(amountLabel, fontSize = 11.5.sp, color = DColor.Ink3)
+                    Text(amount, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = DColor.BrandInk)
+                }
+                Spacer(Modifier.width(14.dp))
+                DButton(button, onAction, modifier = Modifier.weight(1f), height = 42.dp)
+            }
         }
-        Spacer(Modifier.width(14.dp))
-        DButton(button, onAction, modifier = Modifier.weight(1f), height = 42.dp)
     }
 }
 

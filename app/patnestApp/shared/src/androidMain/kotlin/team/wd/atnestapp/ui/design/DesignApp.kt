@@ -35,9 +35,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
@@ -141,6 +143,9 @@ fun DesignApp(apiBase: String) {
             // 各屏由 DFrame 自己用 statusBarsPadding / navigationBarsPadding 避让系统栏。
             BoxWithConstraints(Modifier.fillMaxSize().background(DColor.Bg)) {
                 val window = remember(maxWidth, maxHeight) { DWindow.of(maxWidth, maxHeight) }
+                // 根级玻璃背景：Toast 这类窗口级浮层模糊「整个界面」；
+                // 页内骨架会 provide 自己的 backdrop 遮蔽这份，各浮层总模糊自己正下方的内容
+                val rootBackdrop = rememberDGlassBackdrop()
                 CompositionLocalProvider(LocalDWindow provides window) {
                     // 宽屏导航栏常驻，需要知道该高亮哪一项：二级页的 tab 为 null，
                     // 栏内不高亮任何一项，但仍可一键跳到别的 Tab。
@@ -149,7 +154,10 @@ fun DesignApp(apiBase: String) {
                         backStackEntry?.destination?.route
                             ?.let { route -> DScreen.entries.firstOrNull { it.name == route }?.tab }
                     }
-                    Row(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxSize()
+                            .then(if (isGlassSupported) Modifier.dGlassBackdropSource(rootBackdrop) else Modifier),
+                    ) {
                         if (window.showRail) DNavigationRail(activeTab, nav)
                         Box(Modifier.weight(1f).fillMaxHeight()) {
                             NavHost(
@@ -175,7 +183,7 @@ fun DesignApp(apiBase: String) {
                     }
                     // 提示条按窗口居中，而不是内容区居中：宽屏下它要落在大屏的视觉中心，
                     // 而不是缩在限宽后的正文中间。
-                    DToastHost(store, Modifier.align(Alignment.BottomCenter))
+                    DToastHost(store, rootBackdrop, Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -191,7 +199,7 @@ fun DesignApp(apiBase: String) {
  *    不需要额外维护 Job，也不会出现「第二条提示被第一条的计时提前收掉」。
  */
 @Composable
-private fun DToastHost(store: MobileState, modifier: Modifier = Modifier) {
+private fun DToastHost(store: MobileState, backdrop: LayerBackdrop?, modifier: Modifier = Modifier) {
     var message by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
 
@@ -213,14 +221,28 @@ private fun DToastHost(store: MobileState, modifier: Modifier = Modifier) {
         exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 2 },
         modifier = modifier,
     ) {
+        // 玻璃 Toast：悬浮在页面之上，模糊身后滚过的内容；
+        // 无背景记录（或 API<33）时退化为原实体深色气泡，观感不变
         Box(
             // 手机要避开底部 Tab；宽屏没有 Tab，贴近底部即可
             Modifier.padding(bottom = LocalDWindow.current.toastBottom)
-                .navigationBarsPadding()
-                .clip(DShape.Pill).background(DColor.Toast)
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+                .navigationBarsPadding(),
         ) {
-            Text(message, color = DColor.White, fontSize = 12.5.sp)
+            DGlassSurface(
+                shape = DShape.Pill,
+                tint = DColor.Toast,
+                blurRadius = 28f,
+                border = Color.White.copy(alpha = 0.22f),
+                fallbackColor = DColor.Toast,
+                fallbackBorderColor = Color.Transparent,
+            ) {
+                Text(
+                    message,
+                    color = DColor.White,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }
