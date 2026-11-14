@@ -1178,7 +1178,7 @@ fun D09Login(nav: DNav) {
                     DGlassSurface(
                         modifier = Modifier.size(34.dp).clickable { nav.back() },
                         shape = CircleShape,
-                        tint = Color.White.copy(alpha = 0.15f),
+                        tint = Color.White.copy(alpha = 0.10f),
                         blurRadius = 18f,
                         cornerDp = 17.dp,
                         fallbackColor = DColor.Scrim,
