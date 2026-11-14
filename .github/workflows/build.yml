@@ -201,10 +201,17 @@ jobs:
         with:
           gradle-version: wrapper
 
-      - uses: android-actions/setup-android@v3
-
+      # ubuntu-latest 镜像自带 Android SDK 与 cmdline-tools，不需要 setup-android；
+      # 该 action 会尝试安装已被 Google 移除的 `tools` 包，从而让整个 job 失败。
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null || true
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKM="$(command -v sdkmanager || echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager")"
+          yes | "$SDKM" --licenses > /dev/null || true
+          # 显式装主平台，避免 AGP 在首次编译时边下载边构建导致超时
+          "$SDKM" "platforms;android-37" "platform-tools" > /dev/null || true
+          echo "Android SDK ready: $SDKM"
 
       # Android 端构建期读 app/patnestApp/.env 注入接口地址与高德 Key；
       # .env 被 .gitignore 排除，这里按 Secrets 生成一份。
@@ -240,7 +247,7 @@ jobs:
           PATNEST_RELEASE_STORE_PASSWORD: ${{ secrets.PATNEST_STORE_PASSWORD }}
           PATNEST_RELEASE_KEY_PASSWORD: ${{ secrets.PATNEST_KEY_PASSWORD }}
           PATNEST_RELEASE_KEY_ALIAS: ${{ secrets.PATNEST_KEY_ALIAS }}
-        run: ./gradlew :androidApp:assembleRelease --no-daemon --stacktrace
+        run: sh ./gradlew :androidApp:assembleRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
@@ -289,7 +296,7 @@ jobs:
       - name: Package
         working-directory: app/patnestApp
         shell: bash
-        run: ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
+        run: sh ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
