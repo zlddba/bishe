@@ -275,3 +275,22 @@ cd app/patnestApp && ./gradlew :desktopApp:packageDistributionForCurrentOS
 4. **第二次运行**：Android APK 在 3m51s 构建成功；三个桌面 job 全部挂在 `:desktopApp:compileKotlin`——`WalletPage.kt:213` 的字符串插值写成了 `"当前可用余额 ¥$moneyText(balance)"`，缺花括号会被解析成「变量 `moneyText` + 字面量 `(balance)`」，编译器报 `Function invocation 'moneyText(...)' expected`。改为 `"…¥${moneyText(balance)}"`。这类错误本地不编译很难发现，也说明 CI 的必要性。
 
 每次修复都是：提交 → 快进 `release/v2.0.0` → 删除并重建同名 tag → 推送触发新一轮。
+
+### 发布结果（v2.0.0，2026-11-14）
+
+第三次运行 `43563726783` 全绿，耗时约 5 分钟：`verify` 7s、`miniapp` 13s、`bundle` 19s、`android` 5m0s、`deb` 3m11s、`msi` 3m57s、`dmg` 4m53s、`release` 14s。
+
+<https://github.com/zlddba/bishe/releases/tag/v2.0.0> 已生成正式 Release（非草稿、非预发布），6 个附件：
+
+| 附件 | 大小 |
+| --- | --- |
+| `patnest-docker-2.0.0.zip` | 14.9 MB |
+| `androidApp-release.apk` | 107 MB |
+| `team.wd.atnestapp_2.0.0_amd64.deb` | 110 MB |
+| `team.wd.atnestapp-2.0.0.msi` | 117 MB |
+| `team.wd.atnestapp-2.0.0.dmg` | 119 MB |
+| `patnest-uniapp-2.0.0.zip` | 290 KB |
+
+Release 正文与 `docs/release/v2.0.0.md` 逐字一致（忽略换行符后比对通过，2353 字），验证了「发布文档即 Release 正文」这条约定。
+
+> 经验：Gradle 版本号现在从 `PATNEST_VERSION` 注入（`packageVersion` / `versionName`），`versionCode` 用 `github.run_number` 保证单调递增；升级 Gradle 时务必同步 `gradle-wrapper.properties` 的 `distributionSha256Sum`。

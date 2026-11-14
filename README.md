@@ -2,7 +2,7 @@
 
 宠物寄养服务预约系统，毕业设计项目。一个仓库按目录分模块，三条角色线：**主人**（找机构、下单寄养、支付、评价）、**机构**（开店、排期与容量、定价、接单、发动态）、**管理员**（审核、订单与资金、内容、系统运维）。
 
-当前版本：**v2.0.0**（首个正式版，发布说明见 [docs/release/v2.0.0.md](docs/release/v2.0.0.md)）。
+当前版本：**v2.0.0**（首个正式版，发布说明见 [docs/release/v2.0.0.md](docs/release/v2.0.0.md)，安装包与部署包见 [GitHub Release](https://github.com/zlddba/bishe/releases/tag/v2.0.0)）。
 
 线上环境：`https://www.linkzdsada.dpdns.org:9200`（API 与管理后台同域，`/swagger/index.html` 为接口文档）。
 
