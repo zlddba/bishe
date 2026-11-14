@@ -140,6 +140,16 @@ private const val LIQUID_REFRACTION_AGSL = """
         return p * pow(max(1.0 - c, 0.0), p - 1.0) * slope;
     }
 
+    // 向白提亮而不裁剪：增益围绕亮度相关的支点，亮像素少动、暗像素多动
+    // （官方 liftToward）——玻璃边缘因曲率聚光永远比中间亮，没有它边缘就发暗成黑框
+    float3 liftToward(float3 color, float amount) {
+        float v = lumaOf(color);
+        float w = smoothstep(0.0, 0.5, v);
+        float k = mix(1.0 - v, v, w);
+        float gain = 1.0 + smoothstep(0.0, 1.0, amount) * mix(0.75, 0.4, w);
+        return (color + k) * gain - k;
+    }
+
     // SDF 梯度方向（指向形状外），半像素中心差分在局部平面场上是精确的（官方 sdfGradient）
     float2 sdfGradient(float2 local) {
         float dx = silhouetteSdf(local + float2(0.5, 0.0)) - silhouetteSdf(local - float2(0.5, 0.0));
@@ -179,19 +189,18 @@ private const val LIQUID_REFRACTION_AGSL = """
         // 底缘极淡的加性辉光：玻璃厚度在底部的受光感（官方 inner bottom）
         float bottom = smoothstep(1.0, 0.0, 1.0 - local.y / max(in_size.y, 1.0));
         col.rgb += bottom * bottom * 0.03;
+        // 边缘聚光提亮：越贴边越亮（官方 rim lighting 的核心感知），
+        // 真玻璃的边缘永远比中间亮——这是「液态」观感的关键，也杜绝暗边黑框
+        col.rgb = liftToward(col.rgb, 0.5 * (1.0 - shaped));
         return col;
     }
-
-    // 轮廓外溢：着色器只在远超轮廓处才切透明；真正的边缘由全分辨率
-    // 抗锯齿裁切收边。若在这里按 d>0 硬切，切口发生在降采样图层上，
-    // 放大回屏幕就是一圈楼梯锯齿（官方注释：the mask pass trims the edge
-    // at full resolution, so this one only has to reach past it）。
-    const float kOverspill = 4.0;
 
     half4 main(float2 coord) {
         float2 local = coord - in_pad;
         float d = silhouetteSdf(local);
-        if (d >= kOverspill) return half4(0.0);
+        // 轮廓在着色器内做 1.5px 平滑淡出：既不在降采样图层上硬切（那会放大成
+        // 楼梯锯齿），也不让边缘材质溢出成暗环——淡出的同时边缘材质已被
+        // liftToward 提亮，轮廓是亮边过渡而非黑边
         float edge = max(in_glass.y, 1.0);
         float2 gradient = sdfGradient(local);
         float4 col;
@@ -204,7 +213,8 @@ private const val LIQUID_REFRACTION_AGSL = """
         } else {
             col = shade(local, d, gradient, edge);
         }
-        float alpha = in_glass.x;
+        float edgeFade = clamp(1.0 - d / 1.5, 0.0, 1.0);
+        float alpha = in_glass.x * edgeFade;
         return half4(half3(col.rgb * alpha), half(alpha));
     }
 """
