@@ -363,3 +363,13 @@ Linux 四种格式由同一个 `linux` job 产出，实际文件名：
 可行性核对：GitHub 私有仓库已开放 arm64 标准 runner（2026-01 起）；Skiko 提供 `skiko-awt-runtime-linux-arm64` / `skiko-awt-runtime-windows-arm64`；`appimagetool-aarch64.AppImage` 可下载。jpackage 不能交叉打包，所以每个架构各跑一次。`windows-11-arm` 的 WiX 工具链若缺失需在该镜像单独安装，是首个待实跑验证的点。
 
 **这批改动尚未打 tag、未实跑 CI**；需要发布 v2.0.2 时按第三节流程操作。
+
+### v2.0.2 发布结果（双架构矩阵首次实跑）
+
+运行 `43569944862` 全绿，墙钟约 6 分钟：<https://github.com/zlddba/bishe/releases/tag/v2.0.2>，15 个附件，命名全部为 `patnest-<版本>-<平台>-<架构>.<格式>`。正文与 `docs/release/v2.0.2.md` 逐字一致（2541 字）。
+
+关键验证点：
+- `ubuntu-24.04-arm` 上 jpackage 产出 arm64 deb / rpm / AppImage / tar.gz，AppImage 用 `appimagetool-aarch64` 封装成功；
+- `windows-11-arm` 上 jpackage + WiX 直接可用，产出 arm64 msi（此前标记的待验证点已确认）；
+- `ndk.abiFilters` 生效，APK 内无 32 位 ARM 库（CI 校验通过）；
+- 两个服务端部署包 `patnest-server-2.0.2-linux-amd64.zip` / `-arm64.zip` 并列发布。
