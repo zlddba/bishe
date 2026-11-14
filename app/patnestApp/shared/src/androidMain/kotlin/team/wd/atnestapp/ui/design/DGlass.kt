@@ -182,10 +182,16 @@ private const val LIQUID_REFRACTION_AGSL = """
         return col;
     }
 
+    // 轮廓外溢：着色器只在远超轮廓处才切透明；真正的边缘由全分辨率
+    // 抗锯齿裁切收边。若在这里按 d>0 硬切，切口发生在降采样图层上，
+    // 放大回屏幕就是一圈楼梯锯齿（官方注释：the mask pass trims the edge
+    // at full resolution, so this one only has to reach past it）。
+    const float kOverspill = 4.0;
+
     half4 main(float2 coord) {
         float2 local = coord - in_pad;
         float d = silhouetteSdf(local);
-        if (d > 0.0) return half4(0.0);
+        if (d >= kOverspill) return half4(0.0);
         float edge = max(in_glass.y, 1.0);
         float2 gradient = sdfGradient(local);
         float4 col;
