@@ -37,7 +37,7 @@
 
 - [ ] **批次 0（已完成）**：地基。依赖接入（6 模块）、`DTheme` 加 MiuixTheme 桥、试点屏 **D09Login** 重写（Scaffold/TopAppBar/Card/TextField/Button 全 Miuix 化）
 - [x] **批次 1**：认证与表单屏 —— `D40Register`、`D41ProfileEdit`、`D12PetAdd`、`D44AddressAdd`、`D28PublishDynamic`（新增 DMiuix.kt 桥接助手；下拉选择字段暂保留自研 Popup）
-- [ ] **批次 2**：主人端主页与列表 —— `D01Home`、`D02FindSitters`、`D05Orders`、`D08Pets`、`D13Favorites`、`D14Coupons`、`D15Messages`
+- [x] **批次 2**：主人端主页与列表 —— `D01Home`、`D02FindSitters`、`D05Orders`、`D08Pets`、`D13Favorites`、`D14Coupons`、`D15Messages`（新增 Scroll/List 双骨架，Miuix TopAppBar + PullToRefresh + 底部 Tab；页内卡片组件保留待视觉统一批次）
 - [ ] **批次 3**：主人端详情与流程 —— `D03SitterDetail`、`D04Booking`、`D10Checkout`、`D11ReviewWrite`、`D19OrderDetail`、`D22PaySuccess`、`D23SitterCompare`
 - [ ] **批次 4**：机构端 —— `D18SitterWorkspace`、`DSitterOrders`、`DSitterMoments`、`DSitterProfile`、`D26ShopProfile`、`D27Capacity`、`D28~D31` 收尾
 - [ ] **批次 5**：详情与二级页 —— `D06Dynamics`、`D16Addresses`、`D17Settings`、`D20Tickets`、`DTicketChat`、`D21Points`、`D24MapPicker`、`D25RoleSwitch`

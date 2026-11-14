@@ -270,7 +270,9 @@ fun DMiuixListScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     refreshing: Boolean? = null,
     onRefresh: (() -> Unit)? = null,
-    content: @Composable LazyListScope.() -> Unit,
+    // LazyColumn 的 DSL 是非 Composable 的接收者 lambda（item 内容才是 @Composable），
+    // 与 DLazyFrame 保持一致；写成 @Composable 反而传不进 LazyColumn。
+    content: LazyListScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
     Column(Modifier.fillMaxSize().background(DColor.Bg)) {
