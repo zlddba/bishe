@@ -1178,8 +1178,9 @@ class MobileState(private val session: MobileSession) {
                     remark = bookingRemark.trim(),
                     userCouponId = bookingCoupon?.id ?: 0L,
                     pointsUsed = bookingPoints,
+                    // 下单走 JSON 数组；估价接口才是 "id:qty" 字符串
                     addons = bookingAddonQty.filter { it.value > 0 }
-                        .map { "${it.key}:${it.value}" },
+                        .map { CreateOrderAddonPayload(it.key, it.value) },
                 ),
             )
             lastCreatedOrderId = created.orderId

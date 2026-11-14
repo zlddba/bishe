@@ -33,3 +33,6 @@ release/
 .gotmp
 .workbuddy
 release.jks.b64
+
+# ===== 个人材料（论文/报告原稿，不入库）=====
+docs/bswd/
