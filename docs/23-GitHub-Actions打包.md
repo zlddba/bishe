@@ -373,3 +373,7 @@ Linux 四种格式由同一个 `linux` job 产出，实际文件名：
 - `windows-11-arm` 上 jpackage + WiX 直接可用，产出 arm64 msi（此前标记的待验证点已确认）；
 - `ndk.abiFilters` 生效，APK 内无 32 位 ARM 库（CI 校验通过）；
 - 两个服务端部署包 `patnest-server-2.0.2-linux-amd64.zip` / `-arm64.zip` 并列发布。
+
+### v2.0.3 发布结果
+
+运行 `43575818994` 全绿（11 个 job，墙钟约 5.5 分钟），<https://github.com/zlddba/bishe/releases/tag/v2.0.3>，15 个附件，命名全部符合规范。正文与 `docs/release/v2.0.3.md` 逐字一致（1513 字）。KMP 下拉刷新组件随包交付。
