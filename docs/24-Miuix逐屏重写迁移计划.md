@@ -24,7 +24,7 @@
 | `DCard` | `Card(modifier, onClick?, content: ColumnScope)` | 自带按压缩放反馈（pressFeedbackType） |
 | `DButton` | `Button(onClick, colors = ButtonDefaults.buttonColorsPrimary())` | 默认 buttonColors 是灰底，主操作必须显式指定 primary |
 | `DSmallButton` | `TextButton` 或小型 `Button` | |
-| `DFieldInput` | `TextField(state = rememberTextFieldState(), label, useLabelAsPlaceholder = true)` | state 驱动；密码掩码复用 `DPasswordMask`（已改 internal）；IME Done 用 onKeyboardAction |
+| `DFieldInput` | **`DMiuixField`（全局唯一输入组件）** | 普通/密码双分支共用同一套 decorator 外观；密码走 `BasicSecureTextField` 系统混淆（修复退格清空 bug）；40 处调用已全部迁移 |
 | `DTabLine` | `TabRow(tabs, selectedTabIndex, onTabSelected)` | |
 | `DSwitch` 类开关 | `Switch(checked, onCheckedChange)` | |
 | `DOptionRow` / 设置行 | preference 模块 `SwitchPreference` / `ArrowPreference` / `RadioButtonPreference` / `SliderPreference` | 设置页（D17Settings 等）优先用 |

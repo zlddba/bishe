@@ -79,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.view.WindowCompat
@@ -88,146 +90,6 @@ import team.wd.atnestapp.ui.app.MobileImage
 /* ------------------------------------------------------------------ *
  * 屏骨架：状态栏 / 顶栏 / 可滚动内容 / 固定底栏 / 底部 Tab
  * ------------------------------------------------------------------ */
-
-@Composable
-fun DFrame(
-    nav: DNav,
-    title: String? = null,
-    activeTab: DTab? = null,
-    backable: Boolean = true,
-    // true = 内容自带沉浸头部（首页 hero），DFrame 不再补状态栏高度。
-    immersiveTop: Boolean = false,
-    actions: @Composable RowScope.() -> Unit = {},
-    bottomBar: (@Composable () -> Unit)? = null,
-    // 下拉刷新（Android）：传 onRefresh 即启用，refreshing 传当前加载标志
-    refreshing: Boolean? = null,
-    onRefresh: (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val win = LocalDWindow.current
-    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-        if (title != null) {
-            DTopBar(title = title, nav = nav, backable = backable, actions = actions)
-        } else if (!immersiveTop) {
-            // 无顶栏的页面（登录、找机构、支付成功等）自己也要让开状态栏，
-            // 否则第一行内容会被状态栏压住。
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        }
-        // 宽屏把正文限制在可读宽度并居中。手机下 dPageWidth 是空操作，
-        // 版式与改造前逐像素一致。
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            // 进场动效交给 NavHost 的转场统一处理，这里不再给整屏内容加 alpha 动画：
-            // 整屏 alpha < 1 会让这一页整体离屏合成（整块 RenderNode 每帧重绘），
-            // 页面里再有封面图时掉帧非常明显。转场本身已经足够顺，不需要二次淡入。
-            //
-            // 没有底栏 / Tab 的页面，滚动内容要自己让开系统导航条。
-            val needBottomInset = bottomBar == null && activeTab == null
-            val colModifier = Modifier
-                .dPageWidth(win)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                // 清单声明 adjustResize + EdgeToEdge 时，键盘高度不会自动变成内容留白，
-                // 不加 imePadding 页尾输入框会被键盘直接盖住
-                .imePadding()
-                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
-                .padding(bottom = 14.dp)
-            if (onRefresh != null) {
-                // Miuix 的下拉刷新：指示器的拉出、驻留、收回全部由组件按 isRefreshing
-                // 状态驱动，刷新结束 isRefreshing=false 即走完成动画收回；即使刷新请求
-                // 被忽略（store 的「加载中直接 return」守卫）或极速完成，也不会卡住。
-                // contentAlignment 虽是 Miuix 组件没有的参数，但该容器是全宽的——
-                // 正文限宽居中靠内容自己的布局完成，这里无需额外处理。
-                PullToRefresh(
-                    isRefreshing = refreshing == true,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize(),
-                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
-                ) {
-                    Column(colModifier, content = content)
-                }
-            } else {
-                Column(colModifier, content = content)
-            }
-        }
-        if (bottomBar != null) {
-            // 底部结算栏同样限宽：否则宽屏下按钮会拉成一米长，和居中的正文脱节。
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Box(Modifier.dPageWidth(win)) { bottomBar() }
-            }
-        }
-        // 宽屏的 Tab 由左侧常驻导航栏承担（见 DesignApp），底部不再重复画一条。
-        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
-    }
-}
-
-/** 正文限宽：只在 Medium / Expanded 生效，手机返回原 Modifier。 */
-internal fun Modifier.dPageWidth(win: DWindow): Modifier =
-    if (win.hasContentLimit) this.widthIn(max = win.contentMaxWidth) else this
-
-/**
- * 与 [DFrame] 同构，但正文用 LazyColumn。
- *
- * 机构 / 订单这类一次可能返回几十条的页面走这个骨架：LazyColumn 只组合可见项，
- * 首屏不用一次建满 50 张卡片，内存和首帧耗时都会明显下降。
- * 用法差别只有一处：正文是 [LazyListScope]，所以每块内容要自己包 `item { }`。
- */
-@Composable
-fun DLazyFrame(
-    nav: DNav,
-    title: String? = null,
-    activeTab: DTab? = null,
-    backable: Boolean = true,
-    immersiveTop: Boolean = false,
-    actions: @Composable RowScope.() -> Unit = {},
-    bottomBar: (@Composable () -> Unit)? = null,
-    // 下拉刷新（Android）：传 onRefresh 即启用，refreshing 传当前加载标志
-    refreshing: Boolean? = null,
-    onRefresh: (() -> Unit)? = null,
-    content: LazyListScope.() -> Unit,
-) {
-    val win = LocalDWindow.current
-    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
-        if (title != null) {
-            DTopBar(title = title, nav = nav, backable = backable, actions = actions)
-        } else if (!immersiveTop) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-        }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            val needBottomInset = bottomBar == null && activeTab == null
-            val scrollModifier = Modifier
-                .dPageWidth(win)
-                .fillMaxSize()
-                .imePadding()
-                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
-            if (onRefresh != null) {
-                PullToRefresh(
-                    isRefreshing = refreshing == true,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize(),
-                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
-                ) {
-                    LazyColumn(
-                        scrollModifier,
-                        contentPadding = PaddingValues(bottom = 14.dp),
-                        content = content,
-                    )
-                }
-            } else {
-                LazyColumn(
-                    scrollModifier,
-                    contentPadding = PaddingValues(bottom = 14.dp),
-                    content = content,
-                )
-            }
-        }
-        if (bottomBar != null) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Box(Modifier.dPageWidth(win)) { bottomBar() }
-            }
-        }
-        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
-    }
-}
 
 /**
  * 让状态栏图标临时切成浅色（白色），用于首页粉色 hero 顶到状态栏的场景；
@@ -437,13 +299,15 @@ fun DCard(
     padding: Dp = 14.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        modifier
+    // 底层已换 Miuix Card（HyperOS 卡片观感）：调用点签名不变（padding → insideMargin）。
+    // Miuix Card 无描边参数，1dp 描边保留在 modifier 上。
+    Card(
+        modifier = modifier
             .fillMaxWidth()
-            .clip(DShape.Lg)
-            .background(DColor.Card)
-            .border(1.dp, DColor.Line, DShape.Lg)
-            .padding(padding),
+            .border(1.dp, DColor.Line, DShape.Lg),
+        cornerRadius = 12.dp,
+        insideMargin = PaddingValues(padding),
+        colors = CardDefaults.defaultColors(color = DColor.Card, contentColor = DColor.Ink),
         content = content,
     )
 }
