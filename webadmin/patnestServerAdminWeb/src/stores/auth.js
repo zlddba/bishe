@@ -26,6 +26,22 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(credentials) {
     const res = await authApi.login(credentials)
+    if (res.data?.totp_required) {
+      // 两步验证：这时还拿不到令牌，调用方要拿着票据去第二步
+      return res
+    }
+    applySession(res)
+    return res
+  }
+
+  // 两步验证第二步：用登录时下发的票据 + 6 位口令（或恢复码）换令牌。
+  async function loginTotp(payload) {
+    const res = await authApi.loginTotp(payload)
+    applySession(res)
+    return res
+  }
+
+  function applySession(res) {
     token.value = res.data.access_token
     refreshToken.value = res.data.refresh_token || ''
     user.value = res.data.user
@@ -34,7 +50,6 @@ export const useAuthStore = defineStore('auth', () => {
     if (refreshToken.value) localStorage.setItem('pn_refresh', refreshToken.value)
     else localStorage.removeItem('pn_refresh')
     localStorage.setItem('pn_user', JSON.stringify(user.value))
-    return res
   }
 
   // 静默续期：换访问令牌，顺带收下服务端轮换出来的新刷新令牌。
@@ -79,6 +94,7 @@ export const useAuthStore = defineStore('auth', () => {
     username,
     role,
     login,
+    loginTotp,
     logout,
     clearSession,
     applyAccessToken,

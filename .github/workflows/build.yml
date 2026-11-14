@@ -1,0 +1,236 @@
+name: Build
+
+# 默认只在打 tag（v1.2.0）或手动触发时构建，避免每次 push 都烧私有仓库的 Actions 分钟数。
+# 想每次 push master 都构建：取消下面 push 分支的注释即可。
+on:
+  workflow_dispatch:
+    inputs:
+      upload_android:
+        description: "构建 Android Release APK"
+        type: boolean
+        default: true
+      upload_desktop:
+        description: "构建桌面端安装包（deb/msi/dmg）"
+        type: boolean
+        default: true
+      upload_bundle:
+        description: "构建后端 + 管理后台部署包"
+        type: boolean
+        default: true
+      upload_miniapp:
+        description: "打包小程序 uni-app 工程（zip 源码包）"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+#    branches:
+#      - master
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 后端二进制 + 管理后台 dist + Docker 部署文件，复用仓库里的 build.sh
+  bundle:
+    name: 部署包（API + 管理后台）
+    if: github.event_name != 'workflow_dispatch' || inputs.upload_bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: server/patnestServer/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webadmin/patnestServerAdminWeb/package-lock.json
+
+      - name: Install web deps
+        working-directory: webadmin/patnestServerAdminWeb
+        run: npm ci --no-audit --no-fund
+
+      - name: Build bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=""
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ -n "$VERSION" ]]; then
+            bash build.sh --version "$VERSION"
+          else
+            bash build.sh
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patnest-deploy-bundle
+          path: |
+            release/*.zip
+            release/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  # 小程序不做编译：托管 runner 装不了 HBuilderX，这里只把 uni-app 工程打成 zip，
+  # 下载解压后用 HBuilderX 打开，再发行到微信开发者工具。
+  miniapp:
+    name: 小程序工程包（uniapp zip）
+    if: github.event_name != 'workflow_dispatch' || inputs.upload_miniapp
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          V=""
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ -z "$V" ]]; then
+            V="$(sed -n 's/.*"versionName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' uniapp/patnestUniapp/manifest.json | head -n1)"
+          fi
+          echo "version=${V:-dev}" >> "$GITHUB_OUTPUT"
+
+      - name: 打包工程
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd uniapp
+          NAME="patnest-uniapp-${{ steps.ver.outputs.version }}"
+          zip -qr "../${NAME}.zip" patnestUniapp \
+            -x "patnestUniapp/unpackage/*" \
+               "patnestUniapp/.hbuilderx/*" \
+               "patnestUniapp/node_modules/*" \
+               "patnestUniapp/.DS_Store"
+          echo "已生成 ${NAME}.zip（$(du -h "../${NAME}.zip" | cut -f1)）"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patnest-uniapp-project
+          path: patnest-uniapp-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # Android Release APK：签名与接口地址全部来自 Secrets，不在仓库里存密钥
+  android:
+    name: Android APK
+    if: github.event_name != 'workflow_dispatch' || inputs.upload_android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      # Android 端在构建期读 app/patnestApp/.env 注入接口地址与高德 Key；
+      # .env 被 .gitignore 排除，这里按 Secrets 生成一份。
+      - name: Write .env
+        working-directory: app/patnestApp
+        env:
+          API_BASE: ${{ vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE }}
+          AMAP_KEY: ${{ secrets.PATNEST_AMAP_ANDROID_KEY }}
+        run: |
+          set -euo pipefail
+          API="${API_BASE:-http://127.0.0.1:9200/api/v1}"
+          printf 'PATNEST_API_BASE=%s\nPATNEST_AMAP_ANDROID_KEY=%s\n' "$API" "${AMAP_KEY:-}" > .env
+          echo "API_BASE=$API"
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PATNEST_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${KEYSTORE_BASE64:-}" ]]; then
+            echo "::error::缺少 Secrets.PATNEST_KEYSTORE_BASE64，release 构建无法签名"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/patnest_release.jks"
+          echo "PATNEST_RELEASE_KEYSTORE=$RUNNER_TEMP/patnest_release.jks" >> "$GITHUB_ENV"
+
+      - name: Assemble release
+        working-directory: app/patnestApp
+        env:
+          PATNEST_RELEASE_STORE_PASSWORD: ${{ secrets.PATNEST_STORE_PASSWORD }}
+          PATNEST_RELEASE_KEY_PASSWORD: ${{ secrets.PATNEST_KEY_PASSWORD }}
+          PATNEST_RELEASE_KEY_ALIAS: ${{ secrets.PATNEST_KEY_ALIAS }}
+        run: ./gradlew :androidApp:assembleRelease --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patnest-android-apk
+          path: app/patnestApp/androidApp/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # 桌面端安装包：jpackage 只能打当前系统的格式，所以三个系统各跑一份
+  desktop:
+    name: 桌面端（${{ matrix.format }}）
+    if: github.event_name != 'workflow_dispatch' || inputs.upload_desktop
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            task: packageDeb
+            format: deb
+            glob: "*.deb"
+          - os: windows-latest
+            task: packageMsi
+            format: msi
+            glob: "*.msi"
+          - os: macos-latest
+            task: packageDmg
+            format: dmg
+            glob: "*.dmg"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      - name: Package
+        working-directory: app/patnestApp
+        shell: bash
+        run: ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patnest-desktop-${{ matrix.format }}
+          path: app/patnestApp/desktopApp/build/compose/binaries/main/${{ matrix.format }}/${{ matrix.glob }}
+          if-no-files-found: error
+          retention-days: 14

@@ -56,10 +56,10 @@
 
 		<!-- 价格筛选 -->
 		<view class="price-filter">
-			<input class="price-input" type="digit" v-model="priceMin" placeholder="最低价" placeholder-class="ph" @confirm="reload" />
+			<input class="price-input" type="digit" v-model="priceMin" placeholder="最低价" placeholder-class="ph" @confirm="applyPriceFilter" />
 			<text class="price-sep">—</text>
-			<input class="price-input" type="digit" v-model="priceMax" placeholder="最高价" placeholder-class="ph" @confirm="reload" />
-			<view class="apply-btn" @click="reload">筛选</view>
+			<input class="price-input" type="digit" v-model="priceMax" placeholder="最高价" placeholder-class="ph" @confirm="applyPriceFilter" />
+			<view class="apply-btn" @click="applyPriceFilter">筛选</view>
 		</view>
 
 		<!-- 访客提示（机构浏览公开，登录后才能下单） -->
@@ -312,12 +312,26 @@
 			},
 			setType(t) {
 				this.params.type = t
+				// 退出搜索态时同时清掉关键词，避免「输入框还显示关键词、结果是全量」的误导
 				this.searchMode = false
+				this.keyword = ''
 				this.reload()
+			},
+			// 价格筛选 / 排序都走这个入口：/sitters/search 只接受 q，带不了任何筛选参数，
+			// 停留在搜索态会让价格、排序、地区全部静默失效。
+			applyPriceFilter() {
+				this.exitSearch()
+				this.reload()
+			},
+			exitSearch() {
+				if (!this.searchMode) return
+				this.searchMode = false
+				this.keyword = ''
 			},
 			setSort(s) {
 				this.params.sort = s
 				this.showSort = false
+				this.exitSearch()
 				// 选「离我最近」但还没定位时，先要一次定位授权
 				if (s === 'distance' && !this.loc) {
 					this.requestLocation()
@@ -423,10 +437,14 @@
 	.nb-loc {
 		display: flex;
 		align-items: center;
-		max-width: 260rpx;
+		/* 左右两侧等宽，标题才是真正居中；240rpx ≈ 120px，足够让开微信胶囊（约 87px） */
+		width: 240rpx;
+		max-width: 240rpx;
 		padding: 6rpx 14rpx 6rpx 10rpx;
 		background: rgba(255, 255, 255, 0.18);
 		border-radius: 999rpx;
+		flex-shrink: 0;
+		box-sizing: border-box;
 	}
 	.nb-loc-icon {
 		width: 28rpx;
@@ -458,9 +476,9 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	/* 右侧留出微信胶囊按钮的位置 */
+	/* 右侧留出微信胶囊按钮的位置：与左侧城市块等宽，标题不会随城市名长度漂移 */
 	.nb-capsule {
-		width: 150rpx;
+		width: 240rpx;
 		flex-shrink: 0;
 	}
 	.sort-btn .arrow {

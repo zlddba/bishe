@@ -320,6 +320,18 @@ export const walletApi = {
 }
 
 // ---------------------------------------------------------------------------
+// 邀请码（迁移 0022，GET /pet-owner/invite）
+// ---------------------------------------------------------------------------
+export const inviteApi = {
+	// 我的邀请码与邀请统计：
+	// { invite_code, invited_by, invited_count, rewarded_count,
+	//   points_per_invite, my_reward: { granted, order_id } }
+	my() {
+		return http.get('/pet-owner/invite')
+	}
+}
+
+// ---------------------------------------------------------------------------
 // 钱包（真实货币，docs/03 §13；与「积分（虚拟）」是两套体系）
 // ---------------------------------------------------------------------------
 export const moneyApi = {
@@ -422,7 +434,9 @@ export const geoApi = {
 // ---------------------------------------------------------------------------
 export const uploadApi = {
 	// 上传图片到 MinIO，返回 { url, key, size, name }
-	image(filePath) {
+	// access_token 只有 30 分钟，上传走的是 uni.uploadFile 而非 request.js，
+	// 不接刷新逻辑的话，挂机半小时后选图会永久失败（只能退出重登）。
+	image(filePath, retried = false) {
 		return new Promise((resolve, reject) => {
 			const token = uni.getStorageSync('patnest_access_token')
 			uni.uploadFile({
@@ -430,7 +444,25 @@ export const uploadApi = {
 				filePath,
 				name: 'file',
 				header: token ? { Authorization: 'Bearer ' + token } : {},
-				success: (res) => {
+				success: async (res) => {
+					// 令牌过期：刷新一次后重传（只重试一次，避免死循环）
+					if (res.statusCode === 401 && !retried) {
+						let newToken = null
+						try {
+							newToken = await http.refresh()
+						} catch (e) {
+							newToken = null
+						}
+						if (newToken) {
+							try {
+								return resolve(await uploadApi.image(filePath, true))
+							} catch (e) {
+								return reject(e)
+							}
+						}
+						uni.showToast({ title: '登录已失效，请重新登录', icon: 'none' })
+						return reject({ code: 20001, message: '登录已失效' })
+					}
 					try {
 						const body = JSON.parse(res.data)
 						if (body && body.code === 0) {

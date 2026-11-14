@@ -16,9 +16,13 @@ type User struct {
 	Status         int16      `json:"status"`
 	LoginFailCount int16      `json:"-"`
 	LockedUntil    *time.Time `json:"-"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      *time.Time `json:"-"`
+	// 两步验证（0023）：只在登录校验内部使用，绝不跟随用户对象出站
+	TotpEnabled  bool       `json:"-"`
+	TotpSecret   string     `json:"-"`
+	TotpLastStep int64      `json:"-"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"-"`
 }
 
 type RegisterRequest struct {
@@ -29,6 +33,8 @@ type RegisterRequest struct {
 	// Phone 注册必填：手机号是登录标识、找回账号与订单/寄养提醒的唯一可靠联系方式。
 	// 这里不加 binding:"required"，由 handler 统一给出「请填写手机号」这类可读提示。
 	Phone string `json:"phone"`
+	// InviteCode 选填：好友的邀请码，注册时绑定邀请关系（0022）。
+	InviteCode string `json:"invite_code" binding:"omitempty,max=16"`
 }
 
 type LoginRequest struct {
@@ -37,6 +43,16 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 	// Client 标识登录来源：app=桌面/手机客户端（不允许管理员），留空视为管理后台。
 	Client string `json:"client"`
+	// TotpCode 两步验证口令（选填）。正常流程是密码通过后拿 totp_ticket 再调
+	// /auth/login/totp；只有在 Redis 不可用、票据无处安放时才走这个「一步到位」的分支。
+	TotpCode string `json:"totp_code"`
+}
+
+// TotpLoginRequest 是两步验证第二步的请求体。
+type TotpLoginRequest struct {
+	Ticket string `json:"ticket" binding:"required"`
+	// Code 可以是 6 位动态口令，也可以是 10 位恢复码（XXXXX-XXXXX）。
+	Code string `json:"code" binding:"required"`
 }
 
 type AuthResponse struct {
@@ -53,6 +69,18 @@ type AuthResponse struct {
 	Client string `json:"client,omitempty"`
 	// ClientPlatform windows / macos / linux / android / ios / wechat / unknown
 	ClientPlatform string `json:"client_platform,omitempty"`
+	// TotpRequired 密码已通过但账号启用了两步验证：此时不下发令牌，
+	// 客户端要拿着 TotpTicket 再调 /auth/login/totp 提交动态口令。
+	TotpRequired bool `json:"totp_required,omitempty"`
+	// TotpTicket 一次性挑战票据（5 分钟有效，用后即焚）。
+	TotpTicket string `json:"totp_ticket,omitempty"`
+}
+
+func (u User) NicknameValue() string {
+	if u.Nickname == nil {
+		return ""
+	}
+	return *u.Nickname
 }
 
 type UserPublic struct {

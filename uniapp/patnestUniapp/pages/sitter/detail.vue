@@ -179,6 +179,7 @@
 				addons: [],
 				capacity: [],
 				favorited: false,
+				favBusy: false,
 				loading: false,
 				// 加载失败时的错误信息（null = 正常）
 				loadError: null,
@@ -361,6 +362,10 @@
 			},
 			async toggleFav() {
 				if (!isLoggedIn()) return this.goLogin()
+				// 收藏按钮连点会同时发出 add / remove，两个请求返回顺序不定，
+				// 最终界面状态可能和后端相反
+				if (this.favBusy) return
+				this.favBusy = true
 				try {
 					if (this.favorited) {
 						await favoriteApi.remove(this.id)
@@ -371,7 +376,12 @@
 						this.favorited = true
 						uni.showToast({ title: '已收藏', icon: 'success' })
 					}
-				} catch (e) {}
+				} catch (e) {
+					// 失败时回滚，避免界面显示成功而后端没变
+					this.favorited = !this.favorited
+				} finally {
+					this.favBusy = false
+				}
 			},
 			goBook() {
 				if (!isLoggedIn()) return this.goLogin()

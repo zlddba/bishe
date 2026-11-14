@@ -104,6 +104,8 @@ export default request
 
 export const authApi = {
   login: (data) => request.post('/auth/login', data),
+  // 两步验证第二步：密码通过后拿 totp_ticket + 6 位口令换令牌
+  loginTotp: (data) => request.post('/auth/login/totp', data),
   logout: (config) => request.post('/auth/logout', null, config),
   getProfile: () => request.get('/auth/me'),
 }
@@ -158,6 +160,21 @@ export const adminApi = {
   removeTLS: () => request.delete('/admin/system/tls'),
   // 后端自己的端口是否同时接受 HTTPS（页面开关，切换即时生效）
   setBackendTLS: (data) => request.post('/admin/system/tls/backend', data),
+  // Let's Encrypt：镜像内置 acme.sh，走 DNS-01（Cloudflare）验证，不占用 80 端口。
+  // 签发正常 10~30 秒，超时给足 5 分钟（后端 acme.sh 的执行上限也是 5 分钟）。
+  getACME: () => request.get('/admin/system/acme'),
+  issueACME: (data) => request.post('/admin/system/acme/issue', data, { timeout: 5 * 60 * 1000 }),
+  renewACME: (data) => request.post('/admin/system/acme/renew', data, { timeout: 5 * 60 * 1000 }),
+  updateACMESettings: (data) => request.post('/admin/system/acme/settings', data),
+  checkACME: (data) => request.post('/admin/system/acme/check', data),
+  // 两步验证（TOTP）：绑定 / 启用 / 关闭 / 重发恢复码，都是给自己账号用的
+  getTotp: () => request.get('/admin/security/totp'),
+  setupTotp: () => request.post('/admin/security/totp/setup'),
+  enableTotp: (data) => request.post('/admin/security/totp/enable', data),
+  disableTotp: (data) => request.post('/admin/security/totp/disable', data),
+  regenerateRecoveryCodes: (data) => request.post('/admin/security/totp/recovery-codes', data),
+  // 超级管理员帮别人重置（换手机、验证器丢了、恢复码也用完）
+  resetUserTotp: (id) => request.post(`/admin/users/${id}/totp/reset`),
   getUpdates: () => request.get('/admin/updates'),
   scanUpdates: () => request.post('/admin/updates/scan'),
   uploadUpdate: (file, onUploadProgress) => {

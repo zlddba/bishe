@@ -16,7 +16,7 @@
 // 是 https 就必须换成 https://（证书域名要和这里对得上，自签证书要先装进信任库）。
 // ---------------------------------------------------------------------------
 // export const API_BASE_URL = 'http://192.168.3.100:9200/api/v1'
-export const API_BASE_URL = 'http://10.109.248.94:9200/api/v1'
+export const API_BASE_URL = 'https://www.linkzdsada.dpdns.org:9200/api/v1'
 
 // 统一响应中业务成功码（handler/response.go:16）
 export const SUCCESS_CODE = 0

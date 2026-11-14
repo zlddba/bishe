@@ -121,6 +121,10 @@ func main() {
 	log.Println("[Worker] Account cancel worker started (1m scan, 72h cooling).")
 	handler.StartAuditCleanupWorker(workerCtx, 24*time.Hour)
 	log.Println("[Worker] Audit log cleanup worker started (daily, 180d retention).")
+	// Let's Encrypt 自动续期：每 12 小时看一次，剩余天数小于阈值才真正调用 acme.sh。
+	// 手工上传的证书不归它管（见 renewACMECert 里的 LetsEncrypt 判断）。
+	handler.StartACMERenewWorker(workerCtx, 12*time.Hour)
+	log.Println("[Worker] ACME renew worker started (12h scan).")
 
 	// --- Start HTTP Server ---
 	addr := fmt.Sprintf(":%d", cfg.AppPort)

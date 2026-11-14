@@ -38,18 +38,77 @@ if [[ "${PATNEST_AGENT_CONTAINER:-0}" == "1" ]]; then
     exit 1
   fi
   ENGINE=docker
-elif command -v podman-compose >/dev/null 2>&1; then
-  COMPOSE=(podman-compose)
-  ENGINE=podman
-elif command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then
-  COMPOSE=(podman compose)
-  ENGINE=podman
-elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  COMPOSE=(docker compose)
-  ENGINE=docker
 else
-  echo "no usable compose command (podman-compose / podman compose / docker compose)" >&2
-  exit 1
+  # Engine selection on the host. Priority: --engine / PATNEST_ENGINE env var /
+  # PATNEST_ENGINE in .env / auto. Auto means docker first, podman as fallback,
+  # and a hard error when neither is usable. The update-agent container keeps
+  # its own docker CLI branch above because it talks to the mounted socket.
+  requested="${PATNEST_ENGINE:-}"
+  if [[ -z "$requested" && -f .env ]]; then
+    requested="$(sed -n 's/^PATNEST_ENGINE=//p' .env 2>/dev/null | head -n1 | tr -d '\r')"
+  fi
+  requested="$(printf '%s' "${requested:-auto}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+
+  use_docker() {
+    command -v docker >/dev/null 2>&1 || return 1
+    docker compose version >/dev/null 2>&1 || return 1
+    docker info >/dev/null 2>&1 || return 1
+    COMPOSE=(docker compose)
+    ENGINE=docker
+    return 0
+  }
+
+  use_podman() {
+    if command -v podman >/dev/null 2>&1 &&
+       podman compose version >/dev/null 2>&1 &&
+       podman info >/dev/null 2>&1; then
+      COMPOSE=(podman compose)
+      ENGINE=podman
+      return 0
+    fi
+    if command -v podman-compose >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+      COMPOSE=(podman-compose)
+      ENGINE=podman
+      return 0
+    fi
+    return 1
+  }
+
+  case "$requested" in
+    docker)
+      use_docker || {
+        echo "[engine] docker requested but not usable (need docker CLI, compose plugin and a running daemon)" >&2
+        exit 1
+      }
+      ;;
+    podman)
+      use_podman || {
+        echo "[engine] podman requested but not usable (need podman compose or podman-compose plus podman info)" >&2
+        exit 1
+      }
+      ;;
+    auto)
+      if use_docker; then
+        :
+      elif use_podman; then
+        echo "[engine] docker not available, using podman" >&2
+      else
+        echo "[engine] neither docker nor podman is usable; install one and retry" >&2
+        if command -v docker >/dev/null 2>&1 && ! docker info >/dev/null 2>&1; then
+          echo "  docker CLI found but the daemon is not running; start Docker and retry." >&2
+        fi
+        if command -v podman >/dev/null 2>&1 && ! podman info >/dev/null 2>&1; then
+          echo "  podman found but 'podman info' failed; check the socket and permissions." >&2
+        fi
+        exit 1
+      fi
+      ;;
+    *)
+      echo "[engine] unknown engine '$requested' (use docker, podman or auto)" >&2
+      exit 1
+      ;;
+  esac
+  echo "[engine] using $ENGINE (${COMPOSE[*]})" >&2
 fi
 
 env_value() {

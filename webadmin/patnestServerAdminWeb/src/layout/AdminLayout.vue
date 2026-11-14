@@ -62,6 +62,9 @@
         <div class="nav-item" :class="{active: route.path==='/updates'}" @click="go('/updates')">
           <el-icon><UploadFilled /></el-icon>系统更新
         </div>
+        <div class="nav-item" :class="{active: route.path==='/security'}" @click="go('/security')">
+          <el-icon><Key /></el-icon>账号安全
+        </div>
       </nav>
       <div class="side-foot">
         <div class="side-user">
@@ -113,7 +116,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppVersion } from '@/composables/useAppVersion'
-import { Odometer, Shop, Document, Star, Picture, ChatDotRound, User, Notebook, UploadFilled, SwitchButton, Search, Bell, Refresh, CircleCheck, PriceTag, MessageBox, Promotion, Service, Wallet, Lock } from '@element-plus/icons-vue'
+import { Odometer, Shop, Document, Star, Picture, ChatDotRound, User, Notebook, UploadFilled, SwitchButton, Search, Bell, Refresh, CircleCheck, PriceTag, MessageBox, Promotion, Service, Wallet, Lock, Key } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

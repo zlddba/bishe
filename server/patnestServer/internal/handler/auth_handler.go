@@ -36,6 +36,7 @@ func Register(c *gin.Context) {
 	// binding:"required" 只能拦住缺失或空串，纯空格的输入要在这里再拦一次。
 	req.Phone = strings.TrimSpace(req.Phone)
 	req.Username = strings.TrimSpace(req.Username)
+	req.InviteCode = strings.ToUpper(strings.TrimSpace(req.InviteCode))
 	if req.Phone == "" {
 		BadRequest(c, "请填写手机号")
 		return
@@ -64,6 +65,26 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// 邀请码选填：非空必须能查到邀请人，无效直接拒绝而不是静默忽略，
+	// 否则用户以为填了、实际没绑定，首单完成后才发现没奖励。
+	// inviterID 为 nil 时 INSERT 写 NULL；邀请码由数据库触发器生成，
+	// 客户端不能自己指定（见 fn_set_invite_code）。
+	var inviterID interface{}
+	if req.InviteCode != "" {
+		if !validInviteCodeFormat(req.InviteCode) {
+			BadRequest(c, "邀请码格式不正确")
+			return
+		}
+		var id int64
+		if err := db.Pool.QueryRow(context.Background(),
+			"SELECT id FROM users WHERE invite_code = $1 AND deleted_at IS NULL",
+			req.InviteCode).Scan(&id); err != nil {
+			BadRequest(c, "邀请码无效")
+			return
+		}
+		inviterID = id
+	}
+
 	if req.Role == "admin" {
 		Forbidden(c, "不允许注册管理员账号")
 		return
@@ -90,10 +111,10 @@ func Register(c *gin.Context) {
 
 	var user model.User
 	err = db.Pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash, nickname, phone, role)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO users (username, password_hash, nickname, phone, role, invited_by)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, username, nickname, role, created_at, updated_at`,
-		req.Username, string(hash), nilIfEmpty(req.Nickname), nilIfEmpty(req.Phone), req.Role,
+		req.Username, string(hash), nilIfEmpty(req.Nickname), nilIfEmpty(req.Phone), req.Role, inviterID,
 	).Scan(&user.ID, &user.Username, &user.Nickname, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		InternalError(c, "创建用户失败")
@@ -164,14 +185,16 @@ func Login(c *gin.Context) {
 	// 极端情况下某个账号的 username 恰好等于另一个账号的 phone，
 	// 用 ORDER BY 让「用户名精确命中」优先，避免查询结果随执行计划漂移。
 	err := db.Pool.QueryRow(context.Background(),
-		`SELECT id, username, password_hash, nickname, phone, role, status, login_fail_count, locked_until
+		`SELECT id, username, password_hash, nickname, phone, role, status, login_fail_count, locked_until,
+		        totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_last_step, 0)
 		 FROM users
 		 WHERE deleted_at IS NULL AND (username = $1 OR phone = $1)
 		 ORDER BY (username = $1) DESC, id ASC
 		 LIMIT 1`,
 		loginAccount,
 	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Nickname, &user.Phone, &user.Role,
-		&user.Status, &user.LoginFailCount, &user.LockedUntil)
+		&user.Status, &user.LoginFailCount, &user.LockedUntil,
+		&user.TotpEnabled, &user.TotpSecret, &user.TotpLastStep)
 
 	if err != nil {
 		cache.RecordLoginFailure(limitKey)
@@ -209,6 +232,51 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// 两步验证（0023）：管理员启用了 TOTP 时，密码正确也先不下发令牌，
+	// 只给一张 5 分钟的一次性票据，等 /auth/login/totp 校验过动态口令再换令牌。
+	// 这里特意不重置失败计数——密码对了，但第二因子还没过，账号不算真正登录。
+	if user.Role == "admin" && user.TotpEnabled && user.TotpSecret != "" {
+		// 没有 Redis 时票据无处安放：此时允许把口令一并放在本次请求里直接校验，
+		// 避免「启用了两步验证 + Redis 故障 = 永远进不去后台」。
+		if code := strings.TrimSpace(req.TotpCode); code != "" {
+			ok, _ := checkSecondFactor(context.Background(), user.ID, user.TotpSecret, user.TotpLastStep, code)
+			if !ok {
+				incrementLoginFail(user.ID, user.LoginFailCount)
+				cache.RecordLoginFailure(limitKey)
+				Unauthorized(c, "动态验证码不正确")
+				return
+			}
+			resetLoginFail(user.ID)
+			cache.ClearLoginFailure(limitKey)
+			finishLogin(c, user, req.Client)
+			return
+		}
+
+		ticket, err := issueTotpTicket(user.ID, user.Username)
+		if err != nil {
+			InternalError(c, "两步验证服务暂不可用，请稍后重试")
+			return
+		}
+		OK(c, model.AuthResponse{
+			User: model.UserPublic{
+				ID:       user.ID,
+				Username: user.Username,
+				Nickname: user.NicknameValue(),
+				Role:     user.Role,
+			},
+			TotpRequired: true,
+			TotpTicket:   ticket,
+		})
+		return
+	}
+
+	finishLogin(c, user, req.Client)
+}
+
+// finishLogin 是密码（及两步验证）都通过之后的收尾：撤销注销申请、轮换管理员会话、
+// 签发令牌并返回。保留成独立函数是为了让「密码登录」与「TOTP 二次校验」两条路径
+// 签发完全一致的响应，不会因为分支而漏掉单会话轮换之类的小动作。
+func finishLogin(c *gin.Context, user model.User, clientTag string) {
 	// 冷静期内登录即撤销注销申请（"在冷静期中还登录则不会删除账号"）
 	cancelWithdrawn := withdrawCancelOnLogin(context.Background(), user.ID, c.ClientIP())
 
@@ -235,14 +303,10 @@ func Login(c *gin.Context) {
 	storeRefreshToken(user.ID, refreshToken)
 
 	// 客户端识别：显式 client 字段优先，其次按 UA 推断；结果写 Redis 供后续请求/排查使用
-	client := clientinfo.Detect(req.Client, c.Request.UserAgent(), user.Role)
+	client := clientinfo.Detect(clientTag, c.Request.UserAgent(), user.Role)
 	client.IP = c.ClientIP()
 	saveClientSession(accessToken, refreshToken, user.ID, client)
 
-	nickname := ""
-	if user.Nickname != nil {
-		nickname = *user.Nickname
-	}
 	phone, phoneBound := "", false
 	if user.Phone != nil && strings.TrimSpace(*user.Phone) != "" {
 		phone, phoneBound = strings.TrimSpace(*user.Phone), true
@@ -252,7 +316,7 @@ func Login(c *gin.Context) {
 		User: model.UserPublic{
 			ID:         user.ID,
 			Username:   user.Username,
-			Nickname:   nickname,
+			Nickname:   user.NicknameValue(),
 			Role:       user.Role,
 			Phone:      phone,
 			PhoneBound: phoneBound,
@@ -266,6 +330,74 @@ func Login(c *gin.Context) {
 		Client:          client.Client,
 		ClientPlatform:  client.Platform,
 	})
+}
+
+// LoginTOTP handles POST /api/v1/auth/login/totp
+// 拿登录时下发的票据 + 6 位动态口令（或一枚恢复码）换正式令牌。
+func LoginTOTP(c *gin.Context) {
+	var req model.TotpLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "请求参数无效: "+err.Error())
+		return
+	}
+	req.Ticket = strings.TrimSpace(req.Ticket)
+	req.Code = strings.TrimSpace(req.Code)
+
+	challenge := verifyTotpTicket(req.Ticket)
+	if challenge == nil {
+		Unauthorized(c, "验证已过期，请重新输入账号密码登录")
+		return
+	}
+
+	// 票据本身不设失败计数就会被拿来当口令爆破的入口，这里 5 次即作废。
+	if totpAttemptExceeded(req.Ticket) {
+		Unauthorized(c, "验证码错误次数过多，请重新登录")
+		return
+	}
+
+	var user model.User
+	err := db.Pool.QueryRow(context.Background(),
+		`SELECT id, username, password_hash, nickname, phone, role, status, login_fail_count, locked_until,
+		        totp_enabled, COALESCE(totp_secret, ''), COALESCE(totp_last_step, 0)
+		 FROM users WHERE id = $1 AND deleted_at IS NULL`, challenge.UserID,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Nickname, &user.Phone, &user.Role,
+		&user.Status, &user.LoginFailCount, &user.LockedUntil,
+		&user.TotpEnabled, &user.TotpSecret, &user.TotpLastStep)
+	if err != nil {
+		Unauthorized(c, "账号状态已变化，请重新登录")
+		return
+	}
+	if user.Status == 0 {
+		Forbidden(c, "账号已被禁用")
+		return
+	}
+	// 票据有效期内账号可能被后台关掉了两步验证，此时直接放行（等价于只验密码）。
+	if !user.TotpEnabled || user.TotpSecret == "" {
+		consumeTotpTicket(req.Ticket)
+		user.Role = middleware.EffectiveRole(user.ID, user.Role)
+		finishLogin(c, user, "")
+		return
+	}
+
+	ok, usedRecovery := checkSecondFactor(context.Background(), user.ID, user.TotpSecret, user.TotpLastStep, req.Code)
+	if !ok {
+		// 第二因子错误也计入该账号的登录失败次数，连续猜错会触发临时锁定。
+		incrementLoginFail(user.ID, user.LoginFailCount)
+		cache.RecordLoginFailure(cache.LoginLimitKey(c.ClientIP(), user.Username))
+		Unauthorized(c, "验证码不正确")
+		return
+	}
+
+	// 校验通过：票据立刻作废，一票一用。
+	consumeTotpTicket(req.Ticket)
+	resetLoginFail(user.ID)
+	cache.ClearLoginFailure(cache.LoginLimitKey(c.ClientIP(), user.Username))
+	user.Role = middleware.EffectiveRole(user.ID, user.Role)
+
+	if usedRecovery {
+		writeAudit(c, "auth.totp_recovery_login", "user", user.ID, `{"factor":"recovery_code"}`)
+	}
+	finishLogin(c, user, "")
 }
 
 // Refresh handles POST /api/v1/auth/refresh

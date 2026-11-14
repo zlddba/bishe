@@ -47,7 +47,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="注册时间" min-width="160" />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <template v-if="row.deleted_at">
               <el-button
@@ -61,6 +61,11 @@
             <template v-else>
               <el-button size="small" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" @click="openReset(row)">重置密码</el-button>
+              <el-button
+                v-if="canResetTotp(row)"
+                size="small"
+                @click="handleResetTotp(row)"
+              >重置两步验证</el-button>
               <el-button
                 v-if="canDelete(row)"
                 type="danger"
@@ -253,6 +258,30 @@ function canDelete(row) {
   if (row.id === currentUserId.value) return false
   if (row.username === 'admin') return false
   return true
+}
+
+// 只有内置超级管理员能重置别人的两步验证（换手机、验证器丢了、恢复码也用完）。
+// 自己给自己重置没意义，直接用「账号安全」页的关闭流程。
+function canResetTotp(row) {
+  return auth.username === 'admin' && row.role === 'admin' && row.id !== currentUserId.value
+}
+
+async function handleResetTotp(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认重置管理员「${row.username}」的两步验证吗？重置后该账号仅凭密码即可登录后台，需要对方重新绑定验证器。`,
+      '重置两步验证',
+      { type: 'warning', confirmButtonText: '确认重置' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await adminApi.resetUserTotp(row.id)
+    ElMessage.success('已重置该账号的两步验证')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '重置失败')
+  }
 }
 
 async function loadData() {

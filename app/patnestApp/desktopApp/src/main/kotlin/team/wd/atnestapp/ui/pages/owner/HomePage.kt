@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import team.wd.atnestapp.utils.formatScore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,7 +105,7 @@ fun HomePage(app: AppState) {
                 )
                 StatCard(
                     "平均评分",
-                    if (avgScore <= 0.0) "—" else ((avgScore * 10).toInt() / 10.0).toString(),
+                    if (avgScore <= 0.0) "—" else formatScore(avgScore),
                     "分", "来自在架机构评分",
                     modifier = Modifier.weight(1f), icon = AppIcon.Star,
                 )

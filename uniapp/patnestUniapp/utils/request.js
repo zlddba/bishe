@@ -217,5 +217,7 @@ export default {
 		return request({ url, method: 'DELETE', data, ...opts })
 	},
 	// 原始请求（用于上传、blob 下载等需要自定义处理返回体的场景）
-	raw: rawRequest
+	raw: rawRequest,
+	// 主动刷新 access_token（上传等绕过 request 的场景复用同一套刷新逻辑）
+	refresh: doRefresh
 }

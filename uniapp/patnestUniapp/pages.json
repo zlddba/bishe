@@ -199,6 +199,14 @@
 			}
 		},
 		{
+			"path": "pages/mine/invite",
+			"style": {
+				"navigationBarTitleText": "邀请有礼",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
 			"path": "pages/mine/profile",
 			"style": {
 				"navigationBarTitleText": "编辑资料",

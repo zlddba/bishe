@@ -103,11 +103,16 @@ export function calcEstimate(o) {
 		}
 	}
 
-	// 积分抵扣（后端会自动截断到「余额 × 100」）
+	// 积分抵扣（100 积分 = 1 元）
+	// 可抵扣上限同时受两个条件约束（与 order_pricing.go:205-221 同口径）：
+	//   ① 积分余额（单位：积分，不能再乘兑换率）
+	//   ② 优惠后剩余应付金额 × 兑换率
 	let pointsUsed = Math.max(0, Math.floor(Number(opt.pointsUsed) || 0))
 	let pointsDiscount = 0
 	if (pointsUsed > 0) {
-		const maxPoints = Math.floor((Number(opt.pointsBalance) || 0) * opt.pointsRate)
+		const remaining = Math.max(0, subtotal - discountAmount)
+		const balancePoints = Math.floor(Number(opt.pointsBalance) || 0)
+		const maxPoints = Math.min(balancePoints, Math.floor(remaining * opt.pointsRate))
 		if (pointsUsed > maxPoints) pointsUsed = maxPoints
 		pointsDiscount = pointsUsed / opt.pointsRate
 	}

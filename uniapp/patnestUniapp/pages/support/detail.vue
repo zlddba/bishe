@@ -52,8 +52,8 @@
 			}
 		},
 		onLoad(options) {
+			// 只记 id，加载交给 onShow（onLoad 后紧跟 onShow，两边都调会首屏打两次同样的请求）
 			this.id = options.id
-			this.load()
 		},
 		onShow() {
 			if (this.id) this.load()

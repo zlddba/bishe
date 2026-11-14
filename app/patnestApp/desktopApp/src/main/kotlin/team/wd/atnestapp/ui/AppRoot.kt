@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui
 
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +60,7 @@ import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.GeoPickPayload
 import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.EstimateDto
+import team.wd.atnestapp.data.api.InviteDto
 import team.wd.atnestapp.data.api.PointsEntryDto
 import team.wd.atnestapp.data.api.RefundDto
 import team.wd.atnestapp.data.api.PetStayDto
@@ -183,9 +185,9 @@ sealed interface ModalKind {
         val endDate: String,
     ) : ModalKind
     /** 续住：只能往后延，且订单必须已支付 */
-    data class Renew(val orderId: Long, val orderNo: String, val endDate: String, val amount: Int) : ModalKind
+    data class Renew(val orderId: Long, val orderNo: String, val endDate: String, val amount: Double) : ModalKind
     /** 申请退款：进入平台审核 */
-    data class Refund(val orderId: Long, val orderNo: String, val amount: Int) : ModalKind
+    data class Refund(val orderId: Long, val orderNo: String, val amount: Double) : ModalKind
     /** 联系客服：提交售后工单 */
     data object Ticket : ModalKind
 }
@@ -234,10 +236,17 @@ class AppState {
     var pets by mutableStateOf<List<Pet>>(emptyList())
     var petsLoading by mutableStateOf(false)
     var petsError by mutableStateOf<String?>(null)
+    var petsHasMore by mutableStateOf(false)
+    var petsLoadingMore by mutableStateOf(false)
+    private var petsPage = 0
 
     var orders by mutableStateOf<List<Order>>(emptyList())
     var ordersLoading by mutableStateOf(false)
     var ordersError by mutableStateOf<String?>(null)
+    /** 订单分页：后端 per_page 上限 50，超过要翻页 */
+    var ordersHasMore by mutableStateOf(false)
+    var ordersLoadingMore by mutableStateOf(false)
+    private var ordersPage = 0
 
     var favorites by mutableStateOf<List<Sitter>>(emptyList())
     var favoritesLoading by mutableStateOf(false)
@@ -268,6 +277,9 @@ class AppState {
     var receivedOrders by mutableStateOf<List<SbOrder>>(emptyList())
     var receivedOrdersLoading by mutableStateOf(false)
     var receivedOrdersError by mutableStateOf<String?>(null)
+    var receivedOrdersHasMore by mutableStateOf(false)
+    var receivedOrdersLoadingMore by mutableStateOf(false)
+    private var receivedOrdersPage = 0
 
     var capacityItems by mutableStateOf<List<CapacityItemDto>>(emptyList())
     var capacityLoading by mutableStateOf(false)
@@ -326,6 +338,9 @@ class AppState {
     var pointsBalance by mutableStateOf(0)
     var pointsHistory by mutableStateOf<List<PointsEntryDto>>(emptyList())
 
+    // 邀请码与邀请统计（迁移 0022）
+    var inviteInfo by mutableStateOf<InviteDto?>(null)
+
     // 钱包（真实货币）：概览、余额、流水、加载/错误态
     var wallet by mutableStateOf<WalletDto?>(null)
     var walletBalance by mutableStateOf(0.0)
@@ -377,11 +392,11 @@ class AppState {
         }
     }
 
-    suspend fun register(loginAccount: String, password: String, phone: String) {
+    suspend fun register(loginAccount: String, password: String, phone: String, inviteCode: String = "") {
         authBusy = true
         try {
             // 昵称默认沿用账号名，登录后可在"个人中心 → 我的资料"修改
-            applyAuth(api.register(loginAccount, password, loginAccount, phone))
+            applyAuth(api.register(loginAccount, password, loginAccount, phone, inviteCode.trim()))
         } catch (e: Exception) {
             toast(e.message ?: "注册失败")
         } finally {
@@ -409,7 +424,12 @@ class AppState {
         nickname = me.nickname?.takeIf { it.isNotBlank() } ?: account
         accountRole = me.role
         isSitterAccount = me.role == "sitter"
-        role = AppRole.Owner
+        // 回到上次用的工作台（与 Android 端一致），机构账号不用每次重登都手动切
+        role = if (isSitterAccount && sessionStore.current.activeRole == "sitter") {
+            AppRole.Sitter
+        } else {
+            AppRole.Owner
+        }
         loggedIn = true
         loginVisible = false
         // 落盘：下次启动直接进登录态（令牌 + 账号快照，昵称/角色变了也会被下次 restore 校正）
@@ -424,6 +444,8 @@ class AppState {
         pendingPage = null
         if (target != null) {
             page = target
+        } else if (role == AppRole.Sitter) {
+            page = AppPage.SbDash
         }
         toast(
             if (authResponse.cancelWithdrawn) {
@@ -454,6 +476,7 @@ class AppState {
         nickname = saved.nickname.ifBlank { saved.account }
         accountRole = saved.role
         isSitterAccount = saved.role == "sitter"
+        role = if (isSitterAccount && saved.activeRole == "sitter") AppRole.Sitter else AppRole.Owner
         loggedIn = true
         scope.launch {
             try {
@@ -467,6 +490,11 @@ class AppState {
                 nickname = me.nickname?.takeIf { it.isNotBlank() } ?: account
                 accountRole = me.role
                 isSitterAccount = me.role == "sitter"
+                // 机构资格被收回时不能再停在机构工作台
+                if (!isSitterAccount && role == AppRole.Sitter) {
+                    role = AppRole.Owner
+                    page = AppPage.Home
+                }
                 // 昵称 / 角色可能在服务端改过，把校正后的这一份写回本地
                 sessionStore.saveAuth(
                     token = api.token.orEmpty(),
@@ -599,6 +627,7 @@ class AppState {
         selectedPoints = 0
         pointsBalance = 0
         pointsHistory = emptyList()
+        inviteInfo = null
         wallet = null
         walletBalance = 0.0
         walletTransactions = emptyList()
@@ -667,17 +696,52 @@ class AppState {
         }
     }
 
+    /**
+     * 顶部搜索框。原来 onSearch 只做 go(Sitters)，关键词根本没进查询条件，
+     * 用户输入后看到的还是全量列表（假搜索）。
+     */
+    suspend fun searchSitters() {
+        if (sittersLoading) return
+        val keyword = sitterSearch.trim()
+        sittersLoading = true
+        sittersError = null
+        try {
+            sitters = if (keyword.isEmpty()) api.listSitters() else api.searchSitters(keyword)
+        } catch (e: Exception) {
+            sittersError = e.message ?: "搜索失败"
+        } finally {
+            sittersLoading = false
+        }
+    }
+
     suspend fun loadPets(force: Boolean = false) {
         if (!loggedIn || petsLoading) return
         if (!force && pets.isNotEmpty()) return
         petsLoading = true
         petsError = null
         try {
-            pets = api.listPets()
+            val data = api.listPetsPage(1)
+            pets = data.items
+            petsPage = 1
+            petsHasMore = data.items.size < data.total
         } catch (e: Exception) {
             petsError = e.message ?: "加载宠物失败"
         } finally {
             petsLoading = false
+        }
+    }
+
+    suspend fun loadMorePets() {
+        if (!loggedIn || petsLoading || petsLoadingMore || !petsHasMore) return
+        petsLoadingMore = true
+        try {
+            val data = api.listPetsPage(petsPage + 1)
+            petsPage += 1
+            pets = (pets + data.items).distinctBy { it.id }
+            petsHasMore = pets.size < data.total
+        } catch (_: Exception) {
+        } finally {
+            petsLoadingMore = false
         }
     }
 
@@ -767,11 +831,28 @@ class AppState {
         ordersLoading = true
         ordersError = null
         try {
-            orders = api.listOrders()
+            val data = api.listOrdersPage(1)
+            orders = data.items
+            ordersPage = 1
+            ordersHasMore = data.items.size < data.total
         } catch (e: Exception) {
             ordersError = e.message ?: "加载订单失败"
         } finally {
             ordersLoading = false
+        }
+    }
+
+    suspend fun loadMoreOrders() {
+        if (!loggedIn || ordersLoading || ordersLoadingMore || !ordersHasMore) return
+        ordersLoadingMore = true
+        try {
+            val data = api.listOrdersPage(ordersPage + 1)
+            ordersPage += 1
+            orders = (orders + data.items).distinctBy { it.id }
+            ordersHasMore = orders.size < data.total
+        } catch (_: Exception) {
+        } finally {
+            ordersLoadingMore = false
         }
     }
 
@@ -915,6 +996,16 @@ class AppState {
         }
     }
 
+    /** 邀请码与奖励状态；失败时静默置空，避免个人中心被拖住 */
+    suspend fun loadInvite() {
+        if (!loggedIn) return
+        try {
+            inviteInfo = api.myInvite()
+        } catch (_: Exception) {
+            inviteInfo = null
+        }
+    }
+
     /** 钱包概览与流水；失败时静默归零，避免页面被拖住（与积分一致） */
     suspend fun loadWallet(force: Boolean = false) {
         if (!loggedIn) return
@@ -925,12 +1016,15 @@ class AppState {
             val overview = api.walletOverview()
             wallet = overview
             walletBalance = overview.balance
-            val list = api.walletTransactions(page = 1)
-            walletTransactions = list.items
         } catch (e: Exception) {
-            // 拉不到不阻塞：余额归零，保留错误文案供页面提示
+            // 拉不到不能把余额写成 0：walletBalance 是「余额支付」的判定依据，
+            // 一次网络抖动就会让用户看到 ¥0、支付方式被降级，还以为钱没了。
             walletError = e.message ?: "加载钱包失败"
-            walletBalance = 0.0
+        }
+        try {
+            walletTransactions = api.walletTransactions(page = 1).items
+        } catch (_: Exception) {
+            // 流水失败不影响余额展示
         } finally {
             walletLoading = false
         }
@@ -1162,7 +1256,16 @@ class AppState {
         contactPhone: String,
     ) {
         try {
-            api.updateProfile(UpdateProfilePayload(nicknameInput, phone, address, contactName, contactPhone))
+            // 空字段传 null：后端 COALESCE 只跳过 null，空串会把已有资料清空
+            api.updateProfile(
+                UpdateProfilePayload(
+                    nickname = nicknameInput.trim().ifBlank { null },
+                    phone = phone.trim().ifBlank { null },
+                    address = address.trim().ifBlank { null },
+                    contactName = contactName.trim().ifBlank { null },
+                    contactPhone = contactPhone.trim().ifBlank { null },
+                )
+            )
             nickname = nicknameInput
             profile = api.me()
             toast("资料已保存")
@@ -1606,11 +1709,28 @@ class AppState {
         receivedOrdersLoading = true
         receivedOrdersError = null
         try {
-            receivedOrders = api.listReceivedOrders().map { it.toUiOrder() }
+            val data = api.listReceivedOrdersPage(1)
+            receivedOrders = data.items.map { it.toUiOrder() }
+            receivedOrdersPage = 1
+            receivedOrdersHasMore = data.items.size < data.total
         } catch (e: Exception) {
             receivedOrdersError = e.message ?: "加载订单失败"
         } finally {
             receivedOrdersLoading = false
+        }
+    }
+
+    suspend fun loadMoreReceivedOrders() {
+        if (!loggedIn || receivedOrdersLoading || receivedOrdersLoadingMore || !receivedOrdersHasMore) return
+        receivedOrdersLoadingMore = true
+        try {
+            val data = api.listReceivedOrdersPage(receivedOrdersPage + 1)
+            receivedOrdersPage += 1
+            receivedOrders = (receivedOrders + data.items.map { it.toUiOrder() }).distinctBy { it.id }
+            receivedOrdersHasMore = receivedOrders.size < data.total
+        } catch (_: Exception) {
+        } finally {
+            receivedOrdersLoadingMore = false
         }
     }
 
@@ -1784,6 +1904,8 @@ class AppState {
             return
         }
         role = target
+        // 落盘：冷启动/重新登录时回到用户上次选的工作台
+        sessionStore.setActiveRole(if (target == AppRole.Sitter) "sitter" else "owner")
         page = if (target == AppRole.Owner) AppPage.Home else AppPage.SbDash
         if (target == AppRole.Sitter) {
             scope.launch { loadReceivedOrders() }
@@ -1955,8 +2077,8 @@ fun AppRoot(
                             onLogin = { account, password ->
                                 scope.launch { app.login(account, password) }
                             },
-                            onRegister = { account, password, phone ->
-                                scope.launch { app.register(account, password, phone) }
+                            onRegister = { account, password, phone, inviteCode ->
+                                scope.launch { app.register(account, password, phone, inviteCode) }
                             },
                             onCancel = { app.cancelLogin() },
                             onError = { app.toast(it) },
@@ -2120,7 +2242,7 @@ private fun DrawerBody(app: AppState, kind: DrawerKind) {
                 "寄养区间" to o.range,
                 "天数 / 次数" to o.days,
                 "费用构成" to o.fee,
-                "应付金额" to "¥${o.amount}",
+                "应付金额" to "¥${formatMoney(o.amount)}",
                 "下单时间" to o.made,
                 "订单状态" to o.status,
             ).forEach { (k, v) -> KeyValueRow(k, v) }
@@ -2160,7 +2282,7 @@ private fun DrawerBody(app: AppState, kind: DrawerKind) {
                 "宠物" to o.pet,
                 "寄养区间" to o.range,
                 "天数" to o.days,
-                "费用构成" to "¥${o.amount}",
+                "费用构成" to "¥${formatMoney(o.amount)}",
                 "下单时间" to o.made,
                 "订单状态" to o.status,
             ).forEach { (k, v) -> KeyValueRow(k, v) }
@@ -2834,7 +2956,7 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
             SoftTextField(endText, { endText = it }, Modifier.fillMaxWidth(), placeholder = "YYYY-MM-DD")
             Spacer(Modifier.height(8.dp))
             Text(
-                "订单 ${modal.orderNo} 实付 ¥${modal.amount}，当前结束日期 ${modal.endDate}，新日期必须晚于它。",
+                "订单 ${modal.orderNo} 实付 ¥${formatMoney(modal.amount)}，当前结束日期 ${modal.endDate}，新日期必须晚于它。",
                 color = PatNestColors.Ink3, fontSize = 11.5.sp,
             )
             Spacer(Modifier.height(6.dp))
@@ -2858,7 +2980,7 @@ private fun ModalBody(app: AppState, modal: ModalKind) {
         is ModalKind.Refund -> {
             var reason by remember(modal.orderId) { mutableStateOf("") }
             Text(
-                "订单 ${modal.orderNo} 实付 ¥${modal.amount}，提交后由平台审核，审核通过才退款。",
+                "订单 ${modal.orderNo} 实付 ¥${formatMoney(modal.amount)}，提交后由平台审核，审核通过才退款。",
                 color = PatNestColors.Ink2, fontSize = 13.sp, lineHeight = 20.sp,
             )
             Spacer(Modifier.height(12.dp))
@@ -2964,7 +3086,7 @@ private fun orderStatusLabelOf(status: String) = when (status) {
 }
 
 /** 金额显示：整钱不带小数，避免 ¥156.0 这种观感；不用 String.format 以防跟随系统 locale */
-private fun money(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
+private fun money(v: Double): String = formatMoney(v)
 
 private fun ReceivedOrderDto.toUiOrder(): SbOrder = SbOrder(
     no = orderNo,
@@ -2972,11 +3094,12 @@ private fun ReceivedOrderDto.toUiOrder(): SbOrder = SbOrder(
     pet = if (petCount > 0) "$petCount 只" else "—",
     range = "${shortDay(startDate)} - ${shortDay(endDate)}",
     days = "$totalDays 天",
-    amount = totalAmount.roundToInt(),
+    amount = totalAmount,
     status = sitterStatusLabel(status),
     made = formatCreated(createdAt),
     id = id,
     createdAt = createdAt,
+    rawStatus = status,
 )
 
 private fun sitterStatusLabel(status: String): String = when (status) {

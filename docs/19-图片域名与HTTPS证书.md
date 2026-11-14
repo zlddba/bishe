@@ -97,9 +97,43 @@ CSV 导出、文件下载等非 JSON 响应直接透传，不缓冲。
 ## 三、HTTPS 证书
 
 > **站点只监听 9200，443 已关闭。**
-> HTTPS 由后端进程自己在 9200 上终结——同一个端口同时收 http 和 https。
+> 同一个端口同时收 http 与 https：nginx 用 `stream` + `ssl_preread` 看首字节分流，
+> TLS 交给本机 8443（nginx 终结 TLS），明文交给本机 8080。
+> （早期版本设想让后端进程自己终结 9200 的 TLS，但容器部署里 9200 由 nginx 占用、
+> API 只在内网 9201，客户端根本到不了后端，该设想不成立，已改为 nginx 终结。）
 
-### 后台操作
+### 后台操作：自动申请（推荐）
+
+「系统更新」页底部 → **HTTPS 证书 → Let's Encrypt 自动证书**：
+
+1. **域名**：要签的域名，多个用英文逗号分隔，第一个作为主名；
+2. **CF Token**：Cloudflare API Token，权限给 `Zone → Zone → Read` 与
+   `Zone → DNS → Edit`，Zone Resources 选中该域名所在的域；
+3. 点 **验证 Token**——后端会真的调一次 Cloudflare API，告诉你这个 Token 能管哪些域名、
+   目标域名是否落在里面（比事后从 acme.sh 的报错里猜快得多）；
+4. 点 **申请 / 更新证书**，10~60 秒出结果。
+
+验证方式是 **DNS-01**：acme.sh 调 Cloudflare API 写一条
+`_acme-challenge.<域名>` TXT 记录，Let's Encrypt 从 DNS 里读到就算通过。
+所以**不需要 80 端口、不需要 443、也不需要停机**，站点只开 9200 一样能签。
+
+签发成功后证书直接写进 `nginx/tls/fullchain.pem` + `privkey.pem`，与手工上传的位置完全一致；
+nginx 入口脚本 5 秒内发现文件变化并 `nginx -s reload`，不用重启容器。
+
+到期前 `ACME_RENEW_DAYS`（默认 30）天时，后端 worker（每 12 小时一次）会自动续期——
+续期复用同一条 TXT 记录机制，同样不需要人工介入。蓝绿两个槽位都会跑这个 worker，
+靠 Redis 锁互斥，只有一个真正执行。
+
+几个细节：
+
+- **Token 只写不读**：接口只回 `token_set: true/false`，永远不回明文；Token 存在
+  `data/acme/settings.json`（0600），不在 `.env` 里；
+- **测试环境开关**：打开后签的是 Let's Encrypt 测试证书（浏览器不信任），
+  用来验证 Token、DNS 权限、域名归属，且不消耗正式环境每周 5 张的配额；
+- **手工上传的证书不会被接管**：worker 只续 `Issuer` 含 "Let's Encrypt" 的证书，
+  Cloudflare Origin CA 之类的证书仍然走手工上传那条路。
+
+### 后台操作：手工上传
 
 「系统更新」页底部 → **HTTPS 证书**：
 
@@ -123,23 +157,31 @@ CSV 导出、文件下载等非 JSON 响应直接透传，不缓冲。
 - 开启/关闭开关 → 即时生效（内存状态直接改）；
 - 开关落盘在 `TLS_DIR/backend_tls`，蓝绿双槽位的另一个实例每 5 秒同步一次。
 
-nginx 不再参与：它只监听 9200 提供管理页面与 `/api` 反代，不终结 TLS、
-不监听 443，也不需要证书热加载守护脚本。
+nginx 的角色：它是**对外唯一**的 TLS 终结者。默认配置里 9200 由 `stream` 块监听并分流，
+8443 那个 server 用挂载进来的 `fullchain.pem` / `privkey.pem` 做握手；后端 9201 只在
+容器网络内，nginx 用明文（或 `SERVER_SCHEME=https` 时的 https）反代过去。
+`deploy/docker/nginx/entrypoint.sh` 会盯着证书文件的变化，用户重新上传后 5 秒内自动
+`nginx -s reload`，所以换证书仍然不需要重启容器。
 
 ### 同一端口两种协议
 
-后端在 9200 上按连接的第一个字节判断协议：
+`stream` 块用 `ssl_preread` 看连接首字节：
 
-| 首字节 | 判定 | 处理 |
+| 首字节 | 判定 | 去向 |
 |---|---|---|
-| `0x16` | TLS 握手记录 | 交给 `tls.Server` 握手 |
-| ASCII 字母 | 明文 HTTP 请求 | 直接按 HTTP 处理 |
+| `0x16` | TLS 握手记录 | 本机 `8443`，由 nginx 终结 TLS |
+| ASCII 字母 / 其他 | 明文 HTTP | 本机 `8080` |
 
-所以 `http://域名:9200` 和 `https://域名:9200` 都能用，切换开关不影响明文客户端，
-nginx 的反代也照旧（明文或 https 都行）。
+两个 server 共用同一份 `locations.conf`，所以管理页面、`/api`、`/files` 在两种协议下
+行为完全一致。转发时带 PROXY protocol，HTTP 层用 `real_ip` 还原真实客户端 IP——
+否则所有请求的 `$remote_addr` 都是 `127.0.0.1`，登录限流会把全网算成同一个人。
 
-> 代价：走嗅探的连接 `http.Request.TLS` 为 nil（`http.Server` 认不出 `*tls.Conn`）。
-> 仓里没有任何地方依赖 `Request.TLS`——协议判断一律走 `X-Forwarded-Proto`——所以无实际影响。
+所以 `http://域名:9200` 和 `https://域名:9200` 都能用，浏览器地址栏换协议不影响登录态。
+
+> 后端进程自身也实现了「首字节嗅探」（`0x16` 交给 `tls.Server`，ASCII 走明文），
+> 那是给 systemd 部署下客户端直连后端用的；容器部署里客户端只到 nginx，用不到这条路径。
+> 代价是这类连接的 `http.Request.TLS` 为 nil，仓里没有任何地方依赖它（协议判断一律走
+> `X-Forwarded-Proto`），所以无实际影响。
 
 几个细节：
 
@@ -151,18 +193,25 @@ nginx 的反代也照旧（明文或 https 都行）。
 
 | 客户端 | 地址 |
 |---|---|
-| 小程序 / 桌面端直连后端 | `https://域名:9200/api/v1`（开关打开后） |
-| 经 nginx 的管理页面 | `http://域名:9200` |
-| 对象存储图片 | `http(s)://域名:9200/files/...`（nginx 反代，与证书无关） |
+| 管理后台（浏览器） | `https://域名:9200`（`http://域名:9200` 同样可用） |
+| 小程序 / 桌面端 | `https://域名:9200/api/v1` |
+| 对象存储图片 | `https://域名:9200/files/...`（nginx 反代，与证书无关） |
 
-> 小程序要求合法域名 + HTTPS 证书，所以正式环境用第一种：客户端基址改成
-> `https://`，域名必须与证书 SAN 对得上（自签证书要先装进系统信任库）。
+> 小程序要求合法域名 + HTTPS 证书，域名必须与证书 SAN 对得上。
+> **注意证书签发方**：Cloudflare Origin CA 的证书只有 Cloudflare 边缘节点信任，
+> 浏览器/`curl` 直连会报 `SEC_E_UNTRUSTED_ROOT`（证书不受信任）。
+> 用后台的「Let's Encrypt 自动证书」签一张公共 CA 的证书即可解决（走 DNS-01，不占端口）；
+> 只有确认走 Cloudflare 代理时，Origin CA 证书才有意义（且 9200 不在 CF 免费版代理端口
+> 列表里，需要改用 8443）。
 
 ### 限制
 
-- **不自动续期**。Let's Encrypt 需要 ACME 客户端 + HTTP-01 验证 + 定时任务，
-  当前实现只支持手动上传；到期前 15 天后台会提示，届时重新上传即可。
-- **不启用 HTTP/2**：嗅探出来的连接只协商到 HTTP/1.1（nginx 那条路才有 h2）。
+- **手工上传的证书不自动续期**：到期前 15 天后台会提示，届时重新上传即可。
+  想让续期自动化，改用「Let's Encrypt 自动证书」——它由后端 worker 负责续期。
+- **自动续期依赖 Cloudflare 托管 DNS**：DNS-01 要求域名的 NS 在 Cloudflare 上；
+  如果换成别的 DNS 服务商，需要同步替换 `vendor/dnsapi/` 里的插件与凭证环境变量
+  （acme.sh 的插件名如 `dns_dp` / `dns_ali`，对应凭证变量各不相同）。
+- **未启用 HTTP/2**：`stream` 分流后的 TLS server 没开 h2，连接按 HTTP/1.1 协商。
 - 私钥以明文存放于宿主机磁盘（Docker 部署为 `deploy/docker/nginx/tls/`，
   systemd 部署为 `TLS_DIR`，默认 `/var/lib/patnest/tls`），已在 `.gitignore`
   中排除。宿主机权限收紧即可，不要提交到仓库。

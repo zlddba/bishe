@@ -168,5 +168,17 @@ fun PetsPage(app: AppState) {
                 ThinDivider()
             }
         }
+        if (app.pets.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            if (app.petsHasMore) {
+                PrimaryButton(
+                    if (app.petsLoadingMore) "正在加载…" else "加载更多宠物",
+                    { app.scope.launch { app.loadMorePets() } },
+                    height = 34.dp,
+                )
+            } else {
+                Text("没有更多宠物了", color = PatNestColors.Ink3, fontSize = 11.5.sp)
+            }
+        }
     }
 }

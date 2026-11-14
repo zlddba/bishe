@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -105,7 +106,7 @@ fun OrdersPage(app: AppState) {
                         TCell(order.pet, 1.1f)
                         TCell(order.range, 1f, dim = true)
                         TCell(order.days, 0.7f, dim = order.days.contains("次"))
-                        TCell("¥${order.amount}", 0.8f, mono = true)
+                        TCell("¥${formatMoney(order.amount)}", 0.8f, mono = true)
                         Row(Modifier.weight(0.9f)) {
                             Tag(
                                 order.status,
@@ -155,6 +156,18 @@ fun OrdersPage(app: AppState) {
                     }
                     ThinDivider()
                 }
+            if (app.orders.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                if (app.ordersHasMore) {
+                    PrimaryButton(
+                        if (app.ordersLoadingMore) "正在加载…" else "加载更多订单",
+                        { app.scope.launch { app.loadMoreOrders() } },
+                        height = 34.dp,
+                    )
+                } else {
+                    Text("没有更多订单了", color = PatNestColors.Ink3, fontSize = 11.5.sp)
+                }
+            }
         }
     }
 }

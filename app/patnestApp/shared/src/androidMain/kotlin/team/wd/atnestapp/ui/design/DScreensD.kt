@@ -383,11 +383,16 @@ fun D49ReviewAppend(nav: DNav) {
 fun D50Invite(nav: DNav) {
     val store = DLocalStore.current
     val context = LocalContext.current
-    LaunchedEffect(Unit) { store.loadProfile() }
+    LaunchedEffect(Unit) {
+        store.loadProfile()
+        store.loadInvite()
+    }
     var copied by remember { mutableStateOf(false) }
-    val userId = store.profile?.id ?: 0L
-    val code = if (userId > 0L) "PET" + userId.toString().padStart(6, '0') else "PETNEST"
-    val shareText = "我在宠栖 PetNest 给毛孩子找寄养，用我的邀请码 $code 注册，我们各得 100 积分。"
+    // 邀请码由服务端生成下发，不再用本地 userId 拼串（0022）
+    val invite = store.invite
+    val code = invite?.inviteCode?.takeIf { it.isNotBlank() } ?: "—"
+    val rewardPoints = invite?.pointsPerInvite ?: 100
+    val shareText = "我在宠栖 PetNest 给毛孩子找寄养，用我的邀请码 $code 注册，我们各得 $rewardPoints 积分。"
     DFrame(nav = nav, title = null) {
         D_HeroBlock(roundedBottom = true) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -436,12 +441,14 @@ fun D50Invite(nav: DNav) {
                         DColor.BrandInk,
                     )
                     D_Stat(store.money(store.pointsBalance / 100.0), "可抵扣")
-                    D_Stat("100", "每邀请一位")
+                    D_Stat(rewardPoints.toString(), "每邀请一位")
                 }
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "邀请关系由平台在好友注册时按邀请码绑定，邀请记录暂未开放查询接口。",
+                "已邀请 ${invite?.invitedCount ?: 0} 人，其中 ${invite?.rewardedCount ?: 0} 人完成首单；" +
+                    "好友首单完成后双方各得 $rewardPoints 积分。" +
+                    (if (invite?.myReward?.granted == true) " 你已领取过邀请奖励。" else ""),
                 fontSize = 11.5.sp,
                 color = DColor.Ink3,
             )
@@ -453,10 +460,14 @@ fun D50Invite(nav: DNav) {
                     DButton(
                         if (copied) "已复制" else "复制邀请码",
                         {
-                            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            manager?.setPrimaryClip(ClipData.newPlainText("邀请码", code))
-                            copied = true
-                            nav.toast("邀请码已复制")
+                            if (code == "—") {
+                                nav.toast("邀请码加载中，请稍后再试")
+                            } else {
+                                val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                manager?.setPrimaryClip(ClipData.newPlainText("邀请码", code))
+                                copied = true
+                                nav.toast("邀请码已复制")
+                            }
                         },
                         mod,
                         DButtonStyle.Ghost,
@@ -721,7 +732,7 @@ fun D55CouponDetail(nav: DNav) {
             DCard {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
+                        if (coupon.type == "percent") "减${coupon.value.toInt()}%" else store.money(coupon.value),
                         fontSize = 38.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = DColor.BrandInk,
@@ -1317,7 +1328,9 @@ fun D60Wallet(nav: DNav) {
                 } else {
                     transactions.take(12).forEachIndexed { index, txn ->
                         if (index > 0) DDivider()
-                        val positive = txn.type == "recharge" || txn.type == "refund"
+                        // 后端 amount 恒为正，方向由 type 决定（与桌面端 walletSignedAmount 同口径）：
+                        // 只有消费/提现/平台扣款是支出，recharge、refund、adjust_add、settle_in 都是收入
+                        val positive = txn.type !in setOf("consume", "withdraw", "adjust_sub")
                         DKeyValue(
                             txn.remark.ifBlank {
                                 when (txn.type) {

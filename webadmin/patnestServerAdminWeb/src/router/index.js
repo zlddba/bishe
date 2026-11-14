@@ -30,6 +30,7 @@ const routes = [
       { path: 'permissions', name: 'Permissions', component: () => import('@/views/PermissionsView.vue'), meta: { title: '权限配置' } },
       { path: 'audit', name: 'Audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志' } },
       { path: 'updates', name: 'Updates', component: () => import('@/views/UpdatesView.vue'), meta: { title: '系统更新' } },
+      { path: 'security', name: 'Security', component: () => import('@/views/SecurityView.vue'), meta: { title: '账号安全' } },
     ],
   },
 ]

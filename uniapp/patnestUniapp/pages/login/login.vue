@@ -40,6 +40,16 @@
 			</view>
 
 			<view v-if="mode === 'register'" class="field">
+				<text class="label">邀请码（选填）</text>
+				<input
+					class="input"
+					v-model="inviteCode"
+					placeholder="填写好友的邀请码，如 PET000123"
+				/>
+				<text class="hint">好友首单完成后，双方各得 100 积分</text>
+			</view>
+
+			<view v-if="mode === 'register'" class="field">
 				<text class="tip">小程序端仅支持主人账号；机构账号可在App提交入驻资料。</text>
 			</view>
 
@@ -73,6 +83,7 @@
 				password: '',
 				phone: '',
 				phoneError: '',
+				inviteCode: '',
 				role: ROLE.OWNER,
 				loading: false,
 				// 记住密码
@@ -165,7 +176,8 @@
 							username: this.username.trim(),
 							password: this.password,
 							role: this.role,
-							phone: this.phone.trim()
+							phone: this.phone.trim(),
+							invite_code: this.inviteCode.trim()
 						})
 					}
 					applyAuthResult(res)
@@ -204,7 +216,9 @@
 					confirmColor: '#C85B74',
 					success: (r) => {
 						if (r.confirm) {
-							uni.reLaunch({ url: '/pages/mine/profile' })
+							// navigateTo 而不是 reLaunch/redirectTo：保留返回键，
+							// 用户改主意时能退回，不会被困在编辑页
+							uni.navigateTo({ url: '/pages/mine/profile?from=bind' })
 						} else {
 							const pages = getCurrentPages()
 							if (pages.length > 1) {

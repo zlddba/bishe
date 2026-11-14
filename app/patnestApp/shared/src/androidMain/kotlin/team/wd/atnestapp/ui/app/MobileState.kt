@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.data.api.AddonDto
 import team.wd.atnestapp.data.api.AddonPayload
@@ -14,6 +16,7 @@ import team.wd.atnestapp.data.api.ApplySitterPayload
 import team.wd.atnestapp.data.api.AuthResponseDto
 import team.wd.atnestapp.data.api.CapacityItemDto
 import team.wd.atnestapp.data.api.CouponListDto
+import team.wd.atnestapp.data.api.CreateOrderAddonPayload
 import team.wd.atnestapp.data.api.CreateOrderPayload
 import team.wd.atnestapp.data.api.CreateOrderPetPayload
 import team.wd.atnestapp.data.api.CreatePetPayload
@@ -21,6 +24,7 @@ import team.wd.atnestapp.data.api.DynamicCommentDto
 import team.wd.atnestapp.data.api.DynamicDto
 import team.wd.atnestapp.data.api.EarningsDto
 import team.wd.atnestapp.data.api.EstimateDto
+import team.wd.atnestapp.data.api.InviteDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.NotificationDto
@@ -59,6 +63,12 @@ import kotlin.math.roundToInt
  * 页面只读这里的字段、只调这里的方法，业务口径与桌面端保持一致。
  */
 class MobileState(private val session: MobileSession) {
+    /**
+     * 列表每页条数：取后端上限 50。
+     * 首页统计（待支付角标等）是基于已加载列表算的，页太小会让统计偏低。
+     */
+    private val PAGE_SIZE = 50
+
     var api: ApiClient = ApiClient(session.baseUrl)
         private set
 
@@ -141,6 +151,9 @@ class MobileState(private val session: MobileSession) {
         private set
     var selectedSitter by mutableStateOf<Sitter?>(null)
     var selectedOrder by mutableStateOf<Order?>(null)
+    /** 最近一次下单返回的订单 id：收银台据此精确定位订单，避免付错单 */
+    var lastCreatedOrderId by mutableStateOf(0L)
+        private set
     var editingPet by mutableStateOf<Pet?>(null)
     var viewingPet by mutableStateOf<Pet?>(null)
     /** 动态详情（设计层跳转用，避免把整条动态塞进路由参数） */
@@ -172,6 +185,12 @@ class MobileState(private val session: MobileSession) {
 
     var pets by mutableStateOf(listOf<Pet>())
         private set
+    /** 宠物列表分页：后端 per_page 上限 50，超过要翻页 */
+    var petsHasMore by mutableStateOf(false)
+        private set
+    var petsLoadingMore by mutableStateOf(false)
+        private set
+    private var petsPage = 0
     var petsLoading by mutableStateOf(false)
         private set
     var petsError by mutableStateOf<String?>(null)
@@ -181,6 +200,12 @@ class MobileState(private val session: MobileSession) {
         private set
     var ordersLoading by mutableStateOf(false)
         private set
+    /** 订单分页状态：hasMore 由「已加载条数 < total」决定 */
+    var ordersHasMore by mutableStateOf(false)
+        private set
+    var ordersLoadingMore by mutableStateOf(false)
+        private set
+    private var ordersPage = 0
     var ordersError by mutableStateOf<String?>(null)
         private set
 
@@ -234,6 +259,10 @@ class MobileState(private val session: MobileSession) {
     var pointsHistory by mutableStateOf(listOf<PointsEntryDto>())
         private set
 
+    /** 邀请码与邀请统计；未登录或接口失败时为 null */
+    var invite by mutableStateOf<InviteDto?>(null)
+        private set
+
     var refunds by mutableStateOf(listOf<RefundDto>())
         private set
     var tickets by mutableStateOf(listOf<TicketDto>())
@@ -248,7 +277,11 @@ class MobileState(private val session: MobileSession) {
     var bookingRemark by mutableStateOf("")
     var bookingCoupon by mutableStateOf<UserCouponDto?>(null)
     var bookingPoints by mutableStateOf(0)
-    var bookingAddons by mutableStateOf(listOf<String>())
+    /** 加购服务 id → 数量（0 表示不选）。之前存的是名称且没有任何入口，等于摆设。 */
+    var bookingAddonQty by mutableStateOf(mapOf<Long, Int>())
+    /** 当前机构提供的加购服务 */
+    var sitterAddons by mutableStateOf(listOf<AddonDto>())
+        private set
     var estimate by mutableStateOf<EstimateDto?>(null)
         private set
     var estimating by mutableStateOf(false)
@@ -271,6 +304,11 @@ class MobileState(private val session: MobileSession) {
         private set
     var receivedOrdersLoading by mutableStateOf(false)
         private set
+    var receivedOrdersHasMore by mutableStateOf(false)
+        private set
+    var receivedOrdersLoadingMore by mutableStateOf(false)
+        private set
+    private var receivedOrdersPage = 0
     var capacityItems by mutableStateOf(listOf<CapacityItemDto>())
         private set
     var capacityLoading by mutableStateOf(false)
@@ -354,12 +392,19 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
-    suspend fun register(inputAccount: String, password: String, phone: String) {
+    suspend fun register(
+        inputAccount: String,
+        password: String,
+        phone: String,
+        inviteCode: String = "",
+        nickname: String = "",
+    ) {
         if (busy) return
         busy = true
         try {
-            // 昵称沿用账号名，注册后可在个人中心修改
-            applyAuth(api.register(inputAccount, password, inputAccount.trim(), phone.trim()))
+            // 昵称：注册页填了就用手填的，留空才退回账号名（之前直接写死账号名，输入框形同虚设）
+            val nick = nickname.trim().ifBlank { inputAccount.trim() }
+            applyAuth(api.register(inputAccount, password, nick, phone.trim(), inviteCode.trim()))
         } catch (e: Exception) {
             toast(e.message ?: "注册失败")
         } finally {
@@ -465,6 +510,7 @@ class MobileState(private val session: MobileSession) {
         tickets = emptyList()
         pointsHistory = emptyList()
         pointsBalance = 0
+        invite = null
         estimate = null
         myShop = null
         receivedOrders = emptyList()
@@ -591,11 +637,30 @@ class MobileState(private val session: MobileSession) {
         petsLoading = true
         petsError = null
         try {
-            pets = api.listPets()
+            val data = api.listPetsPage(1, PAGE_SIZE)
+            pets = data.items
+            petsPage = 1
+            petsHasMore = data.items.size < data.total
         } catch (e: Exception) {
             petsError = e.message ?: "宠物档案加载失败"
         } finally {
             petsLoading = false
+        }
+    }
+
+    /** 宠物列表触底加载下一页 */
+    suspend fun loadMorePets() {
+        if (!loggedIn || petsLoading || petsLoadingMore || !petsHasMore) return
+        petsLoadingMore = true
+        try {
+            val data = api.listPetsPage(petsPage + 1, PAGE_SIZE)
+            petsPage += 1
+            pets = (pets + data.items).distinctBy { it.id }
+            petsHasMore = pets.size < data.total
+        } catch (_: Exception) {
+            // 加载更多失败不打断已展示内容
+        } finally {
+            petsLoadingMore = false
         }
     }
 
@@ -605,11 +670,29 @@ class MobileState(private val session: MobileSession) {
         ordersLoading = true
         ordersError = null
         try {
-            orders = api.listOrders()
+            val data = api.listOrdersPage(1, PAGE_SIZE)
+            orders = data.items
+            ordersPage = 1
+            ordersHasMore = data.items.size < data.total
         } catch (e: Exception) {
             ordersError = e.message ?: "订单加载失败"
         } finally {
             ordersLoading = false
+        }
+    }
+
+    /** 订单列表触底加载下一页（第 51 条起以前永远拿不到） */
+    suspend fun loadMoreOrders() {
+        if (!loggedIn || ordersLoading || ordersLoadingMore || !ordersHasMore) return
+        ordersLoadingMore = true
+        try {
+            val data = api.listOrdersPage(ordersPage + 1, PAGE_SIZE)
+            ordersPage += 1
+            orders = (orders + data.items).distinctBy { it.id }
+            ordersHasMore = orders.size < data.total
+        } catch (_: Exception) {
+        } finally {
+            ordersLoadingMore = false
         }
     }
 
@@ -748,6 +831,16 @@ class MobileState(private val session: MobileSession) {
             pointsHistory = data.items
         } catch (_: Exception) {
             pointsBalance = 0
+        }
+    }
+
+    /** 邀请码与奖励状态；失败时静默置空，别把邀请页拖住 */
+    suspend fun loadInvite() {
+        if (!loggedIn) return
+        try {
+            invite = api.myInvite()
+        } catch (_: Exception) {
+            invite = null
         }
     }
 
@@ -941,7 +1034,7 @@ class MobileState(private val session: MobileSession) {
         bookingStart = next.toString()
         val end = runCatching { LocalDate.parse(bookingEnd) }.getOrNull()
         if (end == null || !end.isAfter(next)) bookingEnd = next.plusDays(1).toString()
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun shiftEnd(days: Long) {
@@ -949,7 +1042,7 @@ class MobileState(private val session: MobileSession) {
         val next = (runCatching { LocalDate.parse(bookingEnd) }.getOrNull() ?: start.plusDays(1)).plusDays(days)
         if (!next.isAfter(start)) return
         bookingEnd = next.toString()
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun pickBookingStart(day: String) {
@@ -957,7 +1050,7 @@ class MobileState(private val session: MobileSession) {
         bookingStart = day
         val end = runCatching { LocalDate.parse(bookingEnd) }.getOrNull()
         if (end == null || !end.isAfter(start)) bookingEnd = start.plusDays(1).toString()
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun pickBookingEnd(day: String) {
@@ -968,7 +1061,7 @@ class MobileState(private val session: MobileSession) {
             return
         }
         bookingEnd = day
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun toggleBookingPet(petId: Long) {
@@ -977,24 +1070,59 @@ class MobileState(private val session: MobileSession) {
         } else {
             bookingPetIds + petId
         }
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun selectBookingCoupon(coupon: UserCouponDto?) {
         bookingCoupon = coupon
-        scope.launch { refreshEstimate() }
+        scheduleEstimate()
     }
 
     fun selectBookingPoints(points: Int) {
-        bookingPoints = points.coerceIn(0, pointsBalance)
-        scope.launch { refreshEstimate() }
+        // 上限同时受余额与本单可抵扣额约束，避免用户选了「全部」却被服务端截断
+        val cap = if (estimate == null) pointsBalance else minOf(pointsBalance, maxUsablePoints())
+        bookingPoints = points.coerceIn(0, cap.coerceAtLeast(0))
+        scheduleEstimate()
     }
 
-    fun toggleBookingAddon(name: String) {
-        bookingAddons = if (bookingAddons.contains(name)) bookingAddons.filterNot { it == name } else bookingAddons + name
+    /** 设置某条加购的数量（0~9），改完立即重新估价 */
+    fun setBookingAddonQty(addonId: Long, qty: Int) {
+        val next = qty.coerceIn(0, 9)
+        bookingAddonQty = if (next == 0) bookingAddonQty - addonId else bookingAddonQty + (addonId to next)
+        scheduleEstimate()
     }
 
-    /** 下单前实时估价，参数不齐或后端报错时清空，页面退回本地估算 */
+    /** 本单最多可抵扣的积分：不超过余额，也不超过「优惠后应付 × 100」 */
+    fun maxUsablePoints(): Int {
+        val est = estimate ?: return 0
+        val remaining = (est.subtotal - est.discountAmount).coerceAtLeast(0.0)
+        return minOf(pointsBalance, (remaining * 100).toInt())
+    }
+
+    /** 换机构时清掉上一家的券/积分/加购，避免把别家的 addon_id 带进新订单 */
+    fun resetBookingExtras() {
+        bookingCoupon = null
+        bookingPoints = 0
+        bookingAddonQty = emptyMap()
+        sitterAddons = emptyList()
+    }
+
+    /** 拉取所选机构的加购服务（进下单页时调用） */
+    suspend fun loadSitterAddons() {
+        val sitter = selectedSitter ?: return
+        sitterAddons = runCatching { api.sitterAddons(sitter.id) }.getOrDefault(emptyList())
+    }
+
+    /** 估价请求的句柄：改日期/宠物时会连发多次，必须取消上一次，否则慢请求会覆盖新结果 */
+    private var estimateJob: Job? = null
+
+    /** 重新估价（自动取消上一次未完成的请求） */
+    fun scheduleEstimate() {
+        estimateJob?.cancel()
+        estimateJob = scope.launch { refreshEstimate() }
+    }
+
+    /** 下单前实时估价，参数不齐时清空；请求失败保留上一次结果，避免金额闪成空 */
     suspend fun refreshEstimate() {
         val sitter = selectedSitter
         if (sitter == null || bookingPetIds.isEmpty() || bookingDays <= 0) {
@@ -1002,20 +1130,32 @@ class MobileState(private val session: MobileSession) {
             return
         }
         estimating = true
-        estimate = runCatching {
-            api.estimateOrder(
-                sitterId = sitter.id,
-                startDate = bookingStart,
-                endDate = bookingEnd,
-                petIds = bookingPetIds,
-                userCouponId = bookingCoupon?.id ?: 0L,
-                pointsUsed = bookingPoints,
-            )
-        }.getOrNull()
-        estimating = false
+        try {
+            val next = try {
+                api.estimateOrder(
+                    sitterId = sitter.id,
+                    startDate = bookingStart,
+                    endDate = bookingEnd,
+                    petIds = bookingPetIds,
+                    userCouponId = bookingCoupon?.id ?: 0L,
+                    pointsUsed = bookingPoints,
+                    addons = bookingAddonQty.filter { it.value > 0 }
+                        .map { "${it.key}:${it.value}" },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (next != null) estimate = next
+        } finally {
+            estimating = false
+        }
     }
 
     suspend fun createOrder(): Boolean {
+        // 防重复下单：一次点击只允许一笔（后端创建订单不做幂等）
+        if (busy) return false
         val sitter = selectedSitter ?: return false
         if (bookingPetIds.isEmpty()) {
             toast("请至少选择一只宠物")
@@ -1027,7 +1167,9 @@ class MobileState(private val session: MobileSession) {
         }
         busy = true
         try {
-            api.createOrder(
+            // 用返回值锁定刚创建的那笔单，别再用「列表里第一个待支付」去猜，
+            // 否则用户本来就有待支付订单时会把钱付到旧单上
+            val created = api.createOrder(
                 CreateOrderPayload(
                     sitterId = sitter.id,
                     startDate = bookingStart,
@@ -1036,8 +1178,11 @@ class MobileState(private val session: MobileSession) {
                     remark = bookingRemark.trim(),
                     userCouponId = bookingCoupon?.id ?: 0L,
                     pointsUsed = bookingPoints,
+                    addons = bookingAddonQty.filter { it.value > 0 }
+                        .map { "${it.key}:${it.value}" },
                 ),
             )
+            lastCreatedOrderId = created.orderId
         } catch (e: Exception) {
             toast(e.message ?: "下单失败")
             busy = false
@@ -1046,7 +1191,7 @@ class MobileState(private val session: MobileSession) {
         busy = false
         bookingCoupon = null
         bookingPoints = 0
-        bookingAddons = emptyList()
+        bookingAddonQty = emptyMap()
         estimate = null
         loadOrders(force = true)
         toast("订单已创建，请在 30 分钟内完成支付")
@@ -1235,7 +1380,16 @@ class MobileState(private val session: MobileSession) {
 
     suspend fun saveProfile(nicknameInput: String, phone: String, address: String, contactName: String, contactPhone: String) {
         try {
-            api.updateProfile(UpdateProfilePayload(nicknameInput.trim(), phone.trim(), address.trim(), contactName.trim(), contactPhone.trim()))
+            // 空字段传 null（不发这个键），否则后端 COALESCE 会把已有值覆盖成空串
+            api.updateProfile(
+                UpdateProfilePayload(
+                    nickname = nicknameInput.trim().ifBlank { null },
+                    phone = phone.trim().ifBlank { null },
+                    address = address.trim().ifBlank { null },
+                    contactName = contactName.trim().ifBlank { null },
+                    contactPhone = contactPhone.trim().ifBlank { null },
+                )
+            )
             nickname = nicknameInput.trim()
             session.nickname = nickname
             loadProfile()
@@ -1391,11 +1545,28 @@ class MobileState(private val session: MobileSession) {
         if (!force && receivedOrders.isNotEmpty()) return
         receivedOrdersLoading = true
         try {
-            receivedOrders = api.listReceivedOrders()
+            val data = api.listReceivedOrdersPage(1, PAGE_SIZE)
+            receivedOrders = data.items
+            receivedOrdersPage = 1
+            receivedOrdersHasMore = data.items.size < data.total
         } catch (e: Exception) {
             toast(e.message ?: "订单加载失败")
         } finally {
             receivedOrdersLoading = false
+        }
+    }
+
+    suspend fun loadMoreReceivedOrders() {
+        if (!loggedIn || receivedOrdersLoading || receivedOrdersLoadingMore || !receivedOrdersHasMore) return
+        receivedOrdersLoadingMore = true
+        try {
+            val data = api.listReceivedOrdersPage(receivedOrdersPage + 1, PAGE_SIZE)
+            receivedOrdersPage += 1
+            receivedOrders = (receivedOrders + data.items).distinctBy { it.id }
+            receivedOrdersHasMore = receivedOrders.size < data.total
+        } catch (_: Exception) {
+        } finally {
+            receivedOrdersLoadingMore = false
         }
     }
 

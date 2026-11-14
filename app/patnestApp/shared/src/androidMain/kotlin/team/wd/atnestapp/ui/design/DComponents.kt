@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -118,6 +119,9 @@ fun DFrame(
                     .dPageWidth(win)
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
+                    // 清单声明 adjustResize + EdgeToEdge 时，键盘高度不会自动变成内容留白，
+                    // 不加 imePadding 页尾输入框会被键盘直接盖住
+                    .imePadding()
                     .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
                     .padding(bottom = 14.dp),
                 content = content,
@@ -169,6 +173,7 @@ fun DLazyFrame(
                 Modifier
                     .dPageWidth(win)
                     .fillMaxSize()
+                    .imePadding()
                     .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier),
                 contentPadding = PaddingValues(bottom = 14.dp),
                 content = content,

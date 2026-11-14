@@ -1,5 +1,8 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import kotlin.math.roundToInt
+import team.wd.atnestapp.utils.formatScore
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -172,9 +175,9 @@ fun SitterDetailPage(app: AppState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    StarRating(sitter.score, size = 13.dp)
+                    StarRating(sitter.score.roundToInt(), size = 13.dp)
                     Text(
-                        "· ${sitter.score}.0 分" + (goodRate?.let { " · 好评率 $it%" } ?: ""),
+                        "· ${formatScore(sitter.score)} 分" + (goodRate?.let { " · 好评率 $it%" } ?: ""),
                         color = PatNestColors.Ink2, fontSize = 13.sp,
                     )
                 }
@@ -317,7 +320,7 @@ fun SitterDetailPage(app: AppState) {
                     color = PatNestColors.Ink3, fontSize = 12.sp,
                 )
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("¥${sitter.price}", color = PatNestColors.BrandInk, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("¥${formatMoney(sitter.price)}", color = PatNestColors.BrandInk, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text(" /${sitter.unit}", color = PatNestColors.Ink3, fontSize = 13.sp, modifier = Modifier.padding(bottom = 2.dp))
                 }
             }

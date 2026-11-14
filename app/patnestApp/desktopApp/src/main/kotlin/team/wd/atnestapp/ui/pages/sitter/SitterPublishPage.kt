@@ -33,6 +33,7 @@ import team.wd.atnestapp.ui.components.AppIcon
 import team.wd.atnestapp.ui.components.DangerLinkText
 import team.wd.atnestapp.ui.components.LinkText
 import team.wd.atnestapp.ui.components.PageHeader
+import team.wd.atnestapp.ui.components.RemoteImage
 import team.wd.atnestapp.ui.components.Panel
 import team.wd.atnestapp.ui.components.PrimaryButton
 import team.wd.atnestapp.ui.components.Tag
@@ -87,16 +88,13 @@ fun SitterPublishPage(app: AppState) {
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(15.dp),
             ) {
-                Box(
-                    Modifier
-                        .width(100.dp)
-                        .height(90.dp)
-                        .clip(PatNestShape.Md)
-                        .background(Brush.linearGradient(listOf(PatNestColors.Brand50, PatNestColors.BrandSoft))),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppIcon(AppIcon.Image, Modifier.size(32.dp), PatNestColors.BrandInk)
-                }
+                // 有真实照片就显示首图（原先一律画占位图标，机构没法确认图片是否上传成功）
+                RemoteImage(
+                    url = dyn.photos.firstOrNull().orEmpty(),
+                    modifier = Modifier.width(100.dp).height(90.dp),
+                    shape = PatNestShape.Md,
+                    contentDescription = "动态照片",
+                )
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("寄养动态", color = PatNestColors.Ink, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)

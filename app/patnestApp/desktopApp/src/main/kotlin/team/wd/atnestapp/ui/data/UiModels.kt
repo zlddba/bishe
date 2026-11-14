@@ -7,11 +7,14 @@ data class SbOrder(
     val pet: String,
     val range: String,
     val days: String,
-    val amount: Int,
+    /** 实付金额（元，后端 float64） */
+    val amount: Double,
     val status: String,
     val made: String,
     val id: Long = 0,
     val createdAt: String = "",
+    /** 后端原始状态：按钮显隐与筛选都看它，中文 status 只用于展示 */
+    val rawStatus: String = "",
 )
 
 data class Coupon(

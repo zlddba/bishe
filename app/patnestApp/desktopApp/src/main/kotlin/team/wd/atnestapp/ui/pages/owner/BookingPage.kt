@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -191,7 +192,7 @@ fun BookingPage(app: AppState) {
                         Spacer(Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Tag("可同时容纳 ${sitter.cap}", TagKind.Ok)
-                            Tag("¥${sitter.price}/${sitter.unit}", TagKind.Brand)
+                            Tag("¥${formatMoney(sitter.price)}/${sitter.unit}", TagKind.Brand)
                         }
                         Spacer(Modifier.height(18.dp))
                         PanelHeaderInPage("选择宠物", "单选")
@@ -244,7 +245,7 @@ fun BookingPage(app: AppState) {
                     Panel(title = "费用预估", subtitle = "实时计算", modifier = Modifier.weight(1f)) {
                         KeyValueRow("机构", sitter.name)
                         KeyValueRow("寄养天数", "$days 天")
-                        KeyValueRow("日单价", "¥${sitter.price}")
+                        KeyValueRow("日单价", "¥${formatMoney(sitter.price)}")
                         if (quote != null) {
                             // 服务端明细：节假日上浮、券、积分都算进去了
                             quote.breakdown.forEach { line ->
@@ -265,7 +266,7 @@ fun BookingPage(app: AppState) {
                                 }
                             }
                         } else {
-                            KeyValueRow("小计", "¥$subtotal")
+                            KeyValueRow("小计", "¥${formatMoney(subtotal)}")
                             if (app.selectedCouponId != 0L) {
                                 KeyValueRow(
                                     "优惠券（${app.selectedCouponTitle}）",
@@ -339,8 +340,11 @@ fun BookingPage(app: AppState) {
                         KeyValueRow("寄养区间", "${displayDate(startDate)} - ${displayDate(endDate)}")
                         KeyValueRow("宠物", pet?.let { "${it.name}（${it.breed}）" } ?: "未选择宠物")
                         if (quote != null) {
-                            // 与下单接口同一口径，避免"确认页一个价、提交后另一个价"
-                            KeyValueRow("寄养费用", "${sitter.price} × $days 天 = ¥$subtotal")
+                            // 与下单接口同一口径：基础费用直接取服务端 breakdown 的 base 行。
+                            // 本地 sitter.price 是取整后的展示价，拿它乘天数会和报价对不上。
+                            val base = quote.breakdown.firstOrNull { it.type == "base" }?.amount
+                                ?: subtotal.toDouble()
+                            KeyValueRow("寄养费用", "¥${moneyOf(base)}")
                             quote.breakdown.filter { it.type != "base" }.forEach { line ->
                                 val abs = if (line.amount < 0) -line.amount else line.amount
                                 KeyValueRow(
@@ -351,7 +355,7 @@ fun BookingPage(app: AppState) {
                             }
                             KeyValueRow("应付", "¥${moneyOf(quote.totalAmount)}", valueColor = PatNestColors.BrandInk, bold = true)
                         } else {
-                            KeyValueRow("费用构成", "${sitter.price} × $days 天 = ¥$subtotal")
+                            KeyValueRow("费用构成", "${formatMoney(sitter.price)} × $days 天 = ¥${formatMoney(subtotal)}")
                             if (app.selectedCouponId != 0L) {
                                 KeyValueRow(
                                     "优惠",
@@ -359,7 +363,7 @@ fun BookingPage(app: AppState) {
                                     valueColor = PatNestColors.Ok,
                                 )
                             }
-                            KeyValueRow("应付", "¥${payable.toInt()}", valueColor = PatNestColors.BrandInk, bold = true)
+                            KeyValueRow("应付", "¥${formatMoney(payable)}", valueColor = PatNestColors.BrandInk, bold = true)
                         }
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 14.dp),

@@ -1,5 +1,7 @@
 package team.wd.atnestapp.ui.design
 
+import team.wd.atnestapp.utils.formatScore
+import team.wd.atnestapp.utils.formatMoney
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -264,8 +266,8 @@ fun D03SitterDetail(nav: DNav) {
         backable = false,
         bottomBar = {
             DFixBar(
-                "¥${sitter.price}",
-                "¥${sitter.price}/${sitter.unit}",
+                "¥${formatMoney(sitter.price)}",
+                "¥${formatMoney(sitter.price)}/${sitter.unit}",
                 "立即预约",
             ) { nav.startBooking(sitter) }
         },
@@ -314,10 +316,10 @@ fun D03SitterDetail(nav: DNav) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    DStars(sitter.score.toDouble())
+                    DStars(sitter.score)
                     Spacer(Modifier.width(5.dp))
                     Text(
-                        "${sitter.score}.0 · ${sitter.dRatingText()}",
+                        "${formatScore(sitter.score)} · ${sitter.dRatingText()}",
                         fontSize = 11.5.sp,
                         color = DColor.Ink3,
                     )
@@ -329,7 +331,7 @@ fun D03SitterDetail(nav: DNav) {
                     listOfNotNull(
                         sitter.type to DTagTone.Brand,
                         "容量 ${sitter.cap}" to DTagTone.Ok,
-                        if (sitter.price > 0) "¥${sitter.price}/${sitter.unit}" to DTagTone.Line else null,
+                        if (sitter.price > 0) "¥${formatMoney(sitter.price)}/${sitter.unit}" to DTagTone.Line else null,
                     ),
                 )
             }
@@ -400,7 +402,7 @@ fun D03SitterDetail(nav: DNav) {
             DCard {
                 DKeyValue("寄养类型", sitter.type)
                 DKeyValue("可同时容量", sitter.cap)
-                DKeyValue("价格", "¥${sitter.price}/${sitter.unit}")
+                DKeyValue("价格", "¥${formatMoney(sitter.price)}/${sitter.unit}")
                 DKeyValue("简介", sitter.desc)
             }
         }
@@ -519,6 +521,7 @@ fun D04Booking(nav: DNav) {
             store.loadPets()
             store.loadCoupons()
             store.loadPoints()
+            store.loadSitterAddons()
             store.refreshEstimate()
         }
     }
@@ -580,7 +583,41 @@ fun D04Booking(nav: DNav) {
             Spacer(Modifier.height(4.dp))
             DButton("+ 添加新宠物", { nav.go(DScreen.PetAdd) }, style = DButtonStyle.Outline, height = 40.dp)
         }
-        DStepHeader(3, "费用确认")
+        if (store.sitterAddons.isNotEmpty()) {
+            DStepHeader(3, "加购服务")
+            DPad {
+                store.sitterAddons.filter { it.enabled }.forEach { addon ->
+                    val qty = store.bookingAddonQty[addon.id] ?: 0
+                    DCard(modifier = Modifier.padding(bottom = 8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    addon.name,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = DColor.Ink,
+                                )
+                                Text(
+                                    "¥${formatMoney(addon.price)} / ${dAddonUnit(addon.unit)}",
+                                    fontSize = 11.5.sp,
+                                    color = DColor.Ink3,
+                                )
+                            }
+                            DSmallButton("−", { store.setBookingAddonQty(addon.id, qty - 1) })
+                            Text(
+                                "$qty",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DColor.Ink,
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                            DSmallButton("+", { store.setBookingAddonQty(addon.id, qty + 1) }, filled = qty > 0)
+                        }
+                    }
+                }
+            }
+        }
+        DStepHeader(if (store.sitterAddons.isEmpty()) 3 else 4, "费用确认")
         DPad {
             DCard {
                 val estimate = store.estimate
@@ -600,6 +637,50 @@ fun D04Booking(nav: DNav) {
             }
         }
         DPad {
+            Spacer(Modifier.height(10.dp))
+            DCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("积分抵扣", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = DColor.Ink)
+                        Text(
+                            "可用 ${store.pointsBalance} 分 · 100 分抵 1 元",
+                            fontSize = 11.5.sp,
+                            color = DColor.Ink3,
+                        )
+                    }
+                    if (store.bookingPoints > 0) {
+                        Text(
+                            "−" + store.money(store.bookingPoints / 100.0),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DColor.Ok,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    DSmallButton("−100", { store.selectBookingPoints(store.bookingPoints - 100) })
+                    Text(
+                        "${store.bookingPoints} 分",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DColor.Ink,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DSmallButton("+100", { store.selectBookingPoints(store.bookingPoints + 100) })
+                    DSmallButton(
+                        "全部",
+                        { store.selectBookingPoints(store.maxUsablePoints()) },
+                        filled = true,
+                    )
+                }
+            }
+        }
+        DPad {
             Spacer(Modifier.height(12.dp))
             DCard(padding = 0.dp) {
                 DMenuRow(
@@ -615,12 +696,16 @@ fun D04Booking(nav: DNav) {
                 {
                     scope.launch {
                         if (store.createOrder()) {
-                            store.selectedOrder = store.orders.firstOrNull { it.rawStatus == "pending_pay" }
+                            // 优先按刚创建订单的 id 精确匹配；拿不到再退回待支付列表
+                            store.selectedOrder = store.orders.firstOrNull { it.id == store.lastCreatedOrderId }
+                                ?: store.orders.firstOrNull { it.rawStatus == "pending_pay" }
                                 ?: store.orders.firstOrNull()
                             nav.go(DScreen.Checkout)
                         }
                     }
                 },
+                // 下单请求在飞行中时禁用，防止连点创建多笔订单
+                enabled = !store.busy,
             )
         }
     }
@@ -692,6 +777,31 @@ fun D05Orders(nav: DNav) {
                         }
                         repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
+                }
+            }
+        }
+        if (shown.isNotEmpty()) {
+            item {
+                DPad {
+                    Spacer(Modifier.height(4.dp))
+                    if (store.ordersHasMore) {
+                        DButton(
+                            if (store.ordersLoadingMore) "正在加载…" else "加载更多订单",
+                            { scope.launch { store.loadMoreOrders() } },
+                            style = DButtonStyle.Outline,
+                            height = 40.dp,
+                            enabled = !store.ordersLoadingMore,
+                        )
+                    } else {
+                        Text(
+                            "没有更多订单了",
+                            fontSize = 11.5.sp,
+                            color = DColor.Ink3,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
                 }
             }
         }
@@ -910,6 +1020,7 @@ fun D07Profile(nav: DNav) {
 @Composable
 fun D08Pets(nav: DNav) {
     val store = DLocalStore.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadPets() }
     DFrame(
         nav = nav,
@@ -947,6 +1058,16 @@ fun D08Pets(nav: DNav) {
                         )
                     }
                     Spacer(Modifier.height(12.dp))
+                    if (store.petsHasMore) {
+                        DButton(
+                            if (store.petsLoadingMore) "正在加载…" else "加载更多宠物",
+                            { scope.launch { store.loadMorePets() } },
+                            style = DButtonStyle.Outline,
+                            height = 40.dp,
+                            enabled = !store.petsLoadingMore,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     DButton(
                         "+ 继续添加宠物",
                         { nav.go(DScreen.PetAdd) },
@@ -1325,8 +1446,10 @@ fun D14Coupons(nav: DNav) {
             DPad {
                 DGrid(shown, minItemWidth = 320.dp) { coupon ->
                     A_CouponCard(
-                        amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
-                        threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
+                        // 后端 percent 券的 value 是「减免百分比」（order_pricing.go:190：subtotal*value/100），
+                        // 写成「X 折」会把减 10% 显示成「10 折」（= 原价），语义正好相反。
+                        amount = if (coupon.type == "percent") "减${coupon.value.toInt()}%" else store.money(coupon.value),
+                        threshold = if (coupon.minAmount > 0) "满 ${store.money(coupon.minAmount)} 可用" else "无门槛",
                         title = coupon.title,
                         sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
                         expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",
@@ -1360,6 +1483,15 @@ fun D15Messages(nav: DNav) {
             DSmallButton("全部已读", { scope.launch { store.markAllScopedRead() } })
         },
     ) {
+        // 机构账号同一个人会收到两类消息：个人侧（自己下的单）与商家侧（接单/评价）。
+        // 之前 Android 端没有任何地方能切到 business，商家消息永远渲染不出来。
+        if (store.isSitterMode) {
+            val business = store.notificationsCenter.notificationScope == "business"
+            DTabLine(listOf("个人消息", "商家消息"), if (business) 1 else 0) { idx ->
+                store.notificationsCenter.notificationScope = if (idx == 1) "business" else "personal"
+            }
+            Spacer(Modifier.height(10.dp))
+        }
         DTabLine(labels, tab) { tab = it }
         Spacer(Modifier.height(12.dp))
         val all = store.visibleNotifications()
@@ -1398,6 +1530,13 @@ private data class A_SitterInfo(
 )
 
 /** 真实机构 → 设计稿卡片模型（封面 URL 之外的字段都在这里对齐）。 */
+/** 加购服务计价单位（后端值：per_order / per_day / per_visit） */
+internal fun dAddonUnit(unit: String): String = when (unit) {
+    "per_day" -> "每天"
+    "per_visit" -> "每次"
+    else -> "每单"
+}
+
 private fun Sitter.toACard(): A_SitterInfo {
     val area = addr.substringBefore("区").takeIf { it.length in 2..8 }?.plus("区")
     return A_SitterInfo(
@@ -1408,10 +1547,10 @@ private fun Sitter.toACard(): A_SitterInfo {
         desc = listOfNotNull(type, area, "容量 $cap").joinToString(" · "),
         tags = buildList {
             add(type to DTagTone.Brand)
-            if (price > 0) add("¥$price/$unit 起" to DTagTone.Ok)
+            if (price > 0) add("¥${formatMoney(price)}/$unit 起" to DTagTone.Ok)
             if (status != "active") add("暂停接单" to DTagTone.Warn)
         },
-        price = if (price > 0) "¥$price" else null,
+        price = if (price > 0) "¥${formatMoney(price)}" else null,
         unit = if (price > 0) "/$unit" else null,
         type = type,
     )

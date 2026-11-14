@@ -32,3 +32,4 @@ release/
 .gocache/
 .gotmp
 .workbuddy
+release.jks.b64

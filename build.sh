@@ -133,6 +133,10 @@ cp "$TPL_DIR"/scripts/*.sh "$PKG_DIR/scripts/"
 if compgen -G "$TPL_DIR/scripts/*.ps1" >/dev/null; then
   cp "$TPL_DIR"/scripts/*.ps1 "$PKG_DIR/scripts/"
 fi
+# acme.sh 单文件脚本 + dnsapi 插件，Dockerfile.api 会 COPY 进镜像
+mkdir -p "$PKG_DIR/vendor"
+cp "$TPL_DIR/vendor/acme.sh" "$PKG_DIR/vendor/"
+cp -R "$TPL_DIR/vendor/dnsapi" "$PKG_DIR/vendor/"
 cp -a "$WEB_DIR/dist" "$PKG_DIR/web/dist"
 cp "$SRC_DIR/serverdb/init.sql" "$PKG_DIR/db/"
 cp "$SRC_DIR"/serverdb/migrations/*.sql "$PKG_DIR/db/migrations/"

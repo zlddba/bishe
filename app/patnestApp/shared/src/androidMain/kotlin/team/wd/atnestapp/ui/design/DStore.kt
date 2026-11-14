@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.design
 
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.runtime.staticCompositionLocalOf
 import team.wd.atnestapp.data.model.Order
 import team.wd.atnestapp.data.model.Pet
@@ -25,7 +26,7 @@ val DLocalStore = staticCompositionLocalOf<MobileState> {
 /** 机构卡片副标题：类型 · 区域 · 价格。 */
 internal fun Sitter.dSubtitle(): String {
     val area = addr.split("区").firstOrNull()?.takeIf { it.isNotBlank() }?.plus("区") ?: addr
-    return "$type · $area · ¥$price/${unit}"
+    return "$type · $area · ¥${formatMoney(price)}/${unit}"
 }
 
 /** 评分文案：没有评价时不要伪装成 5.0。 */

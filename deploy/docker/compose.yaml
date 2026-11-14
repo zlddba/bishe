@@ -15,6 +15,8 @@ x-api: &api
     - ./data/updates:/var/lib/patnest/updates
     # 证书目录：后台「HTTPS 证书」上传时由 API 写入，nginx 容器读同一份
     - ./nginx/tls:/var/lib/patnest/tls
+    # acme.sh 的账户密钥 / 证书元数据，删掉它等于让 Let's Encrypt 重新注册账户
+    - ./data/acme:/var/lib/patnest/acme
   depends_on:
     - redis
   restart: unless-stopped
@@ -99,13 +101,18 @@ services:
         MINIO_BUCKET: "${MINIO_BUCKET:-patnest-uploads}"
     container_name: patnest-nginx
     ports:
-      # 只监听 9200：HTTPS 由后端自己在 9200 上终结（同一个端口同时收 http 与 https），
-      # nginx 只负责管理页面与 /api 反代，不再开放 443。
+      # 只对外暴露 9200：容器内由 stream + ssl_preread 分流，TLS 交给本机 8443
+      # 终结，明文交给本机 8080，所以 http 与 https 共用这一个端口，443 仍然不开放。
+      #
+      # Let's Encrypt 证书走 DNS-01（Cloudflare TXT 记录）验证，不需要 80 端口，
+      # 所以这里不开 80，宿主机上留给别的服务用。
       - "${PUBLIC_PORT:-9200}:9200"
     volumes:
       - ./nginx/upstream.conf:/etc/nginx/patnest/upstream.conf:ro
       # 反代协议：后端跑 https 时这里要跟着换，发布脚本按 SERVER_SCHEME 重写
       - ./nginx/api_proxy.conf:/etc/nginx/patnest/api_proxy.conf:ro
+      # TLS 证书：后台上传后由 API 写入同一目录，nginx 从这里读取并终结 9200 的 HTTPS
+      - ./nginx/tls:/etc/nginx/patnest/tls:ro
     depends_on:
       - api-blue
     restart: unless-stopped

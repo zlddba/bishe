@@ -31,6 +31,9 @@ import team.wd.atnestapp.data.model.Sitter
 
 class ApiException(message: String) : Exception(message)
 
+/** 一页数据 + 总数：列表分页时据此判断还有没有下一页 */
+data class PagedItems<T>(val items: List<T>, val total: Int)
+
 /**
  * 跨平台 API 客户端：响应统一是 { code, message, data } 信封，
  * 负责拆信封、携带登录令牌，并把异常翻译成可以直接展示的提示。
@@ -320,10 +323,14 @@ class ApiClient(rawBaseUrl: String) {
         password: String,
         nickname: String = "",
         phone: String = "",
+        inviteCode: String = "",
     ): AuthResponseDto =
         postData(
             "/auth/register",
-            RegisterPayload(username.trim(), password, "owner", nickname.trim(), phone.trim()),
+            RegisterPayload(
+                username.trim(), password, "owner", nickname.trim(), phone.trim(),
+                inviteCode.trim().uppercase(),
+            ),
         )
 
     /** 申请注销（冷静期 3 天，期间登录自动撤销；到期由服务端自动执行）。 */
@@ -343,9 +350,25 @@ class ApiClient(rawBaseUrl: String) {
         return page.items.map { it.toUi() }
     }
 
-    suspend fun listPets(): List<Pet> {
-        val page: PetPageDto = getData("/pet-owner/pets", mapOf("page" to "1", "per_page" to "50"))
+    /** 关键词搜索（服务端按名称/地址/描述 ILIKE 匹配，见 SearchSitters） */
+    suspend fun searchSitters(keyword: String): List<Sitter> {
+        val q = keyword.trim()
+        if (q.isEmpty()) return listSitters()
+        val page: SitterPageDto = getData(
+            "/sitters/search",
+            mapOf("q" to q, "page" to "1", "per_page" to "50"),
+        )
         return page.items.map { it.toUi() }
+    }
+
+    suspend fun listPets(): List<Pet> = listPetsPage(1, 50).items
+
+    suspend fun listPetsPage(page: Int, perPage: Int = 50): PagedItems<Pet> {
+        val data: PetPageDto = getData(
+            "/pet-owner/pets",
+            mapOf("page" to page.toString(), "per_page" to perPage.toString()),
+        )
+        return PagedItems(data.items.map { it.toUi() }, data.total)
     }
 
     suspend fun createPet(payload: CreatePetPayload): PetDto =
@@ -363,9 +386,15 @@ class ApiClient(rawBaseUrl: String) {
 
     suspend fun deletePet(petId: Long) = deleteNoContent("/pet-owner/pets/$petId")
 
-    suspend fun listOrders(): List<Order> {
-        val page: OrderPageDto = getData("/pet-owner/orders", mapOf("page" to "1", "per_page" to "50"))
-        return page.items.map { it.toUi() }
+    suspend fun listOrders(): List<Order> = listOrdersPage(1, 50).items
+
+    /** 订单分页：后端 per_page 上限 50，超过必须翻页，否则第 51 条起永远拿不到 */
+    suspend fun listOrdersPage(page: Int, perPage: Int = 50): PagedItems<Order> {
+        val data: OrderPageDto = getData(
+            "/pet-owner/orders",
+            mapOf("page" to page.toString(), "per_page" to perPage.toString()),
+        )
+        return PagedItems(data.items.map { it.toUi() }, data.total)
     }
 
     suspend fun createOrder(payload: CreateOrderPayload): CreateOrderResult =
@@ -421,6 +450,9 @@ class ApiClient(rawBaseUrl: String) {
 
     /** 积分余额与流水 */
     suspend fun myPoints(): PointsDto = getData("/pet-owner/points")
+
+    /** 我的邀请码、邀请人数与奖励状态（迁移 0022） */
+    suspend fun myInvite(): InviteDto = getData("/pet-owner/invite")
 
     /* ---------- 钱包（真实货币） ---------- */
 
@@ -679,9 +711,14 @@ class ApiClient(rawBaseUrl: String) {
     /** 删除本机构优惠券；已被订单核销的券服务端会拒绝删除。 */
     suspend fun deleteSitterCoupon(couponId: Long) = deleteNoContent("/sitter/coupons/$couponId")
 
-    suspend fun listReceivedOrders(): List<ReceivedOrderDto> {
-        val page: ReceivedOrderPageDto = getData("/sitter/orders/manage", mapOf("page" to "1", "per_page" to "50"))
-        return page.items
+    suspend fun listReceivedOrders(): List<ReceivedOrderDto> = listReceivedOrdersPage(1, 50).items
+
+    suspend fun listReceivedOrdersPage(page: Int, perPage: Int = 50): PagedItems<ReceivedOrderDto> {
+        val data: ReceivedOrderPageDto = getData(
+            "/sitter/orders/manage",
+            mapOf("page" to page.toString(), "per_page" to perPage.toString()),
+        )
+        return PagedItems(data.items, data.total)
     }
 
     suspend fun acceptOrder(orderId: Long) {

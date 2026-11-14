@@ -16,18 +16,28 @@ patnest-docker/
 ├── web/dist/               # 已构建的管理页面（含 version.json）
 ├── nginx/upstream.conf     # 蓝绿 active 槽位
 ├── nginx/api_proxy.conf    # nginx→后端 的反代协议（后端跑 https 时发布脚本会改写它）
+├── vendor/
+│   ├── acme.sh             # 3.1.7 单文件脚本，后台「申请证书」时在 API 容器里执行
+│   └── dnsapi/dns_cf.sh    # Cloudflare DNS-01 插件（没有它 acme.sh 会报找不到 hook）
 ├── db/                     # 建库脚本与增量迁移
 ├── data/updates/           # 运行时生成：tmp / manual / queue / status / logs
 └── scripts/                # 安装 / 发布 / 迁移（.sh 与 .ps1 两套等价脚本）
 ```
 
-> **端口**：对外只暴露 `PUBLIC_PORT`（默认 `9200`，管理页面 + API）；**443 不开放**。
+> **端口**：对外只暴露 `PUBLIC_PORT`（默认 `9200`，管理页面 + API）；**443 与 80 都不开放**。
 > API 的 `9201` 只在容器网络内，不需要在安全组放行。
 
-> **协议**：证书在后台「系统更新 → HTTPS 证书」里上传；页面上的「后端同时接受 HTTPS」
-> 开关打开后，API 容器的 9200 端口同时收 http 与 https，客户端可以直连
-> `https://域名:9200`，nginx 的反代不受影响。`.env` 的 `SERVER_SCHEME` 只兜底
-> 启动那一刻的初始状态。
+> **协议**：证书有两种来源，落盘位置完全相同（`nginx/tls/fullchain.pem` + `privkey.pem`）：
+>
+> 1. **Let's Encrypt 自动申请**（推荐）：后台「系统更新 → HTTPS 证书 → Let's Encrypt 自动证书」，
+>    填域名 + Cloudflare API Token 点一下即可。验证方式是 **DNS-01**（往域名里写一条
+>    `_acme-challenge` TXT 记录），所以**不需要 80 端口、不需要停机**，站点只开 9200 也能签。
+>    到期前由后端 worker 自动续期（每 12 小时检查一次）。
+> 2. **手工上传**：自己拿到的证书粘进页面，适合用 Cloudflare Origin CA 或商业证书的场景。
+>
+> 页面上的「后端同时接受 HTTPS」开关打开后，API 容器的 9200 端口同时收 http 与 https，
+> 客户端可以直连 `https://域名:9200`，nginx 的反代不受影响。`.env` 的 `SERVER_SCHEME`
+> 只兜底启动那一刻的初始状态。
 
 ## 首次部署（Linux / macOS）
 
@@ -107,8 +117,58 @@ Windows PowerShell：
 ```
 
 版本号省略时，`release-api.ps1` 使用当前时间生成标签，`release-web.ps1`
-使用 `.env` 里的 `APP_VERSION`。发布脚本会自动识别 `podman-compose`、
-`podman compose` 或 `docker compose`，不需要手工改脚本。
+使用 `.env` 里的 `APP_VERSION`。
+
+### 指定容器引擎
+
+`install` 默认优先 **docker**；检测不到可用的 docker（CLI、compose 插件或守护进程）
+就自动改用 **podman**（`podman compose` 或 `podman-compose`）；两者都不可用直接报错退出。
+
+运行时指定（优先级最高）：
+
+```bash
+bash scripts/install.sh --engine podman      # docker / podman / auto
+PATNEST_ENGINE=podman bash scripts/install.sh
+```
+
+```powershell
+.\scripts\install.ps1 -Engine podman
+```
+
+也可以在 `.env` 里固定 `PATNEST_ENGINE=docker|podman|auto`。显式指定某个引擎但它
+不可用时**不会**静默回退，脚本直接报错，避免装错环境还继续部署。release / rollback /
+migrate 共用 `common.sh` 的同一套选择逻辑。
+
+### Podman 下使用容器化更新代理（AGENT_MODE=container）
+
+代理容器里装的是 docker CLI，靠挂载宿主机引擎 socket 工作，所以 Podman 要先提供
+Docker 兼容 socket：
+
+```bash
+systemctl enable --now podman.socket          # rootful -> /run/podman/podman.sock
+# rootless：systemctl --user enable --now podman.socket
+#           -> $XDG_RUNTIME_DIR/podman/podman.sock
+```
+
+`.env` 对应配置：
+
+```ini
+PATNEST_ENGINE=podman
+AGENT_MODE=container
+DOCKER_SOCKET=/run/podman/podman.sock
+PACKAGE_HOST_ROOT=/opt/patnest      # 换成部署包绝对路径，绕过 docker inspect
+```
+
+执行 `bash scripts/install.sh --engine podman`，再用 `podman logs -f patnest-update-agent`
+观察。需要注意：
+
+- **rootful socket 最稳**。rootless socket 属主是当前用户，而代理容器以 root 运行、
+  UID 映射到 subuid，通常读不到；要额外配 `--userns=keep-id`（当前 compose 没有）。
+- `agent-entrypoint.sh` 用 `docker inspect` 反查 `/pkg` 的挂载源，Podman 兼容 API 的
+  `Mounts` 结构不一定一致；查不到就用 `PACKAGE_HOST_ROOT` 显式指定。
+- `docker compose build` 走 Podman 兼容 API 的 `/build` 端点，**本项目未做实机验证**。
+  首次使用建议在后台「系统更新」页上传一个小更新包，看代理日志能否完成蓝绿切换。
+- 不想处理这些兼容问题就用 `AGENT_MODE=host`，代价是重启后代理不会自动拉起。
 
 ## 管理端一键更新
 
@@ -204,6 +264,40 @@ nohup bash scripts/update-agent.sh >> data/updates/agent.log 2>&1 &
 - `api-blue` / `api-green` 使用同一个镜像，发布时只替换其中一个，健康检查通过后切 Nginx upstream。
 - MySQL/PostgreSQL 与 MinIO 不在本 compose 内，由存储服务器单独提供。
 - `data/updates` 由 API 容器和宿主机代理共享，安装脚本会放开该目录的读写权限；不要把该目录暴露到公网。
+- `nginx/tls` 由 API 容器写入（容器内以 uid/gid 10001 运行），安装脚本会把该目录 chown 给 10001；手工重建目录后要重新执行一次，否则后台传证书会报 `permission denied`。
+- `data/acme` 存 acme.sh 的账户密钥、每个域名的证书配置，以及后台填的 Cloudflare Token（`settings.json`，权限 0600）。删掉它等于让 Let's Encrypt 重新注册账户，下次签发会重新走一遍验证。
+
+## Let's Encrypt 自动证书
+
+后台「系统更新 → HTTPS 证书 → Let's Encrypt 自动证书」，填三项即可：
+
+| 项 | 说明 |
+| --- | --- |
+| 域名 | 要签的域名，多个用英文逗号分隔；必须已在 Cloudflare 里托管（NS 指向 CF） |
+| CF Token | Cloudflare API Token，权限：`Zone → Zone → Read`、`Zone → DNS → Edit`，Zone Resources 选中该域名所在的域 |
+| 邮箱 | 选填，Let's Encrypt 用它发到期提醒 |
+
+点「验证 Token」会真的调一次 Cloudflare API，告诉你这个 Token 能管哪些域名、目标域名是否落在里面——比事后从 acme.sh 的报错里猜要快得多。
+
+签发成功后证书直接写进 `nginx/tls`，nginx 入口脚本 5 秒内发现文件变化并 reload，不用重启容器。
+到期前 `ACME_RENEW_DAYS`（默认 30）天内，后端 worker 会自动续期；续期复用同一条 TXT 记录机制，也不需要人工介入。
+
+> 想先在测试环境跑通流程，把「测试环境」开关打开——签出来的是 Let's Encrypt 的测试证书，浏览器不信任，
+> 但能验证 Token、DNS 权限、域名归属全都正确，且不消耗正式环境的签发配额（同一域名每周 5 张）。
+
+## Linux / Podman 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 后台传证书报 `写入证书失败: open /var/lib/patnest/tls/fullchain.pem: permission denied` | `nginx/tls` 属主不是 10001。执行 `chown -R 10001:10001 nginx/tls && chmod 750 nginx/tls`，或重跑 `install.sh`；SELinux 为 enforcing 时还需 `chcon -Rt container_file_t nginx/tls` |
+| 后台申请证书报 `Cannot find DNS API hook for: dns_cf` | 镜像里缺 `vendor/dnsapi`。确认部署包内有 `vendor/dnsapi/dns_cf.sh`，然后 `docker compose --profile app build api-blue && docker compose --profile app up -d api-blue` |
+| 申请证书报 `invalid domain` / `Authentication error` | Cloudflare Token 权限或范围不对（需要 `Zone:Zone:Read` + `Zone:DNS:Edit`，且覆盖该域名所在的 zone）。先在页面上点「验证 Token」自检 |
+| 申请证书一直卡在 `Please add TXT record` | Token 只有读权限、写不进 DNS；或该域名的 NS 并不在 Cloudflare 上（DNS-01 必须由 CF 托管解析） |
+| 申请证书报 `too many certificates` | 撞上 Let's Encrypt 频率限制（同一域名每周 5 张）。先打开「测试环境」验证流程，或等一周 |
+| 换证书后浏览器仍是旧证书 | 容器内入口脚本每 5 秒检查一次文件变化并 `nginx -s reload`；若被手工改成别的 entrypoint，执行 `podman exec patnest-nginx nginx -s reload` |
+| 重建 `api-blue` 后 9200 报 502 / `no route to host` | nginx 启动时缓存了上游 IP，`podman exec patnest-nginx nginx -s reload` 重新解析即可（`release-api.sh` 会自动做） |
+| `no usable compose command` / `podman compose` 报 `ModuleNotFoundError: podman_compose` | 发行版里的 python `podman-compose` 坏了。装 Docker Compose v2 独立二进制到 `/usr/local/lib/docker/cli-plugins/docker-compose` 并软链 `/usr/local/bin/docker-compose`，`podman compose` 会自动改用它 |
+| 更新代理容器起来就退出，报 `cannot resolve host path of the package` | Podman 兼容 API 下 `docker inspect` 拿不到挂载源，在 `.env` 设 `PACKAGE_HOST_ROOT=<部署包绝对路径>` 后重跑安装脚本 |
 
 ## Windows 常见问题
 

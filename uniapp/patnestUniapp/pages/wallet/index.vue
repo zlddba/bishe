@@ -15,7 +15,7 @@
 			<view class="m-actions">
 				<view class="m-btn" @click="openRecharge">充值</view>
 				<view class="m-btn" @click="openWithdraw">申请退款</view>
-				<view class="m-btn ghost" @click="showMoneyLogs = !showMoneyLogs">
+				<view class="m-btn ghost" @click="toggleMoneyLogs">
 					{{ showMoneyLogs ? '收起流水' : '资金流水' }}
 				</view>
 			</view>
@@ -31,8 +31,8 @@
 					<text class="l-time">{{ fmtTime(t.created_at) }}</text>
 				</view>
 				<view class="l-right">
-					<text :class="['l-amount', t.amount >= 0 ? 'plus' : 'minus']">
-						{{ t.amount >= 0 ? '+' : '' }}¥{{ fmtMoney(t.amount) }}
+					<text :class="['l-amount', moneySigned(t) >= 0 ? 'plus' : 'minus']">
+						{{ moneySigned(t) >= 0 ? '+' : '-' }}¥{{ fmtMoney(moneyAbs(t)) }}
 					</text>
 					<text class="l-balance">余额 {{ fmtMoney(t.balance_after) }}</text>
 				</view>
@@ -220,10 +220,21 @@
 					if (w) this.money = w
 				} catch (e) {}
 				if (this.showMoneyLogs) {
-					try {
-						const res = await moneyApi.transactions({ page: 1, per_page: 30 })
-						this.moneyLogs = (res && res.items) || []
-					} catch (e) {}
+					await this.loadMoneyLogs()
+				}
+			},
+			async loadMoneyLogs() {
+				try {
+					const res = await moneyApi.transactions({ page: 1, per_page: 30 })
+					this.moneyLogs = (res && res.items) || []
+				} catch (e) {}
+			},
+			// 展开流水：首次展开必须自己拉一次数据，
+			// 否则只能靠离开页面再回来（onShow → load）才出现，用户会误以为没有流水。
+			async toggleMoneyLogs() {
+				this.showMoneyLogs = !this.showMoneyLogs
+				if (this.showMoneyLogs && this.moneyLogs.length === 0) {
+					await this.loadMoneyLogs()
 				}
 			},
 			// 打开充值弹层
@@ -233,6 +244,8 @@
 			},
 			// 发起充值并确认（模拟网关同步到账）
 			async doRecharge() {
+				// 防重复提交：按钮上的 disabled 只是样式，拦不住 click
+				if (this.recharging) return
 				const amt = parseFloat(this.rechargeAmount)
 				if (isNaN(amt) || amt <= 0) {
 					return uni.showToast({ title: '请输入有效的充值金额', icon: 'none' })
@@ -319,6 +332,18 @@
 					adjust_sub: '平台扣款'
 				}
 				return map[t] || '资金变动'
+			},
+			// 后端 wallet_transactions.amount 恒为正数，方向靠 type 区分
+			// （order_handler.go:690 扣款写 consume、wallet_handler.go:313 平台调整写 adjust_add/adjust_sub），
+			// 不能直接拿 amount 的正负当收支方向，否则消费也会显示成「+」。
+			moneySigned(t) {
+				const amt = Math.abs(Number(t && t.amount) || 0)
+				const type = t && t.type
+				const negative = ['consume', 'withdraw', 'adjust_sub', 'settle_out'].indexOf(type) >= 0
+				return negative ? -amt : amt
+			},
+			moneyAbs(t) {
+				return Math.abs(this.moneySigned(t))
 			},
 			fmtMoney(n) {
 				return fmtMoney(n)

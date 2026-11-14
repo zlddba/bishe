@@ -53,6 +53,9 @@
 			<view class="menu-item" @click="go('/pages/wallet/index')">
 				<image class="mi-icon" src="/static/icons/coupon.png" mode="aspectFit" /><text class="mi-text">积分与优惠券</text><text class="mi-arrow">›</text>
 			</view>
+			<view class="menu-item" @click="go('/pages/mine/invite')">
+				<image class="mi-icon" src="/static/icons/star.png" mode="aspectFit" /><text class="mi-text">邀请有礼</text><text class="mi-arrow">›</text>
+			</view>
 			<view class="menu-item" @click="go('/pages/refund/list')">
 				<image class="mi-icon" src="/static/icons/wallet.png" mode="aspectFit" /><text class="mi-text">退款进度</text><text class="mi-arrow">›</text>
 			</view>

@@ -172,6 +172,12 @@ if (Test-Path (Join-Path $TplDir "nginx\tls\.gitignore")) {
 Copy-Item (Join-Path $TplDir "scripts\*.sh") (Join-Path $PkgDir "scripts") -Force
 Copy-Item (Join-Path $TplDir "scripts\*.ps1") (Join-Path $PkgDir "scripts") -Force
 Copy-Item $distDir (Join-Path $PkgDir "web\dist") -Recurse -Force
+
+# acme.sh single-file script + dnsapi plugins, COPYed into the api image
+$vendorDir = Join-Path $PkgDir "vendor"
+New-Item -ItemType Directory -Force -Path $vendorDir | Out-Null
+Copy-Item (Join-Path $TplDir "vendor\acme.sh") $vendorDir -Force
+Copy-Item (Join-Path $TplDir "vendor\dnsapi") $vendorDir -Recurse -Force
 Copy-Item (Join-Path $SrcDir "serverdb\init.sql") (Join-Path $PkgDir "db") -Force
 Copy-Item (Join-Path $SrcDir "serverdb\migrations\*.sql") (Join-Path $PkgDir "db\migrations") -Force
 

@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.pages.owner
 
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +56,8 @@ fun PaymentPage(app: AppState) {
         }
         return
     }
-    var method by remember { mutableStateOf(1) }
+    // 从 0 开始：methods 只有一项（index 0），原先初值 1 会让唯一一行永远显示「未选中」
+    var method by remember { mutableStateOf(0) }
     var paid by remember { mutableStateOf(false) }
 
     val methods = listOf(
@@ -120,7 +122,7 @@ fun PaymentPage(app: AppState) {
                     Column(Modifier.weight(1f)) {
                         Text("应付金额", color = PatNestColors.Ink3, fontSize = 12.sp)
                         Text(
-                            "¥${order.amount}",
+                            "¥${formatMoney(order.amount)}",
                             color = PatNestColors.BrandInk, fontSize = 24.sp, fontWeight = FontWeight.Bold,
                         )
                     }

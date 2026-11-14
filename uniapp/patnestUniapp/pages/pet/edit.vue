@@ -124,6 +124,7 @@
 				loading: false,
 				vaccineUrls: [],
 				vaccineStatus: '',
+				vaccineUploading: false,
 				sizes: [
 					{ v: PET_SIZE.TINY, t: '特小' },
 					{ v: PET_SIZE.SMALL, t: '小型' },
@@ -220,27 +221,40 @@
 				this.form.photo_urls.splice(i, 1)
 			},
 			chooseVaccine() {
+				if (this.vaccineUploading) return
 				uni.chooseImage({
 					count: 1,
 					sizeType: ['compressed'],
 					success: async (res) => {
 						const path = res.tempFilePaths[0]
+						this.vaccineUploading = true
+						let uploadedUrl = ''
 						try {
 							const data = await uploadApi.image(path)
-							this.vaccineUrls = this.vaccineUrls.concat([data.url])
+							uploadedUrl = data.url
+							this.vaccineUrls = this.vaccineUrls.concat([uploadedUrl])
 							await this.submitVaccine()
-						} catch (e) {}
+						} catch (e) {
+						} finally {
+							this.vaccineUploading = false
+						}
 					}
 				})
 			},
 			async submitVaccine() {
+				// 传快照：并发场景下 this.vaccineUrls 可能已被改过
+				const snapshot = this.vaccineUrls.slice()
 				try {
-					const res = await petApi.uploadVaccine(this.petId, this.vaccineUrls)
+					const res = await petApi.uploadVaccine(this.petId, snapshot)
 					this.vaccineStatus = (res && res.vaccine_status) || 'pending'
 					uni.showToast({ title: '已提交，等待平台核验', icon: 'none' })
 				} catch (e) {
-					// 失败时回滚本次新增的图片
-					this.vaccineUrls = this.vaccineUrls.slice(0, -1)
+					// 失败时只回滚本次新增的那张，不能盲删最后一张
+					// （并发上传时最后一张可能是另一次请求刚加进来且已成功的）
+					const added = snapshot[snapshot.length - 1]
+					if (added) {
+						this.vaccineUrls = this.vaccineUrls.filter((u) => u !== added)
+					}
 				}
 			},
 			async save() {

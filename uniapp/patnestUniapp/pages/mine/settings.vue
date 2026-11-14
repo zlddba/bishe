@@ -57,8 +57,9 @@
 </template>
 
 <script>
-	import { accountApi, systemApi } from '../../utils/api.js'
+	import { accountApi, systemApi, authApi } from '../../utils/api.js'
 	import { getUserInfo } from '../../utils/auth.js'
+	import { fmtDateTime } from '../../utils/format.js'
 
 	export default {
 		data() {
@@ -75,9 +76,18 @@
 		},
 		onShow() {
 			this.user = getUserInfo() || {}
+			this.refreshUser()
 			this.loadVersion()
 		},
 		methods: {
+			// 注销状态只存在服务端，本地 user 快照不会随接口变化，
+			// 必须重新拉一次 /auth/me 才能让「撤销注销」入口正确出现/消失。
+			async refreshUser() {
+				try {
+					const u = await authApi.getProfile()
+					if (u) this.user = u
+				} catch (e) {}
+			},
 			async loadVersion() {
 				try {
 					const v = await systemApi.version()
@@ -96,10 +106,15 @@
 						if (!r.confirm) return
 						try {
 							const res = await accountApi.requestCancel('account')
-							const deadline = (res && res.deadline) || ''
+							// deadline 是 RFC3339（2026-11-17T12:00:00+08:00），直接拼进文案很难看
+							const raw = (res && res.deadline) || ''
+							const deadline = raw ? fmtDateTime(raw) || raw : ''
+							await this.refreshUser()
 							uni.showModal({
 								title: '申请已提交',
-								content: '冷静期至 ' + deadline + '，期间登录可自动撤销。',
+								content: deadline
+									? '冷静期至 ' + deadline + '，期间登录可自动撤销。'
+									: '已进入 72 小时冷静期，期间登录可自动撤销。',
 								showCancel: false
 							})
 						} catch (e) {}
@@ -115,7 +130,7 @@
 						try {
 							await accountApi.withdrawCancel()
 							uni.showToast({ title: '已撤销', icon: 'success' })
-							this.user = getUserInfo() || {}
+							await this.refreshUser()
 						} catch (e) {}
 					}
 				})

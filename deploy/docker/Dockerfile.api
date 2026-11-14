@@ -1,7 +1,11 @@
 # 本地已编译好 Linux 二进制，服务器只做镜像打包（秒级完成）
+#
+# 镜像内额外带一份 acme.sh（vendor/acme.sh），这样后台「HTTPS 证书」页可以直接
+# 申请 / 续期 Let's Encrypt 证书，不需要在宿主机上另外装 certbot。
+# 用 vendor 里的副本而不是构建时 curl，是为了让构建不依赖 GitHub 可达性。
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata curl openssl \
     && adduser -D -u 10001 -h /app patnest
 
 WORKDIR /app
@@ -12,10 +16,23 @@ COPY db/migrations /app/migrations
 # 全新库的基线结构：patnest-migrate 检测到 users 表不存在时会执行它。
 COPY db/init.sql /app/init.sql
 
-RUN chmod +x /app/patnest-api /app/patnest-migrate \
-    && chown -R patnest:patnest /app
+# acme.sh 是单文件 sh 脚本，直接在容器里跑，不需要 cron：
+# 续期由后端 worker 定时触发（见 internal/acme）。
+# 证书走 DNS-01（Cloudflare）验证，所以不需要 webroot 目录，也不占 80 端口。
+#
+# dnsapi/ 是各家 DNS 服务商的插件，主脚本只负责 ACME 协议，
+# --dns dns_cf 时会去 $LE_WORKING_DIR/dnsapi/ 找 dns_cf.sh。
+# 单文件版不带这个目录，必须一起 COPY，否则会报 "Cannot find DNS API hook"。
+COPY vendor/acme.sh /opt/acme/acme.sh
+COPY vendor/dnsapi/ /opt/acme/dnsapi/
+
+# ACME_HOME 存账户密钥、每个域名的证书与后台保存的 Cloudflare Token
+RUN chmod +x /app/patnest-api /app/patnest-migrate /opt/acme/acme.sh /opt/acme/dnsapi/*.sh \
+    && mkdir -p /var/lib/patnest/acme \
+    && chown -R patnest:patnest /app /opt/acme /var/lib/patnest
 
 ENV TZ=Asia/Shanghai
+ENV ACME_HOME=/var/lib/patnest/acme
 USER patnest
 EXPOSE 9201
 

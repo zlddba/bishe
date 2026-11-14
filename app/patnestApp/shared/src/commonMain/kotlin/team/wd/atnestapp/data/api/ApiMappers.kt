@@ -3,7 +3,7 @@ package team.wd.atnestapp.data.api
 import team.wd.atnestapp.data.model.Order
 import team.wd.atnestapp.data.model.Pet
 import team.wd.atnestapp.data.model.Sitter
-import kotlin.math.roundToInt
+import team.wd.atnestapp.utils.formatMoney
 
 fun SitterDto.toUi(): Sitter {
     val perVisit = priceMode == "per_visit"
@@ -16,9 +16,9 @@ fun SitterDto.toUi(): Sitter {
             "visit" -> "上门喂养"
             else -> "其他"
         },
-        price = (if (perVisit) visitPrice else dailyPrice).roundToInt(),
+        price = if (perVisit) visitPrice else dailyPrice,
         unit = if (perVisit) "次" else "天",
-        score = avgScore.roundToInt().coerceIn(0, 5),
+        score = avgScore.coerceIn(0.0, 5.0),
         cap = if (capacity > 0) "$capacity 只" else "—",
         owner = "—",
         tel = "—",
@@ -73,8 +73,8 @@ fun OrderDto.toUi(): Order = Order(
     pet = if (petCount > 0) "$petCount 只" else "—",
     range = "${shortDate(startDate)} - ${shortDate(endDate)}",
     days = "$totalDays 天",
-    amount = totalAmount.roundToInt(),
-    fee = "¥${totalAmount.roundToInt()}",
+    amount = totalAmount,
+    fee = "¥" + formatMoney(totalAmount),
     status = orderStatusLabel(status),
     made = formatDateTime(createdAt),
     id = id,
@@ -93,9 +93,9 @@ fun FavoriteDto.toUi(): Sitter = Sitter(
         "visit" -> "上门喂养"
         else -> "其他"
     },
-    price = dailyPrice.roundToInt(),
+    price = dailyPrice,
     unit = "天",
-    score = avgScore.roundToInt().coerceIn(0, 5),
+    score = avgScore.coerceIn(0.0, 5.0),
     cap = "—",
     owner = "—",
     tel = "—",

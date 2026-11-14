@@ -876,13 +876,75 @@
         }
       }
     },
+    "/api/v1/auth/login/totp": {
+      "post": {
+        "tags": [
+          "认证与账号"
+        ],
+        "summary": "Login T O T P",
+        "description": "后端 handler: `LoginTOTP`（router.go:51）。公开接口，无需登录。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "LoginTOTP_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/refresh": {
       "post": {
         "tags": [
           "认证与账号"
         ],
         "summary": "Refresh",
-        "description": "后端 handler: `Refresh`（router.go:50）。公开接口，无需登录。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `Refresh`（router.go:52）。公开接口，无需登录。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "Refresh_1",
         "produces": [
           "application/json"
@@ -944,7 +1006,7 @@
           "支付回调"
         ],
         "summary": "Payment Notify",
-        "description": "后端 handler: `PaymentNotify`（router.go:54）。公开接口，无需登录。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `PaymentNotify`（router.go:56）。公开接口，无需登录。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "PaymentNotify_1",
         "produces": [
           "application/json"
@@ -1013,7 +1075,7 @@
           "认证与账号"
         ],
         "summary": "Logout",
-        "description": "后端 handler: `Logout`（router.go:61）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `Logout`（router.go:63）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "Logout_1",
         "produces": [
           "application/json"
@@ -1080,7 +1142,7 @@
           "认证与账号"
         ],
         "summary": "Get Profile",
-        "description": "后端 handler: `GetProfile`（router.go:62）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetProfile`（router.go:64）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetProfile_1",
         "produces": [
           "application/json"
@@ -1137,7 +1199,7 @@
           "认证与账号"
         ],
         "summary": "Update My Profile",
-        "description": "后端 handler: `UpdateMyProfile`（router.go:63）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdateMyProfile`（router.go:65）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdateMyProfile_1",
         "produces": [
           "application/json"
@@ -1204,7 +1266,7 @@
           "认证与账号"
         ],
         "summary": "Change My Password",
-        "description": "后端 handler: `ChangeMyPassword`（router.go:64）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ChangeMyPassword`（router.go:66）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ChangeMyPassword_1",
         "produces": [
           "application/json"
@@ -1271,7 +1333,7 @@
           "售后工单"
         ],
         "summary": "Create Ticket",
-        "description": "后端 handler: `CreateTicket`（router.go:67）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateTicket`（router.go:69）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateTicket_1",
         "produces": [
           "application/json"
@@ -1336,7 +1398,7 @@
           "售后工单"
         ],
         "summary": "List My Tickets",
-        "description": "后端 handler: `ListMyTickets`（router.go:68）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListMyTickets`（router.go:70）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListMyTickets_1",
         "produces": [
           "application/json"
@@ -1393,7 +1455,7 @@
           "售后工单"
         ],
         "summary": "Get My Ticket",
-        "description": "后端 handler: `GetMyTicket`（router.go:69）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetMyTicket`（router.go:71）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetMyTicket_1",
         "produces": [
           "application/json"
@@ -1458,7 +1520,7 @@
           "售后工单"
         ],
         "summary": "Reply My Ticket",
-        "description": "后端 handler: `ReplyMyTicket`（router.go:70）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ReplyMyTicket`（router.go:72）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ReplyMyTicket_1",
         "produces": [
           "application/json"
@@ -1532,7 +1594,7 @@
           "主人端"
         ],
         "summary": "List Pets",
-        "description": "后端 handler: `ListPets`（router.go:78）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListPets`（router.go:80）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListPets_1",
         "produces": [
           "application/json"
@@ -1587,7 +1649,7 @@
           "主人端"
         ],
         "summary": "Create Pet",
-        "description": "后端 handler: `CreatePet`（router.go:79）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreatePet`（router.go:81）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreatePet_1",
         "produces": [
           "application/json"
@@ -1654,7 +1716,7 @@
           "主人端"
         ],
         "summary": "Get Pet",
-        "description": "后端 handler: `GetPet`（router.go:80）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetPet`（router.go:82）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetPet_1",
         "produces": [
           "application/json"
@@ -1717,7 +1779,7 @@
           "主人端"
         ],
         "summary": "Update Pet",
-        "description": "后端 handler: `UpdatePet`（router.go:81）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdatePet`（router.go:83）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdatePet_1",
         "produces": [
           "application/json"
@@ -1789,7 +1851,7 @@
           "主人端"
         ],
         "summary": "Delete Pet",
-        "description": "后端 handler: `DeletePet`（router.go:82）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `DeletePet`（router.go:84）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "DeletePet_1",
         "produces": [
           "application/json"
@@ -1854,7 +1916,7 @@
           "主人端"
         ],
         "summary": "Update Pet Vaccine",
-        "description": "后端 handler: `UpdatePetVaccine`（router.go:83）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdatePetVaccine`（router.go:85）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdatePetVaccine_1",
         "produces": [
           "application/json"
@@ -1928,7 +1990,7 @@
           "主人端"
         ],
         "summary": "Get Pet Stays",
-        "description": "后端 handler: `GetPetStays`（router.go:84）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetPetStays`（router.go:86）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetPetStays_1",
         "produces": [
           "application/json"
@@ -1993,7 +2055,7 @@
           "主人端"
         ],
         "summary": "Create Order",
-        "description": "后端 handler: `CreateOrder`（router.go:86）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateOrder`（router.go:88）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateOrder_1",
         "produces": [
           "application/json"
@@ -2058,7 +2120,7 @@
           "主人端"
         ],
         "summary": "List My Orders",
-        "description": "后端 handler: `ListMyOrders`（router.go:87）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListMyOrders`（router.go:89）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListMyOrders_1",
         "produces": [
           "application/json"
@@ -2115,7 +2177,7 @@
           "主人端"
         ],
         "summary": "Get Order Detail",
-        "description": "后端 handler: `GetOrderDetail`（router.go:88）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetOrderDetail`（router.go:90）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetOrderDetail_1",
         "produces": [
           "application/json"
@@ -2180,7 +2242,7 @@
           "主人端"
         ],
         "summary": "Pay Order",
-        "description": "后端 handler: `PayOrder`（router.go:89）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `PayOrder`（router.go:91）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "PayOrder_1",
         "produces": [
           "application/json"
@@ -2254,7 +2316,7 @@
           "主人端"
         ],
         "summary": "Cancel Order",
-        "description": "后端 handler: `CancelOrder`（router.go:90）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CancelOrder`（router.go:92）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CancelOrder_1",
         "produces": [
           "application/json"
@@ -2328,7 +2390,7 @@
           "主人端"
         ],
         "summary": "List Dynamics",
-        "description": "后端 handler: `ListDynamics`（router.go:92）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListDynamics`（router.go:94）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListDynamics_1",
         "produces": [
           "application/json"
@@ -2393,7 +2455,7 @@
           "主人端"
         ],
         "summary": "Get Review",
-        "description": "后端 handler: `GetReview`（router.go:93）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetReview`（router.go:95）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetReview_1",
         "produces": [
           "application/json"
@@ -2456,7 +2518,7 @@
           "主人端"
         ],
         "summary": "Submit Review",
-        "description": "后端 handler: `SubmitReview`（router.go:94）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SubmitReview`（router.go:96）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SubmitReview_1",
         "produces": [
           "application/json"
@@ -2530,7 +2592,7 @@
           "主人端"
         ],
         "summary": "Reschedule Order",
-        "description": "后端 handler: `RescheduleOrder`（router.go:96）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RescheduleOrder`（router.go:98）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RescheduleOrder_1",
         "produces": [
           "application/json"
@@ -2604,7 +2666,7 @@
           "主人端"
         ],
         "summary": "Renew Order",
-        "description": "后端 handler: `RenewOrder`（router.go:97）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RenewOrder`（router.go:99）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RenewOrder_1",
         "produces": [
           "application/json"
@@ -2678,7 +2740,7 @@
           "主人端"
         ],
         "summary": "Request Refund",
-        "description": "后端 handler: `RequestRefund`（router.go:98）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RequestRefund`（router.go:100）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RequestRefund_1",
         "produces": [
           "application/json"
@@ -2752,7 +2814,7 @@
           "主人端"
         ],
         "summary": "List My Refund Requests",
-        "description": "后端 handler: `ListMyRefundRequests`（router.go:99）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListMyRefundRequests`（router.go:101）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListMyRefundRequests_1",
         "produces": [
           "application/json"
@@ -2809,7 +2871,7 @@
           "主人端"
         ],
         "summary": "List Favorites",
-        "description": "后端 handler: `ListFavorites`（router.go:101）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListFavorites`（router.go:103）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListFavorites_1",
         "produces": [
           "application/json"
@@ -2864,7 +2926,7 @@
           "主人端"
         ],
         "summary": "Add Favorite",
-        "description": "后端 handler: `AddFavorite`（router.go:102）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AddFavorite`（router.go:104）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AddFavorite_1",
         "produces": [
           "application/json"
@@ -2931,7 +2993,7 @@
           "主人端"
         ],
         "summary": "Remove Favorite",
-        "description": "后端 handler: `RemoveFavorite`（router.go:103）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RemoveFavorite`（router.go:105）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RemoveFavorite_1",
         "produces": [
           "application/json"
@@ -2996,7 +3058,7 @@
           "主人端"
         ],
         "summary": "Compare Favorites",
-        "description": "后端 handler: `CompareFavorites`（router.go:104）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CompareFavorites`（router.go:106）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CompareFavorites_1",
         "produces": [
           "application/json"
@@ -3053,8 +3115,65 @@
           "主人端"
         ],
         "summary": "My Points",
-        "description": "后端 handler: `MyPoints`（router.go:106）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MyPoints`（router.go:108）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MyPoints_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pet-owner/invite": {
+      "get": {
+        "tags": [
+          "主人端"
+        ],
+        "summary": "My Invite",
+        "description": "后端 handler: `MyInvite`（router.go:109）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "MyInvite_1",
         "produces": [
           "application/json"
         ],
@@ -3110,7 +3229,7 @@
           "主人端"
         ],
         "summary": "Wallet Overview",
-        "description": "后端 handler: `WalletOverview`（router.go:109）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `WalletOverview`（router.go:112）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "WalletOverview_1",
         "produces": [
           "application/json"
@@ -3167,7 +3286,7 @@
           "主人端"
         ],
         "summary": "Wallet Transactions",
-        "description": "后端 handler: `WalletTransactions`（router.go:110）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `WalletTransactions`（router.go:113）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "WalletTransactions_1",
         "produces": [
           "application/json"
@@ -3224,7 +3343,7 @@
           "主人端"
         ],
         "summary": "Create Recharge",
-        "description": "后端 handler: `CreateRecharge`（router.go:111）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateRecharge`（router.go:114）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateRecharge_1",
         "produces": [
           "application/json"
@@ -3291,7 +3410,7 @@
           "主人端"
         ],
         "summary": "Confirm Recharge",
-        "description": "后端 handler: `ConfirmRecharge`（router.go:112）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ConfirmRecharge`（router.go:115）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ConfirmRecharge_1",
         "produces": [
           "application/json"
@@ -3365,7 +3484,7 @@
           "主人端"
         ],
         "summary": "Apply Wallet Withdrawal",
-        "description": "后端 handler: `ApplyWalletWithdrawal`（router.go:114）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ApplyWalletWithdrawal`（router.go:117）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ApplyWalletWithdrawal_1",
         "produces": [
           "application/json"
@@ -3432,7 +3551,7 @@
           "主人端"
         ],
         "summary": "My Coupons",
-        "description": "后端 handler: `MyCoupons`（router.go:116）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MyCoupons`（router.go:119）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MyCoupons_1",
         "produces": [
           "application/json"
@@ -3489,7 +3608,7 @@
           "主人端"
         ],
         "summary": "Claim Coupon",
-        "description": "后端 handler: `ClaimCoupon`（router.go:117）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ClaimCoupon`（router.go:120）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ClaimCoupon_1",
         "produces": [
           "application/json"
@@ -3563,7 +3682,7 @@
           "主人端"
         ],
         "summary": "Like Dynamic",
-        "description": "后端 handler: `LikeDynamic`（router.go:119）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `LikeDynamic`（router.go:122）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "LikeDynamic_1",
         "produces": [
           "application/json"
@@ -3635,7 +3754,7 @@
           "主人端"
         ],
         "summary": "Unlike Dynamic",
-        "description": "后端 handler: `UnlikeDynamic`（router.go:120）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UnlikeDynamic`（router.go:123）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UnlikeDynamic_1",
         "produces": [
           "application/json"
@@ -3700,7 +3819,7 @@
           "主人端"
         ],
         "summary": "Get Dynamic",
-        "description": "后端 handler: `GetDynamic`（router.go:121）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetDynamic`（router.go:124）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetDynamic_1",
         "produces": [
           "application/json"
@@ -3765,7 +3884,7 @@
           "主人端"
         ],
         "summary": "List Dynamic Comments",
-        "description": "后端 handler: `ListDynamicComments`（router.go:122）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListDynamicComments`（router.go:125）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListDynamicComments_1",
         "produces": [
           "application/json"
@@ -3828,7 +3947,7 @@
           "主人端"
         ],
         "summary": "Create Dynamic Comment",
-        "description": "后端 handler: `CreateDynamicComment`（router.go:123）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateDynamicComment`（router.go:126）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateDynamicComment_1",
         "produces": [
           "application/json"
@@ -3902,7 +4021,7 @@
           "主人端"
         ],
         "summary": "Follow Up Review",
-        "description": "后端 handler: `FollowUpReview`（router.go:124）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `FollowUpReview`（router.go:127）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "FollowUpReview_1",
         "produces": [
           "application/json"
@@ -3976,7 +4095,7 @@
           "主人端"
         ],
         "summary": "List Owner Dynamics",
-        "description": "后端 handler: `ListOwnerDynamics`（router.go:125）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListOwnerDynamics`（router.go:128）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListOwnerDynamics_1",
         "produces": [
           "application/json"
@@ -4033,7 +4152,7 @@
           "主人端"
         ],
         "summary": "Contact Sitter",
-        "description": "后端 handler: `ContactSitter`（router.go:126）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ContactSitter`（router.go:129）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ContactSitter_1",
         "produces": [
           "application/json"
@@ -4107,7 +4226,7 @@
           "主人端"
         ],
         "summary": "Apply Sitter",
-        "description": "后端 handler: `ApplySitter`（router.go:127）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ApplySitter`（router.go:130）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ApplySitter_1",
         "produces": [
           "application/json"
@@ -4174,7 +4293,7 @@
           "主人端"
         ],
         "summary": "Request Account Cancel",
-        "description": "后端 handler: `RequestAccountCancel`（router.go:130）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RequestAccountCancel`（router.go:133）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RequestAccountCancel_1",
         "produces": [
           "application/json"
@@ -4241,7 +4360,7 @@
           "主人端"
         ],
         "summary": "Withdraw Account Cancel",
-        "description": "后端 handler: `WithdrawAccountCancel`（router.go:131）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `WithdrawAccountCancel`（router.go:134）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "WithdrawAccountCancel_1",
         "produces": [
           "application/json"
@@ -4308,7 +4427,7 @@
           "主人端"
         ],
         "summary": "List Personal Notifications",
-        "description": "后端 handler: `ListPersonalNotifications`（router.go:136）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListPersonalNotifications`（router.go:139）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListPersonalNotifications_1",
         "produces": [
           "application/json"
@@ -4365,7 +4484,7 @@
           "主人端"
         ],
         "summary": "Mark Personal Notification Read",
-        "description": "后端 handler: `MarkPersonalNotificationRead`（router.go:137）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkPersonalNotificationRead`（router.go:140）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkPersonalNotificationRead_1",
         "produces": [
           "application/json"
@@ -4439,7 +4558,7 @@
           "主人端"
         ],
         "summary": "Mark All Personal Notifications Read",
-        "description": "后端 handler: `MarkAllPersonalNotificationsRead`（router.go:138）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkAllPersonalNotificationsRead`（router.go:141）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkAllPersonalNotificationsRead_1",
         "produces": [
           "application/json"
@@ -4506,7 +4625,7 @@
           "主人端"
         ],
         "summary": "List Sitters",
-        "description": "后端 handler: `ListSitters`（router.go:144）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListSitters`（router.go:147）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListSitters_2",
         "produces": [
           "application/json"
@@ -4563,7 +4682,7 @@
           "主人端"
         ],
         "summary": "Search Sitters",
-        "description": "后端 handler: `SearchSitters`（router.go:145）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SearchSitters`（router.go:148）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SearchSitters_2",
         "produces": [
           "application/json"
@@ -4620,7 +4739,7 @@
           "主人端"
         ],
         "summary": "Get Sitter",
-        "description": "后端 handler: `GetSitter`（router.go:146）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetSitter`（router.go:149）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetSitter_2",
         "produces": [
           "application/json"
@@ -4685,7 +4804,7 @@
           "主人端"
         ],
         "summary": "Sitter Capacity Public",
-        "description": "后端 handler: `SitterCapacityPublic`（router.go:147）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SitterCapacityPublic`（router.go:150）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SitterCapacityPublic_2",
         "produces": [
           "application/json"
@@ -4750,7 +4869,7 @@
           "主人端"
         ],
         "summary": "List Addons",
-        "description": "后端 handler: `ListAddons`（router.go:148）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListAddons`（router.go:151）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListAddons_2",
         "produces": [
           "application/json"
@@ -4815,7 +4934,7 @@
           "主人端"
         ],
         "summary": "Estimate Order",
-        "description": "后端 handler: `EstimateOrder`（router.go:149）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `EstimateOrder`（router.go:152）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "EstimateOrder_1",
         "produces": [
           "application/json"
@@ -4880,7 +4999,7 @@
           "消息通知"
         ],
         "summary": "List Notifications",
-        "description": "后端 handler: `ListNotifications`（router.go:154）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListNotifications`（router.go:157）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListNotifications_1",
         "produces": [
           "application/json"
@@ -4937,7 +5056,7 @@
           "消息通知"
         ],
         "summary": "Mark Notification Read",
-        "description": "后端 handler: `MarkNotificationRead`（router.go:155）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkNotificationRead`（router.go:158）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkNotificationRead_1",
         "produces": [
           "application/json"
@@ -5011,7 +5130,7 @@
           "消息通知"
         ],
         "summary": "Mark All Notifications Read",
-        "description": "后端 handler: `MarkAllNotificationsRead`（router.go:156）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkAllNotificationsRead`（router.go:159）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkAllNotificationsRead_1",
         "produces": [
           "application/json"
@@ -5078,7 +5197,7 @@
           "机构端"
         ],
         "summary": "Get My Shop",
-        "description": "后端 handler: `GetMyShop`（router.go:164）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetMyShop`（router.go:167）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetMyShop_1",
         "produces": [
           "application/json"
@@ -5133,7 +5252,7 @@
           "机构端"
         ],
         "summary": "Update My Shop",
-        "description": "后端 handler: `UpdateMyShop`（router.go:165）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdateMyShop`（router.go:168）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdateMyShop_1",
         "produces": [
           "application/json"
@@ -5200,7 +5319,7 @@
           "机构端"
         ],
         "summary": "Create My Shop",
-        "description": "后端 handler: `CreateMyShop`（router.go:166）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateMyShop`（router.go:169）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateMyShop_1",
         "produces": [
           "application/json"
@@ -5267,7 +5386,7 @@
           "机构端"
         ],
         "summary": "List Received Orders",
-        "description": "后端 handler: `ListReceivedOrders`（router.go:172）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListReceivedOrders`（router.go:175）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListReceivedOrders_1",
         "produces": [
           "application/json"
@@ -5324,7 +5443,7 @@
           "机构端"
         ],
         "summary": "Get Order Detail",
-        "description": "后端 handler: `GetOrderDetail`（router.go:173）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GetOrderDetail`（router.go:176）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GetOrderDetail_2",
         "produces": [
           "application/json"
@@ -5389,7 +5508,7 @@
           "机构端"
         ],
         "summary": "Accept Order",
-        "description": "后端 handler: `AcceptOrder`（router.go:174）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AcceptOrder`（router.go:177）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AcceptOrder_1",
         "produces": [
           "application/json"
@@ -5463,7 +5582,7 @@
           "机构端"
         ],
         "summary": "Reject Order",
-        "description": "后端 handler: `RejectOrder`（router.go:175）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `RejectOrder`（router.go:178）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "RejectOrder_1",
         "produces": [
           "application/json"
@@ -5537,7 +5656,7 @@
           "机构端"
         ],
         "summary": "Complete Order",
-        "description": "后端 handler: `CompleteOrder`（router.go:176）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CompleteOrder`（router.go:179）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CompleteOrder_1",
         "produces": [
           "application/json"
@@ -5611,7 +5730,7 @@
           "机构端"
         ],
         "summary": "Publish Dynamic",
-        "description": "后端 handler: `PublishDynamic`（router.go:178）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `PublishDynamic`（router.go:181）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "PublishDynamic_1",
         "produces": [
           "application/json"
@@ -5685,7 +5804,7 @@
           "机构端"
         ],
         "summary": "Reply Review",
-        "description": "后端 handler: `ReplyReview`（router.go:179）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ReplyReview`（router.go:182）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ReplyReview_1",
         "produces": [
           "application/json"
@@ -5759,7 +5878,7 @@
           "机构端"
         ],
         "summary": "My Sitter Capacity",
-        "description": "后端 handler: `MySitterCapacity`（router.go:181）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MySitterCapacity`（router.go:184）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MySitterCapacity_1",
         "produces": [
           "application/json"
@@ -5814,7 +5933,7 @@
           "机构端"
         ],
         "summary": "Set Sitter Capacity",
-        "description": "后端 handler: `SetSitterCapacity`（router.go:182）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SetSitterCapacity`（router.go:185）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SetSitterCapacity_1",
         "produces": [
           "application/json"
@@ -5881,7 +6000,7 @@
           "机构端"
         ],
         "summary": "List Sitter Reviews",
-        "description": "后端 handler: `ListSitterReviews`（router.go:184）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListSitterReviews`（router.go:187）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListSitterReviews_1",
         "produces": [
           "application/json"
@@ -5938,7 +6057,7 @@
           "机构端"
         ],
         "summary": "List Sitter Dynamics",
-        "description": "后端 handler: `ListSitterDynamics`（router.go:185）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListSitterDynamics`（router.go:188）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListSitterDynamics_1",
         "produces": [
           "application/json"
@@ -5995,7 +6114,7 @@
           "机构端"
         ],
         "summary": "Delete Sitter Dynamic",
-        "description": "后端 handler: `DeleteSitterDynamic`（router.go:186）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `DeleteSitterDynamic`（router.go:189）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "DeleteSitterDynamic_1",
         "produces": [
           "application/json"
@@ -6060,7 +6179,7 @@
           "机构端"
         ],
         "summary": "Sitter Stats",
-        "description": "后端 handler: `SitterStats`（router.go:187）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SitterStats`（router.go:190）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SitterStats_1",
         "produces": [
           "application/json"
@@ -6117,7 +6236,7 @@
           "机构端"
         ],
         "summary": "List Price Rules",
-        "description": "后端 handler: `ListPriceRules`（router.go:189）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListPriceRules`（router.go:192）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListPriceRules_1",
         "produces": [
           "application/json"
@@ -6172,7 +6291,7 @@
           "机构端"
         ],
         "summary": "Create Price Rule",
-        "description": "后端 handler: `CreatePriceRule`（router.go:190）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreatePriceRule`（router.go:193）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreatePriceRule_1",
         "produces": [
           "application/json"
@@ -6239,7 +6358,7 @@
           "机构端"
         ],
         "summary": "Delete Price Rule",
-        "description": "后端 handler: `DeletePriceRule`（router.go:191）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `DeletePriceRule`（router.go:194）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "DeletePriceRule_1",
         "produces": [
           "application/json"
@@ -6304,7 +6423,7 @@
           "机构端"
         ],
         "summary": "List Addons",
-        "description": "后端 handler: `ListAddons`（router.go:193）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListAddons`（router.go:196）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListAddons_3",
         "produces": [
           "application/json"
@@ -6359,7 +6478,7 @@
           "机构端"
         ],
         "summary": "Create Addon",
-        "description": "后端 handler: `CreateAddon`（router.go:194）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateAddon`（router.go:197）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateAddon_1",
         "produces": [
           "application/json"
@@ -6426,7 +6545,7 @@
           "机构端"
         ],
         "summary": "Update Addon",
-        "description": "后端 handler: `UpdateAddon`（router.go:195）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdateAddon`（router.go:198）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdateAddon_1",
         "produces": [
           "application/json"
@@ -6498,7 +6617,7 @@
           "机构端"
         ],
         "summary": "Delete Addon",
-        "description": "后端 handler: `DeleteAddon`（router.go:196）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `DeleteAddon`（router.go:199）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "DeleteAddon_1",
         "produces": [
           "application/json"
@@ -6563,7 +6682,7 @@
           "机构端"
         ],
         "summary": "Sitter Earnings",
-        "description": "后端 handler: `SitterEarnings`（router.go:198）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SitterEarnings`（router.go:201）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SitterEarnings_1",
         "produces": [
           "application/json"
@@ -6620,7 +6739,7 @@
           "机构端"
         ],
         "summary": "List My Settlements",
-        "description": "后端 handler: `ListMySettlements`（router.go:199）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListMySettlements`（router.go:202）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListMySettlements_1",
         "produces": [
           "application/json"
@@ -6675,7 +6794,7 @@
           "机构端"
         ],
         "summary": "Apply Settlement",
-        "description": "后端 handler: `ApplySettlement`（router.go:201）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ApplySettlement`（router.go:204）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ApplySettlement_1",
         "produces": [
           "application/json"
@@ -6742,7 +6861,7 @@
           "机构端"
         ],
         "summary": "Sitter Settlement Window",
-        "description": "后端 handler: `SitterSettlementWindow`（router.go:200）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `SitterSettlementWindow`（router.go:203）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "SitterSettlementWindow_1",
         "produces": [
           "application/json"
@@ -6799,7 +6918,7 @@
           "机构端"
         ],
         "summary": "List Sitter Coupons",
-        "description": "后端 handler: `ListSitterCoupons`（router.go:204）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListSitterCoupons`（router.go:207）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListSitterCoupons_1",
         "produces": [
           "application/json"
@@ -6854,7 +6973,7 @@
           "机构端"
         ],
         "summary": "Create Sitter Coupon",
-        "description": "后端 handler: `CreateSitterCoupon`（router.go:205）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateSitterCoupon`（router.go:208）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateSitterCoupon_1",
         "produces": [
           "application/json"
@@ -6921,7 +7040,7 @@
           "机构端"
         ],
         "summary": "Update Sitter Coupon",
-        "description": "后端 handler: `UpdateSitterCoupon`（router.go:206）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UpdateSitterCoupon`（router.go:209）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UpdateSitterCoupon_1",
         "produces": [
           "application/json"
@@ -6993,7 +7112,7 @@
           "机构端"
         ],
         "summary": "Delete Sitter Coupon",
-        "description": "后端 handler: `DeleteSitterCoupon`（router.go:207）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `DeleteSitterCoupon`（router.go:210）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "DeleteSitterCoupon_1",
         "produces": [
           "application/json"
@@ -7058,7 +7177,7 @@
           "机构端"
         ],
         "summary": "List Business Notifications",
-        "description": "后端 handler: `ListBusinessNotifications`（router.go:210）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `ListBusinessNotifications`（router.go:213）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "ListBusinessNotifications_1",
         "produces": [
           "application/json"
@@ -7115,7 +7234,7 @@
           "机构端"
         ],
         "summary": "Mark Business Notification Read",
-        "description": "后端 handler: `MarkBusinessNotificationRead`（router.go:211）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkBusinessNotificationRead`（router.go:214）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkBusinessNotificationRead_1",
         "produces": [
           "application/json"
@@ -7189,7 +7308,7 @@
           "机构端"
         ],
         "summary": "Mark All Business Notifications Read",
-        "description": "后端 handler: `MarkAllBusinessNotificationsRead`（router.go:212）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `MarkAllBusinessNotificationsRead`（router.go:215）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "MarkAllBusinessNotificationsRead_1",
         "produces": [
           "application/json"
@@ -7256,7 +7375,7 @@
           "管理后台"
         ],
         "summary": "Admin List Users",
-        "description": "后端 handler: `AdminListUsers`（router.go:220）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListUsers`（router.go:223）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListUsers_1",
         "produces": [
           "application/json"
@@ -7311,7 +7430,7 @@
           "管理后台"
         ],
         "summary": "Admin Create User",
-        "description": "后端 handler: `AdminCreateUser`（router.go:221）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateUser`（router.go:224）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateUser_1",
         "produces": [
           "application/json"
@@ -7378,7 +7497,7 @@
           "管理后台"
         ],
         "summary": "Admin Update User",
-        "description": "后端 handler: `AdminUpdateUser`（router.go:222）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateUser`（router.go:225）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateUser_1",
         "produces": [
           "application/json"
@@ -7450,7 +7569,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete User",
-        "description": "后端 handler: `AdminDeleteUser`（router.go:223）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteUser`（router.go:226）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteUser_1",
         "produces": [
           "application/json"
@@ -7515,7 +7634,7 @@
           "管理后台"
         ],
         "summary": "Admin Purge User",
-        "description": "后端 handler: `AdminPurgeUser`（router.go:224）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminPurgeUser`（router.go:227）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminPurgeUser_1",
         "produces": [
           "application/json"
@@ -7580,7 +7699,7 @@
           "管理后台"
         ],
         "summary": "Admin Reset Password",
-        "description": "后端 handler: `AdminResetPassword`（router.go:225）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminResetPassword`（router.go:228）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminResetPassword_1",
         "produces": [
           "application/json"
@@ -7654,7 +7773,7 @@
           "管理后台"
         ],
         "summary": "Admin List Sitters",
-        "description": "后端 handler: `AdminListSitters`（router.go:227）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListSitters`（router.go:230）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListSitters_1",
         "produces": [
           "application/json"
@@ -7709,7 +7828,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Sitter",
-        "description": "后端 handler: `AdminCreateSitter`（router.go:228）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateSitter`（router.go:231）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateSitter_1",
         "produces": [
           "application/json"
@@ -7776,7 +7895,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Sitter Detail",
-        "description": "后端 handler: `AdminGetSitterDetail`（router.go:229）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetSitterDetail`（router.go:232）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetSitterDetail_1",
         "produces": [
           "application/json"
@@ -7839,7 +7958,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Sitter",
-        "description": "后端 handler: `AdminUpdateSitter`（router.go:230）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateSitter`（router.go:233）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateSitter_1",
         "produces": [
           "application/json"
@@ -7911,7 +8030,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Sitter",
-        "description": "后端 handler: `AdminDeleteSitter`（router.go:232）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteSitter`（router.go:235）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteSitter_1",
         "produces": [
           "application/json"
@@ -7976,7 +8095,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Sitter Status",
-        "description": "后端 handler: `AdminUpdateSitterStatus`（router.go:231）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateSitterStatus`（router.go:234）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateSitterStatus_1",
         "produces": [
           "application/json"
@@ -8050,7 +8169,7 @@
           "管理后台"
         ],
         "summary": "Admin List Orders",
-        "description": "后端 handler: `AdminListOrders`（router.go:234）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListOrders`（router.go:237）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListOrders_1",
         "produces": [
           "application/json"
@@ -8105,7 +8224,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Order",
-        "description": "后端 handler: `AdminCreateOrder`（router.go:235）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateOrder`（router.go:238）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateOrder_1",
         "produces": [
           "application/json"
@@ -8172,7 +8291,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Order Detail",
-        "description": "后端 handler: `AdminGetOrderDetail`（router.go:236）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetOrderDetail`（router.go:239）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetOrderDetail_1",
         "produces": [
           "application/json"
@@ -8235,7 +8354,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Order",
-        "description": "后端 handler: `AdminUpdateOrder`（router.go:237）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateOrder`（router.go:240）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateOrder_1",
         "produces": [
           "application/json"
@@ -8307,7 +8426,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Order",
-        "description": "后端 handler: `AdminDeleteOrder`（router.go:238）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteOrder`（router.go:241）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteOrder_1",
         "produces": [
           "application/json"
@@ -8372,7 +8491,7 @@
           "管理后台"
         ],
         "summary": "Admin Refund Order",
-        "description": "后端 handler: `AdminRefundOrder`（router.go:239）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminRefundOrder`（router.go:242）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminRefundOrder_1",
         "produces": [
           "application/json"
@@ -8446,7 +8565,7 @@
           "管理后台"
         ],
         "summary": "Admin List Pets",
-        "description": "后端 handler: `AdminListPets`（router.go:241）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListPets`（router.go:244）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListPets_1",
         "produces": [
           "application/json"
@@ -8501,7 +8620,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Pet",
-        "description": "后端 handler: `AdminCreatePet`（router.go:242）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreatePet`（router.go:245）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreatePet_1",
         "produces": [
           "application/json"
@@ -8568,7 +8687,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Pet",
-        "description": "后端 handler: `AdminUpdatePet`（router.go:243）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdatePet`（router.go:246）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdatePet_1",
         "produces": [
           "application/json"
@@ -8640,7 +8759,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Pet",
-        "description": "后端 handler: `AdminDeletePet`（router.go:244）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeletePet`（router.go:247）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeletePet_1",
         "produces": [
           "application/json"
@@ -8705,7 +8824,7 @@
           "管理后台"
         ],
         "summary": "Admin List Dynamics",
-        "description": "后端 handler: `AdminListDynamics`（router.go:246）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListDynamics`（router.go:249）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListDynamics_1",
         "produces": [
           "application/json"
@@ -8760,7 +8879,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Dynamic",
-        "description": "后端 handler: `AdminCreateDynamic`（router.go:247）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateDynamic`（router.go:250）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateDynamic_1",
         "produces": [
           "application/json"
@@ -8827,7 +8946,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Dynamic",
-        "description": "后端 handler: `AdminUpdateDynamic`（router.go:248）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateDynamic`（router.go:251）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateDynamic_1",
         "produces": [
           "application/json"
@@ -8899,7 +9018,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Dynamic",
-        "description": "后端 handler: `AdminDeleteDynamic`（router.go:249）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteDynamic`（router.go:252）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteDynamic_1",
         "produces": [
           "application/json"
@@ -8964,7 +9083,7 @@
           "管理后台"
         ],
         "summary": "Admin List Reviews",
-        "description": "后端 handler: `AdminListReviews`（router.go:251）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListReviews`（router.go:254）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListReviews_1",
         "produces": [
           "application/json"
@@ -9019,7 +9138,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Review",
-        "description": "后端 handler: `AdminCreateReview`（router.go:252）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateReview`（router.go:255）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateReview_1",
         "produces": [
           "application/json"
@@ -9086,7 +9205,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Review",
-        "description": "后端 handler: `AdminUpdateReview`（router.go:253）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateReview`（router.go:256）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateReview_1",
         "produces": [
           "application/json"
@@ -9158,7 +9277,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Review",
-        "description": "后端 handler: `AdminDeleteReview`（router.go:254）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteReview`（router.go:257）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteReview_1",
         "produces": [
           "application/json"
@@ -9223,7 +9342,7 @@
           "管理后台"
         ],
         "summary": "Admin Audit Logs",
-        "description": "后端 handler: `AdminAuditLogs`（router.go:256）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminAuditLogs`（router.go:259）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminAuditLogs_1",
         "produces": [
           "application/json"
@@ -9280,7 +9399,7 @@
           "管理后台"
         ],
         "summary": "Admin Stats",
-        "description": "后端 handler: `AdminStats`（router.go:257）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminStats`（router.go:260）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminStats_1",
         "produces": [
           "application/json"
@@ -9337,7 +9456,7 @@
           "管理后台"
         ],
         "summary": "Admin System Info",
-        "description": "后端 handler: `AdminSystemInfo`（router.go:259）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminSystemInfo`（router.go:262）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminSystemInfo_1",
         "produces": [
           "application/json"
@@ -9394,7 +9513,7 @@
           "管理后台"
         ],
         "summary": "Admin Updates",
-        "description": "后端 handler: `AdminUpdates`（router.go:260）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdates`（router.go:263）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdates_1",
         "produces": [
           "application/json"
@@ -9451,7 +9570,7 @@
           "管理后台"
         ],
         "summary": "Admin Scan Updates",
-        "description": "后端 handler: `AdminScanUpdates`（router.go:261）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminScanUpdates`（router.go:264）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminScanUpdates_1",
         "produces": [
           "application/json"
@@ -9518,7 +9637,7 @@
           "管理后台"
         ],
         "summary": "Admin Upload Update",
-        "description": "后端 handler: `AdminUploadUpdate`（router.go:262）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUploadUpdate`（router.go:265）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUploadUpdate_1",
         "produces": [
           "application/json"
@@ -9585,7 +9704,7 @@
           "管理后台"
         ],
         "summary": "Admin Apply Update",
-        "description": "后端 handler: `AdminApplyUpdate`（router.go:263）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminApplyUpdate`（router.go:266）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminApplyUpdate_1",
         "produces": [
           "application/json"
@@ -9652,7 +9771,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Job",
-        "description": "后端 handler: `AdminUpdateJob`（router.go:264）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateJob`（router.go:267）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateJob_1",
         "produces": [
           "application/json"
@@ -9717,7 +9836,7 @@
           "管理后台"
         ],
         "summary": "Admin List Notifications",
-        "description": "后端 handler: `AdminListNotifications`（router.go:266）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListNotifications`（router.go:269）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListNotifications_1",
         "produces": [
           "application/json"
@@ -9774,7 +9893,7 @@
           "管理后台"
         ],
         "summary": "Admin Broadcast Notification",
-        "description": "后端 handler: `AdminBroadcastNotification`（router.go:267）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminBroadcastNotification`（router.go:270）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminBroadcastNotification_1",
         "produces": [
           "application/json"
@@ -9841,7 +9960,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Notification",
-        "description": "后端 handler: `AdminDeleteNotification`（router.go:268）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteNotification`（router.go:271）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteNotification_1",
         "produces": [
           "application/json"
@@ -9906,7 +10025,7 @@
           "管理后台"
         ],
         "summary": "Admin Verify Pet Vaccine",
-        "description": "后端 handler: `AdminVerifyPetVaccine`（router.go:270）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminVerifyPetVaccine`（router.go:273）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminVerifyPetVaccine_1",
         "produces": [
           "application/json"
@@ -9980,7 +10099,7 @@
           "管理后台"
         ],
         "summary": "Admin List Coupons",
-        "description": "后端 handler: `AdminListCoupons`（router.go:272）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListCoupons`（router.go:275）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListCoupons_1",
         "produces": [
           "application/json"
@@ -10035,7 +10154,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Coupon",
-        "description": "后端 handler: `AdminCreateCoupon`（router.go:273）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateCoupon`（router.go:276）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateCoupon_1",
         "produces": [
           "application/json"
@@ -10102,7 +10221,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Coupon",
-        "description": "后端 handler: `AdminUpdateCoupon`（router.go:274）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateCoupon`（router.go:277）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateCoupon_1",
         "produces": [
           "application/json"
@@ -10174,7 +10293,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Coupon",
-        "description": "后端 handler: `AdminDeleteCoupon`（router.go:275）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteCoupon`（router.go:278）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteCoupon_1",
         "produces": [
           "application/json"
@@ -10239,7 +10358,7 @@
           "管理后台"
         ],
         "summary": "Admin List Templates",
-        "description": "后端 handler: `AdminListTemplates`（router.go:277）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListTemplates`（router.go:280）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListTemplates_1",
         "produces": [
           "application/json"
@@ -10294,7 +10413,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Template",
-        "description": "后端 handler: `AdminCreateTemplate`（router.go:278）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreateTemplate`（router.go:281）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreateTemplate_1",
         "produces": [
           "application/json"
@@ -10361,7 +10480,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Template",
-        "description": "后端 handler: `AdminUpdateTemplate`（router.go:279）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateTemplate`（router.go:282）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateTemplate_1",
         "produces": [
           "application/json"
@@ -10433,7 +10552,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete Template",
-        "description": "后端 handler: `AdminDeleteTemplate`（router.go:280）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteTemplate`（router.go:283）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteTemplate_1",
         "produces": [
           "application/json"
@@ -10498,7 +10617,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Permissions",
-        "description": "后端 handler: `AdminGetPermissions`（router.go:282）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetPermissions`（router.go:285）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetPermissions_1",
         "produces": [
           "application/json"
@@ -10553,7 +10672,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Permission",
-        "description": "后端 handler: `AdminUpdatePermission`（router.go:283）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdatePermission`（router.go:286）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdatePermission_1",
         "produces": [
           "application/json"
@@ -10620,7 +10739,7 @@
           "管理后台"
         ],
         "summary": "Admin Export C S V",
-        "description": "后端 handler: `AdminExportCSV`（router.go:285）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminExportCSV`（router.go:288）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminExportCSV_1",
         "produces": [
           "application/json"
@@ -10685,7 +10804,7 @@
           "管理后台"
         ],
         "summary": "Admin List Refund Requests",
-        "description": "后端 handler: `AdminListRefundRequests`（router.go:287）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListRefundRequests`（router.go:290）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListRefundRequests_1",
         "produces": [
           "application/json"
@@ -10742,7 +10861,7 @@
           "管理后台"
         ],
         "summary": "Admin Handle Refund Request",
-        "description": "后端 handler: `AdminHandleRefundRequest`（router.go:288）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminHandleRefundRequest`（router.go:291）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminHandleRefundRequest_1",
         "produces": [
           "application/json"
@@ -10816,7 +10935,7 @@
           "管理后台"
         ],
         "summary": "Admin List Tickets",
-        "description": "后端 handler: `AdminListTickets`（router.go:290）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListTickets`（router.go:293）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListTickets_1",
         "produces": [
           "application/json"
@@ -10873,7 +10992,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Ticket",
-        "description": "后端 handler: `AdminGetTicket`（router.go:291）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetTicket`（router.go:294）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetTicket_1",
         "produces": [
           "application/json"
@@ -10936,7 +11055,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Ticket",
-        "description": "后端 handler: `AdminUpdateTicket`（router.go:293）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateTicket`（router.go:296）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateTicket_1",
         "produces": [
           "application/json"
@@ -11010,7 +11129,7 @@
           "管理后台"
         ],
         "summary": "Admin Reply Ticket",
-        "description": "后端 handler: `AdminReplyTicket`（router.go:292）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminReplyTicket`（router.go:295）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminReplyTicket_1",
         "produces": [
           "application/json"
@@ -11084,7 +11203,7 @@
           "管理后台"
         ],
         "summary": "Admin List Settlements",
-        "description": "后端 handler: `AdminListSettlements`（router.go:295）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListSettlements`（router.go:298）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListSettlements_1",
         "produces": [
           "application/json"
@@ -11141,7 +11260,7 @@
           "管理后台"
         ],
         "summary": "Admin Pay Settlement",
-        "description": "后端 handler: `AdminPaySettlement`（router.go:296）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminPaySettlement`（router.go:299）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminPaySettlement_1",
         "produces": [
           "application/json"
@@ -11215,7 +11334,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Commission Setting",
-        "description": "后端 handler: `AdminGetCommissionSetting`（router.go:299）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetCommissionSetting`（router.go:302）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetCommissionSetting_1",
         "produces": [
           "application/json"
@@ -11270,7 +11389,7 @@
           "管理后台"
         ],
         "summary": "Admin Update Commission Setting",
-        "description": "后端 handler: `AdminUpdateCommissionSetting`（router.go:300）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUpdateCommissionSetting`（router.go:303）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUpdateCommissionSetting_1",
         "produces": [
           "application/json"
@@ -11337,7 +11456,7 @@
           "管理后台"
         ],
         "summary": "Admin List Wallets",
-        "description": "后端 handler: `AdminListWallets`（router.go:303）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListWallets`（router.go:306）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListWallets_1",
         "produces": [
           "application/json"
@@ -11394,7 +11513,7 @@
           "管理后台"
         ],
         "summary": "Admin Get Wallet",
-        "description": "后端 handler: `AdminGetWallet`（router.go:304）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetWallet`（router.go:307）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetWallet_1",
         "produces": [
           "application/json"
@@ -11459,7 +11578,7 @@
           "管理后台"
         ],
         "summary": "Admin Adjust Wallet",
-        "description": "后端 handler: `AdminAdjustWallet`（router.go:305）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminAdjustWallet`（router.go:308）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminAdjustWallet_1",
         "produces": [
           "application/json"
@@ -11533,7 +11652,7 @@
           "管理后台"
         ],
         "summary": "Admin List Recharges",
-        "description": "后端 handler: `AdminListRecharges`（router.go:306）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListRecharges`（router.go:309）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListRecharges_1",
         "produces": [
           "application/json"
@@ -11590,7 +11709,7 @@
           "管理后台"
         ],
         "summary": "Admin Confirm Recharge",
-        "description": "后端 handler: `AdminConfirmRecharge`（router.go:307）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminConfirmRecharge`（router.go:310）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminConfirmRecharge_1",
         "produces": [
           "application/json"
@@ -11664,7 +11783,7 @@
           "管理后台"
         ],
         "summary": "Admin List Wallet Withdrawals",
-        "description": "后端 handler: `AdminListWalletWithdrawals`（router.go:310）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListWalletWithdrawals`（router.go:313）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListWalletWithdrawals_1",
         "produces": [
           "application/json"
@@ -11721,7 +11840,7 @@
           "管理后台"
         ],
         "summary": "Admin Pay Wallet Withdrawal",
-        "description": "后端 handler: `AdminPayWalletWithdrawal`（router.go:311）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminPayWalletWithdrawal`（router.go:314）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminPayWalletWithdrawal_1",
         "produces": [
           "application/json"
@@ -11795,7 +11914,7 @@
           "管理后台"
         ],
         "summary": "Admin Reject Wallet Withdrawal",
-        "description": "后端 handler: `AdminRejectWalletWithdrawal`（router.go:312）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminRejectWalletWithdrawal`（router.go:315）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminRejectWalletWithdrawal_1",
         "produces": [
           "application/json"
@@ -11869,7 +11988,7 @@
           "管理后台"
         ],
         "summary": "Admin List Cancel Failures",
-        "description": "后端 handler: `AdminListCancelFailures`（router.go:315）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListCancelFailures`（router.go:318）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListCancelFailures_1",
         "produces": [
           "application/json"
@@ -11926,7 +12045,7 @@
           "管理后台"
         ],
         "summary": "Admin Retry Cancel",
-        "description": "后端 handler: `AdminRetryCancel`（router.go:316）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminRetryCancel`（router.go:319）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminRetryCancel_1",
         "produces": [
           "application/json"
@@ -12000,7 +12119,7 @@
           "管理后台"
         ],
         "summary": "Admin Get T L S",
-        "description": "后端 handler: `AdminGetTLS`（router.go:319）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminGetTLS`（router.go:322）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminGetTLS_1",
         "produces": [
           "application/json"
@@ -12055,7 +12174,7 @@
           "管理后台"
         ],
         "summary": "Admin Upload T L S",
-        "description": "后端 handler: `AdminUploadTLS`（router.go:320）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminUploadTLS`（router.go:323）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminUploadTLS_1",
         "produces": [
           "application/json"
@@ -12120,7 +12239,7 @@
           "管理后台"
         ],
         "summary": "Admin Delete T L S",
-        "description": "后端 handler: `AdminDeleteTLS`（router.go:322）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminDeleteTLS`（router.go:325）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminDeleteTLS_1",
         "produces": [
           "application/json"
@@ -12177,8 +12296,333 @@
           "管理后台"
         ],
         "summary": "Admin Set Backend T L S",
-        "description": "后端 handler: `AdminSetBackendTLS`（router.go:321）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminSetBackendTLS`（router.go:324）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminSetBackendTLS_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/system/acme": {
+      "get": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Get A C M E",
+        "description": "后端 handler: `AdminGetACME`（router.go:328）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminGetACME_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/system/acme/issue": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Issue A C M E",
+        "description": "后端 handler: `AdminIssueACME`（router.go:329）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminIssueACME_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/system/acme/renew": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Renew A C M E",
+        "description": "后端 handler: `AdminRenewACME`（router.go:330）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminRenewACME_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/system/acme/settings": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Update A C M E Settings",
+        "description": "后端 handler: `AdminUpdateACMESettings`（router.go:331）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminUpdateACMESettings_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/system/acme/check": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Check A C M E",
+        "description": "后端 handler: `AdminCheckACME`（router.go:332）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminCheckACME_1",
         "produces": [
           "application/json"
         ],
@@ -12244,7 +12688,7 @@
           "管理后台"
         ],
         "summary": "Admin List Push Tasks",
-        "description": "后端 handler: `AdminListPushTasks`（router.go:324）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminListPushTasks`（router.go:334）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminListPushTasks_1",
         "produces": [
           "application/json"
@@ -12299,7 +12743,7 @@
           "管理后台"
         ],
         "summary": "Admin Create Push Task",
-        "description": "后端 handler: `AdminCreatePushTask`（router.go:325）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCreatePushTask`（router.go:335）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCreatePushTask_1",
         "produces": [
           "application/json"
@@ -12366,7 +12810,7 @@
           "管理后台"
         ],
         "summary": "Admin Send Push Task",
-        "description": "后端 handler: `AdminSendPushTask`（router.go:326）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminSendPushTask`（router.go:336）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminSendPushTask_1",
         "produces": [
           "application/json"
@@ -12440,8 +12884,407 @@
           "管理后台"
         ],
         "summary": "Admin Cancel Push Task",
-        "description": "后端 handler: `AdminCancelPushTask`（router.go:327）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `AdminCancelPushTask`（router.go:337）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "AdminCancelPushTask_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "路径参数 id"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/security/totp": {
+      "get": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin T O T P Status",
+        "description": "后端 handler: `AdminTOTPStatus`（router.go:341）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminTOTPStatus_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/security/totp/setup": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin T O T P Setup",
+        "description": "后端 handler: `AdminTOTPSetup`（router.go:342）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminTOTPSetup_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/security/totp/enable": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin T O T P Enable",
+        "description": "后端 handler: `AdminTOTPEnable`（router.go:343）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminTOTPEnable_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/security/totp/disable": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin T O T P Disable",
+        "description": "后端 handler: `AdminTOTPDisable`（router.go:344）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminTOTPDisable_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/security/totp/recovery-codes": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin T O T P Recovery Codes",
+        "description": "后端 handler: `AdminTOTPRecoveryCodes`（router.go:345）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminTOTPRecoveryCodes_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": false,
+            "description": "JSON 请求体，字段明细见 docs/03-接口文档.md",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "未登录或令牌失效",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "403": {
+            "description": "无权限",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "资源不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}/totp/reset": {
+      "post": {
+        "tags": [
+          "管理后台"
+        ],
+        "summary": "Admin Reset User T O T P",
+        "description": "后端 handler: `AdminResetUserTOTP`（router.go:347）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "operationId": "AdminResetUserTOTP_1",
         "produces": [
           "application/json"
         ],
@@ -12514,7 +13357,7 @@
           "文件上传"
         ],
         "summary": "Upload Image",
-        "description": "后端 handler: `UploadImage`（router.go:331）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `UploadImage`（router.go:351）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "UploadImage_1",
         "produces": [
           "application/json"
@@ -12582,7 +13425,7 @@
           "地图与定位"
         ],
         "summary": "Geocode Address",
-        "description": "后端 handler: `GeocodeAddress`（router.go:334）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GeocodeAddress`（router.go:354）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GeocodeAddress_1",
         "produces": [
           "application/json"
@@ -12649,7 +13492,7 @@
           "地图与定位"
         ],
         "summary": "Geo Static Map",
-        "description": "后端 handler: `GeoStaticMap`（router.go:335）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GeoStaticMap`（router.go:355）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GeoStaticMap_1",
         "produces": [
           "application/json"
@@ -12706,7 +13549,7 @@
           "地图与定位"
         ],
         "summary": "Geo Tile",
-        "description": "后端 handler: `GeoTile`（router.go:336）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `GeoTile`（router.go:356）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "GeoTile_1",
         "produces": [
           "application/json"
@@ -12763,7 +13606,7 @@
           "地图与定位"
         ],
         "summary": "Create Geo Pick",
-        "description": "后端 handler: `CreateGeoPick`（router.go:337）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `CreateGeoPick`（router.go:357）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "CreateGeoPick_1",
         "produces": [
           "application/json"
@@ -12830,7 +13673,7 @@
           "地图与定位"
         ],
         "summary": "Poll Geo Pick",
-        "description": "后端 handler: `PollGeoPick`（router.go:338）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
+        "description": "后端 handler: `PollGeoPick`（router.go:358）。需要 Bearer Token（登录后取 access_token）。 响应统一为 `code/message/data`；请求字段明细见 `docs/03-接口文档.md`。",
         "operationId": "PollGeoPick_1",
         "produces": [
           "application/json"

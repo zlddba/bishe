@@ -49,7 +49,7 @@ import team.wd.atnestapp.utils.PhoneValidator
 fun LoginPage(
     busy: Boolean,
     onLogin: (String, String) -> Unit,
-    onRegister: (String, String, String) -> Unit,
+    onRegister: (String, String, String, String) -> Unit,
     onCancel: () -> Unit,
     onError: (String) -> Unit,
 ) {
@@ -58,6 +58,7 @@ fun LoginPage(
     var password by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var inviteCode by remember { mutableStateOf("") }
 
     fun submitLogin() {
         if (busy) return
@@ -78,13 +79,14 @@ fun LoginPage(
             !PhoneValidator.isValid(phone) -> onError(PhoneValidator.MESSAGE)
             account.isBlank() -> onError("请输入账号")
             account.trim().length < 3 -> onError("账号至少 3 位")
-            PhoneValidator.looksLikePhone(account) && !PhoneValidator.isValid(account) ->
-                onError(PhoneValidator.MESSAGE)
+            // 后端明确拒绝「账号为手机号格式」（auth_handler.go:49-52），
+            // 这里只要长得像手机号就本地拦下，别等一次 400 往返
+            PhoneValidator.looksLikePhone(account) -> onError("账号不能使用手机号格式")
             password.length < 8 -> onError("密码至少 8 位")
             password.length > 128 -> onError("密码不能超过 128 位")
             password != confirmPassword -> onError("两次输入的密码不一致")
             // 昵称不在此收集：注册时默认沿用账号名，登录后可在"个人中心"修改
-            else -> onRegister(account.trim(), password, phone.trim())
+            else -> onRegister(account.trim(), password, phone.trim(), inviteCode.trim())
         }
     }
 
@@ -218,6 +220,15 @@ fun LoginPage(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = "再次输入密码",
                         password = true,
+                        onSubmit = { submitRegister() },
+                    )
+                    Spacer(Modifier.height(13.dp))
+                    FieldLabel("邀请码（选填）")
+                    SoftTextField(
+                        value = inviteCode,
+                        onValueChange = { inviteCode = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = "填写好友的邀请码，双方各得 100 积分",
                         onSubmit = { submitRegister() },
                     )
                     PrimaryButton(

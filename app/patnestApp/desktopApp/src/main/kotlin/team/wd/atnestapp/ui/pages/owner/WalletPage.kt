@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,10 +146,9 @@ fun WalletPage(app: AppState) {
         RechargeDialog(
             onDismiss = { showRecharge = false },
             onConfirm = { amount ->
-                app.scope.launch {
-                    val ok = app.recharge(amount)
-                    if (ok) showRecharge = false
-                }
+                // 这里是 suspend lambda，由弹窗内部的 scope 执行，busy 才能覆盖整个请求周期
+                val ok = app.recharge(amount)
+                if (ok) showRecharge = false
             },
         )
     }
@@ -183,6 +183,7 @@ private fun WithdrawDialog(
     var name by remember { mutableStateOf("") }
     var accountNo by remember { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
+    var errorText by remember { mutableStateOf("") }
 
     Box(
         Modifier
@@ -237,6 +238,10 @@ private fun WithdrawDialog(
                 SoftTextField(contact, { contact = it.take(20) }, Modifier.fillMaxWidth(), placeholder = "方便客服确认")
 
                 Spacer(Modifier.height(10.dp))
+                if (errorText.isNotEmpty()) {
+                    Text(errorText, color = PatNestColors.Danger, fontSize = 11.5.sp)
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(
                     "提交后金额会立即从余额扣除，由客服线下打款；若被驳回，金额自动退回钱包。",
                     color = PatNestColors.Ink3, fontSize = 11.5.sp,
@@ -248,10 +253,17 @@ private fun WithdrawDialog(
                         "提交申请",
                         {
                             val amount = amountText.toDoubleOrNull()
-                            if (amount == null || amount <= 0.0 || name.isBlank() || accountNo.isBlank()) {
-                                return@PrimaryButton
+                            // 原先四种失败原因合并成一个静默 return，用户点完毫无反馈
+                            errorText = when {
+                                amount == null -> "请输入退款金额"
+                                amount <= 0.0 -> "退款金额需大于 0"
+                                amount > balance -> "退款金额不能超过可用余额 ¥$balance"
+                                name.isBlank() -> "请填写收款人"
+                                accountNo.isBlank() -> "请填写收款账号"
+                                else -> ""
                             }
-                            onConfirm(amount, name.trim(), accountNo.trim(), contact.trim())
+                            if (errorText.isNotEmpty()) return@PrimaryButton
+                            onConfirm(amount ?: 0.0, name.trim(), accountNo.trim(), contact.trim())
                         },
                         Modifier.weight(1f),
                         height = 40.dp,
@@ -347,9 +359,10 @@ private fun TransactionRow(tx: WalletTransactionDto) {
 }
 
 @Composable
-private fun RechargeDialog(onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
+private fun RechargeDialog(onDismiss: () -> Unit, onConfirm: suspend (Double) -> Unit) {
     var amountText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Box(
         Modifier
@@ -394,12 +407,19 @@ private fun RechargeDialog(onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
                         if (busy) "处理中…" else "确认充值",
                         {
                             val amount = amountText.toDoubleOrNull()
-                            if (amount == null || amount <= 0.0) {
+                            if (amount == null || amount <= 0.0 || busy) {
                                 return@PrimaryButton
                             }
+                            // busy 必须在协程内复位：原先 onConfirm 是异步启动，
+                            // 调用一返回就置回 false，网络往返期间还能连点、重复下单充值
                             busy = true
-                            onConfirm(amount)
-                            busy = false
+                            scope.launch {
+                                try {
+                                    onConfirm(amount)
+                                } finally {
+                                    busy = false
+                                }
+                            }
                         },
                         Modifier.weight(1f),
                         height = 40.dp,

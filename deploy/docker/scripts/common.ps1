@@ -6,34 +6,75 @@ function Get-PackageRoot {
 }
 
 function Resolve-ComposeCommand {
-    if (Get-Command podman-compose -ErrorAction SilentlyContinue) {
-        $script:ComposeEngine = "podman"
-        return @("podman-compose")
+    # Priority: -Engine / PATNEST_ENGINE env var / PATNEST_ENGINE in .env / auto.
+    # Auto means docker first, podman as fallback, error when neither is usable.
+    $requested = $env:PATNEST_ENGINE
+    if (-not $requested) { $requested = Get-EnvValue "PATNEST_ENGINE" "auto" }
+    $requested = $requested.ToLower().Trim()
+
+    $dockerOk = $false
+    $podmanCmd = $null
+
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        $version = Invoke-NativeCommand -Command "docker" -Arguments @("compose", "version") -Quiet -AllowFail
+        $info = Invoke-NativeCommand -Command "docker" -Arguments @("info") -Quiet -AllowFail
+        $dockerOk = ($version.ExitCode -eq 0 -and $info.ExitCode -eq 0)
     }
     if (Get-Command podman -ErrorAction SilentlyContinue) {
-        $probe = Invoke-NativeCommand -Command "podman" -Arguments @("compose", "version") -Quiet -AllowFail
-        if ($probe.ExitCode -eq 0) {
-            $script:ComposeEngine = "podman"
-            return @("podman", "compose")
+        $version = Invoke-NativeCommand -Command "podman" -Arguments @("compose", "version") -Quiet -AllowFail
+        $info = Invoke-NativeCommand -Command "podman" -Arguments @("info") -Quiet -AllowFail
+        if ($version.ExitCode -eq 0 -and $info.ExitCode -eq 0) {
+            $podmanCmd = @("podman", "compose")
         }
     }
-    if (Get-Command docker -ErrorAction SilentlyContinue) {
-        $probe = Invoke-NativeCommand -Command "docker" -Arguments @("compose", "version") -Quiet -AllowFail
-        if ($probe.ExitCode -eq 0) {
+    if (-not $podmanCmd -and (Get-Command podman-compose -ErrorAction SilentlyContinue)) {
+        $info = Invoke-NativeCommand -Command "podman" -Arguments @("info") -Quiet -AllowFail
+        if ($info.ExitCode -eq 0) { $podmanCmd = @("podman-compose") }
+    }
+
+    switch ($requested) {
+        "docker" {
+            if (-not $dockerOk) {
+                throw "docker requested but not usable (need docker CLI, compose plugin and a running daemon)."
+            }
             $script:ComposeEngine = "docker"
             return @("docker", "compose")
         }
+        "podman" {
+            if (-not $podmanCmd) {
+                throw "podman requested but not usable (need podman compose or podman-compose plus podman info)."
+            }
+            $script:ComposeEngine = "podman"
+            return $podmanCmd
+        }
+        "auto" {
+            if ($dockerOk) {
+                $script:ComposeEngine = "docker"
+                return @("docker", "compose")
+            }
+            if ($podmanCmd) {
+                Write-Host "[engine] docker not available, using podman" -ForegroundColor Yellow
+                $script:ComposeEngine = "podman"
+                return $podmanCmd
+            }
+            if (Get-Command docker -ErrorAction SilentlyContinue) {
+                Write-Host "  docker CLI found but the daemon is not running; start Docker and retry." -ForegroundColor Yellow
+            }
+            throw "Neither docker nor podman is usable. Install one and retry, or pass -Engine to select one."
+        }
+        default {
+            throw "Unknown engine '$requested' (use docker, podman or auto)."
+        }
     }
-    throw "No compose command found (need podman-compose, podman compose or docker compose)."
 }
 
 function Resolve-ContainerEngine {
     # Follow the engine used by the selected compose command. On machines that
-    # have both podman and docker installed, guessing by PATH order is wrong.
+    # have both installed, guessing by PATH order is wrong; docker is the default.
     if ($script:ComposeEngine) { return $script:ComposeEngine }
-    if (Get-Command podman -ErrorAction SilentlyContinue) { return "podman" }
     if (Get-Command docker -ErrorAction SilentlyContinue) { return "docker" }
-    throw "No container engine found (podman or docker)."
+    if (Get-Command podman -ErrorAction SilentlyContinue) { return "podman" }
+    throw "No container engine found (docker or podman)."
 }
 
 # Stop early with an actionable hint when the container engine is down.
@@ -41,7 +82,9 @@ function Assert-EngineRunning {
     param([string]$Step = "[install]")
 
     $engine = Resolve-ContainerEngine
-    $probe = Invoke-NativeCommand -Command $engine -Arguments @("info", "--format", "{{.ServerVersion}}") -Quiet -AllowFail
+    # Plain "info" works for both docker and podman; the --format field
+    # {{.ServerVersion}} only exists on docker and would misreport podman.
+    $probe = Invoke-NativeCommand -Command $engine -Arguments @("info") -Quiet -AllowFail
     if ($probe.ExitCode -eq 0) { return $true }
 
     Write-Host ""

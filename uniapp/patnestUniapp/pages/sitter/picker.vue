@@ -50,8 +50,17 @@
 				return s.price_mode === 'per_visit' ? s.visit_price || 0 : s.daily_price || 0
 			},
 			pick(s) {
-				// 回退到下单页并带上选中的机构
-				uni.redirectTo({ url: '/pages/order/create?sitter_id=' + s.id })
+				// 不能 redirectTo 回下单页：那会在栈里再压一个新的下单页，
+				// 用户返回时回到「机构为空」的旧页面，已选宠物/日期全丢。
+				// 改为把选择结果写到本地，返回上一页由 create.vue 的 onShow 消费。
+				const pages = getCurrentPages()
+				if (pages.length > 1) {
+					uni.setStorageSync('patnest_picked_sitter', String(s.id))
+					uni.navigateBack()
+				} else {
+					// 直接从外部打开选择页（无上一页）时才重建下单页
+					uni.redirectTo({ url: '/pages/order/create?sitter_id=' + s.id })
+				}
 			}
 		}
 	}

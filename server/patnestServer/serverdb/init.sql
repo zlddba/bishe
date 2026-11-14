@@ -21,6 +21,10 @@
 --     PUBLIC_FILE_BASE 拼接（internal/middleware/fileurl.go，0008 迁移已转换存量数据）。
 --   * migrations/ 目录只保留 0001_baseline.sql（内容不得改动，老库依赖它的校验和）；
 --     0002~0021 已归档到 migrations/archive/，仅供追溯，不再被 cmd/migrate 加载。
+--   * 0022 邀请码闭环（users.invite_code/invited_by、invite_rewards、奖励触发器）
+--     的净效果已内联在下方；老库由 migrations/0022_invite.sql 增量应用。
+--   * 0023 管理后台两步验证（users.totp_*、totp_recovery_codes）同样已内联，
+--     老库由 migrations/0023_admin_totp.sql 增量应用。
 -- ==================================================================
 
 SET client_encoding = 'UTF8';
@@ -134,6 +138,14 @@ CREATE TABLE IF NOT EXISTS users (
     cancel_last_error   VARCHAR(255),
     cancel_blocked_at   TIMESTAMPTZ,
     token_invalid_at    TIMESTAMPTZ,
+    -- 0022：邀请码（由触发器生成）与邀请人
+    invite_code     VARCHAR(16),
+    invited_by      BIGINT          REFERENCES users(id),
+    -- 0023：管理后台两步验证（TOTP）。totp_enabled 为 false 时密钥只是「已生成未确认」
+    totp_secret         VARCHAR(64),
+    totp_enabled        BOOLEAN     NOT NULL DEFAULT FALSE,
+    totp_confirmed_at   TIMESTAMPTZ,
+    totp_last_step      BIGINT,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ,
@@ -144,6 +156,13 @@ CREATE TABLE IF NOT EXISTS users (
 COMMENT ON TABLE users IS 'Platform users: pet owners, sitters, admins';
 COMMENT ON COLUMN users.status IS '1=active, 0=disabled';
 COMMENT ON COLUMN users.locked_until IS 'Account lock expiry after repeated login failures';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_invite_code
+    ON users (invite_code) WHERE invite_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_invited_by
+    ON users (invited_by) WHERE invited_by IS NOT NULL;
+COMMENT ON COLUMN users.invite_code IS '我的邀请码，PET+用户ID补零至6位，由触发器生成（0022）';
+COMMENT ON COLUMN users.invited_by IS '邀请人 user_id，NULL 表示自然注册（0022）';
 
 -- 3.2 pets
 CREATE TABLE IF NOT EXISTS pets (
@@ -440,6 +459,32 @@ CREATE TABLE IF NOT EXISTS points_ledger (
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_points_ledger_user ON points_ledger (user_id, created_at DESC);
+
+-- 3.16b 邀请奖励台账（0022）：invitee_id 即幂等键，一行代表一次「首单完成」奖励。
+CREATE TABLE IF NOT EXISTS invite_rewards (
+    invitee_id  BIGINT       PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    inviter_id  BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id    BIGINT       NOT NULL REFERENCES orders(id),
+    points      INT          NOT NULL DEFAULT 100 CHECK (points > 0),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT uq_invite_reward_inviter_order UNIQUE (inviter_id, order_id)
+);
+CREATE INDEX IF NOT EXISTS idx_invite_rewards_inviter ON invite_rewards (inviter_id, created_at DESC);
+
+-- 3.16c 两步验证恢复码（0023）：只存 sha256，一次一用。
+CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+    id          BIGSERIAL   PRIMARY KEY,
+    user_id     BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash   CHAR(64)    NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_totp_recovery_user_hash
+    ON totp_recovery_codes (user_id, code_hash);
+CREATE INDEX IF NOT EXISTS idx_totp_recovery_unused
+    ON totp_recovery_codes (user_id) WHERE used_at IS NULL;
+COMMENT ON TABLE totp_recovery_codes IS '两步验证恢复码：仅存 sha256，一次一用（0023）';
+COMMENT ON TABLE invite_rewards IS '邀请奖励台账：被邀请人首单完成时双方各得积分，一行即一次奖励（0022）';
 
 -- 3.17 收藏（0003）
 CREATE TABLE IF NOT EXISTS favorites (
@@ -1079,6 +1124,62 @@ END;
 $fn$;
 
 -- 5.11 Order status / soft-delete side effects (0015: 完成与软删都要归还夜间)
+-- 0022：邀请码由数据库按主键生成，客户端无法伪造；与 Android 演示页
+-- 原有的 PET000123 展示格式保持一致。BEFORE INSERT 阶段 BIGSERIAL 默认值已算好。
+CREATE OR REPLACE FUNCTION fn_set_invite_code()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+    IF NEW.invite_code IS NULL THEN
+        NEW.invite_code := 'PET' || lpad(NEW.id::text, 6, '0');
+    END IF;
+    RETURN NEW;
+END;
+$fn$;
+
+-- 0022：被邀请人首单完成时，双方各 +100 积分并写流水。
+CREATE OR REPLACE FUNCTION fn_grant_invite_reward(p_order_id BIGINT, p_invitee_id BIGINT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+    v_inviter_id BIGINT;
+    v_points     INT := 100;
+    v_balance    INT;
+BEGIN
+    SELECT invited_by INTO v_inviter_id
+      FROM users
+     WHERE id = p_invitee_id
+       AND invited_by IS NOT NULL
+       AND deleted_at IS NULL;
+    IF NOT FOUND OR v_inviter_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO invite_rewards (invitee_id, inviter_id, order_id, points)
+    VALUES (p_invitee_id, v_inviter_id, p_order_id, v_points)
+    ON CONFLICT (invitee_id) DO NOTHING;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    UPDATE users SET points = points + v_points, updated_at = now()
+     WHERE id = p_invitee_id
+    RETURNING points INTO v_balance;
+    INSERT INTO points_ledger (user_id, change_amount, balance, reason, ref_type, ref_id)
+    VALUES (p_invitee_id, v_points, v_balance, '邀请奖励-被邀请人', 'invite', p_order_id);
+
+    UPDATE users SET points = points + v_points, updated_at = now()
+     WHERE id = v_inviter_id AND deleted_at IS NULL
+    RETURNING points INTO v_balance;
+    IF FOUND THEN
+        INSERT INTO points_ledger (user_id, change_amount, balance, reason, ref_type, ref_id)
+        VALUES (v_inviter_id, v_points, v_balance, '邀请奖励-邀请人', 'invite', p_order_id);
+    END IF;
+END;
+$fn$;
+
 CREATE OR REPLACE FUNCTION fn_order_status_changed()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -1096,6 +1197,7 @@ BEGIN
         IF NEW.end_date > CURRENT_DATE THEN
             PERFORM fn_release_capacity(NEW.sitter_id, CURRENT_DATE, NEW.end_date, NEW.pet_count);
         END IF;
+        PERFORM fn_grant_invite_reward(NEW.id, NEW.owner_id);
     END IF;
     RETURN NEW;
 END;
@@ -1114,6 +1216,12 @@ BEGIN
     RETURN NEW;
 END;
 $fn$;
+
+DROP TRIGGER IF EXISTS trg_users_invite_code ON users;
+CREATE TRIGGER trg_users_invite_code
+    BEFORE INSERT ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_set_invite_code();
 
 DROP TRIGGER IF EXISTS trg_order_deleted_release ON orders;
 CREATE TRIGGER trg_order_deleted_release

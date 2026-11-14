@@ -3,6 +3,34 @@
 # then start the update agent per AGENT_MODE (container/host/none).
 
 set -euo pipefail
+
+# Optional engine override. Priority: --engine, PATNEST_ENGINE env var,
+# PATNEST_ENGINE in .env, then auto (docker first, podman fallback).
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --engine)
+      [[ $# -ge 2 ]] || { echo "--engine needs a value: docker, podman or auto" >&2; exit 1; }
+      export PATNEST_ENGINE="$2"
+      shift 2
+      ;;
+    --engine=*)
+      export PATNEST_ENGINE="${1#--engine=}"
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: bash scripts/install.sh [--engine docker|podman|auto]"
+      echo "  Default: docker, falling back to podman when docker is unavailable."
+      echo "  Neither available: the script exits with an error."
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      echo "Usage: bash scripts/install.sh [--engine docker|podman|auto]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 source "$(dirname "$0")/common.sh"
 
 [[ -f .env ]] || { echo "copy .env.example to .env and fill it in first" >&2; exit 1; }
@@ -28,9 +56,39 @@ mkdir -p data/redis
 mkdir -p data/updates/{tmp,inbox,manual,queue,processing,failed,status,staging,logs,backups}
 chmod -R a+rwX data/updates 2>/dev/null || true
 
+# The API container runs as uid/gid 10001 (see Dockerfile.api) and writes
+# certificates uploaded from the admin page into nginx/tls. The bind-mount
+# source is created by root, so hand it over or every upload fails with
+# "permission denied".
+mkdir -p nginx/tls
+chown -R 10001:10001 nginx/tls 2>/dev/null || true
+chmod 750 nginx/tls 2>/dev/null || true
+
+# acme.sh runs inside the API container (uid 10001) and keeps its account
+# keys plus the Cloudflare token under this directory. The bind-mount source
+# is created by root, so hand it over or every issue attempt fails.
+mkdir -p data/acme
+chown -R 10001:10001 data/acme 2>/dev/null || true
+chmod -R 700 data/acme 2>/dev/null || true
+
 assert_engine_running "[install]"
 
 ensure_nginx_mount_files
+
+# nginx terminates TLS on 9200 and reads the certificate at startup, so the
+# mounted directory must already hold a usable pair. A real certificate is
+# uploaded from the admin page later; until then a self-signed one keeps the
+# site running instead of crash-looping on a missing file.
+if [[ ! -s nginx/tls/fullchain.pem || ! -s nginx/tls/privkey.pem ]]; then
+  echo "[install] no TLS certificate yet, generating a self-signed placeholder"
+  "$ENGINE" run --rm -v "$PWD/nginx/tls:/tls" docker.io/library/nginx:latest \
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+      -subj "/CN=patnest.local" \
+      -keyout /tls/privkey.pem -out /tls/fullchain.pem >/dev/null 2>&1 ||
+    echo "[install] warning: could not generate a placeholder certificate; nginx may fail to start" >&2
+  chown 10001:10001 nginx/tls/fullchain.pem nginx/tls/privkey.pem 2>/dev/null || true
+  chmod 600 nginx/tls/fullchain.pem nginx/tls/privkey.pem 2>/dev/null || true
+fi
 
 echo "[install] build images patnest-api:$VERSION / patnest-web:$VERSION"
 APP_VERSION="$VERSION" "${COMPOSE[@]}" --profile app build --pull api-blue nginx
@@ -115,7 +173,9 @@ start_container_agent() {
     return 1
   fi
   if [[ "$ENGINE" != "docker" ]]; then
-    echo "[install] warning: container agent uses docker CLI but host engine is $ENGINE; needs a compatible docker.sock" >&2
+    echo "[install] warning: $ENGINE selected, but the update agent container uses the docker CLI." >&2
+    echo "  Set DOCKER_SOCKET to the podman compat socket (e.g. /run/podman/podman.sock)." >&2
+    echo "  If docker inspect cannot resolve /pkg, set PACKAGE_HOST_ROOT to the absolute package path." >&2
   fi
 
   set_env PACKAGE_HOST_PATH "$pkg_path"

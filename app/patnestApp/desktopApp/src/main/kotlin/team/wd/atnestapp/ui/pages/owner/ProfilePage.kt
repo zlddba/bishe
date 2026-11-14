@@ -56,14 +56,17 @@ fun ProfilePage(app: AppState) {
     var contactPhone by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { app.loadProfile() }
+    // 只在首次拿到资料时回填：否则后台刷新会覆盖用户正在输入的内容
+    var hydrated by remember { mutableStateOf(false) }
     LaunchedEffect(app.profile) {
-        app.profile?.let { profile ->
-            nickname = profile.nickname?.takeIf { it.isNotBlank() } ?: nickname
-            phone = profile.phone.orEmpty()
-            address = profile.address.orEmpty()
-            contactName = profile.contactName.orEmpty()
-            contactPhone = profile.contactPhone.orEmpty()
-        }
+        val profile = app.profile ?: return@LaunchedEffect
+        if (hydrated) return@LaunchedEffect
+        nickname = profile.nickname?.takeIf { it.isNotBlank() } ?: nickname
+        phone = profile.phone.orEmpty()
+        address = profile.address.orEmpty()
+        contactName = profile.contactName.orEmpty()
+        contactPhone = profile.contactPhone.orEmpty()
+        hydrated = true
     }
 
     Column(
@@ -220,6 +223,7 @@ private fun SupportPanel(app: AppState) {
     LaunchedEffect(app.loggedIn) {
         if (app.loggedIn) {
             app.loadPoints()
+            app.loadInvite()
             app.loadWallet()
             app.loadTickets()
         }
@@ -266,6 +270,25 @@ private fun SupportPanel(app: AppState) {
         }
         ThinDivider()
         Row(
+            Modifier.fillMaxWidth().padding(vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("我的邀请码", color = PatNestColors.Ink, fontSize = 13.5.sp)
+                Text(
+                    "已邀请 ${app.inviteInfo?.invitedCount ?: 0} 人 · ${app.inviteInfo?.rewardedCount ?: 0} 人完成首单",
+                    color = PatNestColors.Ink3,
+                    fontSize = 11.5.sp,
+                )
+            }
+            Text(
+                app.inviteInfo?.inviteCode?.takeIf { it.isNotBlank() } ?: "—",
+                color = PatNestColors.BrandInk,
+                fontSize = 13.sp,
+            )
+        }
+        ThinDivider()
+        Row(
             Modifier.fillMaxWidth().padding(vertical = 11.dp).clickable {
                 app.go(AppPage.Wallet)
             },
@@ -275,7 +298,7 @@ private fun SupportPanel(app: AppState) {
                 Text("我的钱包", color = PatNestColors.Ink, fontSize = 13.5.sp)
                 Text("真实货币余额，可用于支付订单", color = PatNestColors.Ink3, fontSize = 11.5.sp)
             }
-            Text("¥${app.walletBalance}", color = PatNestColors.BrandInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("¥${moneyText(app.walletBalance)}", color = PatNestColors.BrandInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(8.dp))
             Text("›", color = PatNestColors.Ink3, fontSize = 15.sp)
         }

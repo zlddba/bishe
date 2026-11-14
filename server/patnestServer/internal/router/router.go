@@ -47,6 +47,8 @@ func Setup() *gin.Engine {
 	{
 		auth.POST("/register", handler.Register)
 		auth.POST("/login", handler.Login)
+		// 两步验证第二步：密码通过后拿一次性票据换令牌（0023）
+		auth.POST("/login/totp", handler.LoginTOTP)
 		auth.POST("/refresh", handler.Refresh)
 	}
 
@@ -104,6 +106,7 @@ func Setup() *gin.Engine {
 			owner.GET("/favorites/compare", handler.CompareFavorites)
 
 			owner.GET("/points", handler.MyPoints)
+			owner.GET("/invite", handler.MyInvite)
 
 			// --- 钱包（真实货币）---
 			owner.GET("/wallet", handler.WalletOverview)
@@ -321,10 +324,27 @@ func Setup() *gin.Engine {
 			admin.POST("/system/tls/backend", handler.AdminSetBackendTLS)
 			admin.DELETE("/system/tls", handler.AdminDeleteTLS)
 
+			// --- Let's Encrypt 自动证书（镜像内置 acme.sh，80 端口做 HTTP-01 验证）---
+			admin.GET("/system/acme", handler.AdminGetACME)
+			admin.POST("/system/acme/issue", handler.AdminIssueACME)
+			admin.POST("/system/acme/renew", handler.AdminRenewACME)
+			admin.POST("/system/acme/settings", handler.AdminUpdateACMESettings)
+			admin.POST("/system/acme/check", handler.AdminCheckACME)
+
 			admin.GET("/push-tasks", handler.AdminListPushTasks)
 			admin.POST("/push-tasks", handler.AdminCreatePushTask)
 			admin.POST("/push-tasks/:id/send", handler.AdminSendPushTask)
 			admin.POST("/push-tasks/:id/cancel", handler.AdminCancelPushTask)
+
+			// --- 两步验证（TOTP，0023）：管理员给自己的账号绑定验证器 ---
+			// 这里不挂模块权限：能不能改自己的安全设置，不该取决于别人配的模块权限。
+			admin.GET("/security/totp", handler.AdminTOTPStatus)
+			admin.POST("/security/totp/setup", handler.AdminTOTPSetup)
+			admin.POST("/security/totp/enable", handler.AdminTOTPEnable)
+			admin.POST("/security/totp/disable", handler.AdminTOTPDisable)
+			admin.POST("/security/totp/recovery-codes", handler.AdminTOTPRecoveryCodes)
+			// 兜底：超级管理员帮丢了手机的同事重置（handler 内二次校验调用者身份）
+			admin.POST("/users/:id/totp/reset", handler.AdminResetUserTOTP)
 		}
 
 		// --- Upload (any authenticated user) ---

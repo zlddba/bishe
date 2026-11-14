@@ -77,6 +77,7 @@ import team.wd.atnestapp.ui.theme.PatNestPageBackground
 import team.wd.atnestapp.ui.theme.PatNestShape
 import team.wd.atnestapp.ui.theme.brandGlow
 import team.wd.atnestapp.ui.theme.patShadowSoft
+import kotlinx.coroutines.launch
 
 /**
  * 登录后的主界面：左侧浅色导航 + 顶部栏 + 页面内容。
@@ -370,7 +371,12 @@ private fun TopBar(app: AppState) {
                     textStyle = TextStyle(color = PatNestColors.Ink, fontSize = 13.sp),
                     cursorBrush = SolidColor(PatNestColors.Brand),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { app.go(AppPage.Sitters) }),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        app.scope.launch {
+                            app.searchSitters()
+                            app.go(AppPage.Sitters)
+                        }
+                    }),
                     decorationBox = { inner ->
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (app.sitterSearch.isEmpty()) {

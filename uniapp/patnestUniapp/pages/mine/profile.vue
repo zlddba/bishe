@@ -66,6 +66,8 @@
 			return {
 				saving: false,
 				loading: false,
+				// 是否从「绑定手机号」引导进来（保存后回个人中心而不是 navigateBack）
+				fromBind: false,
 				// 服务端已绑定的手机号（用于判断是否需要提示绑定）
 				boundPhone: '',
 				phoneError: '',
@@ -98,7 +100,9 @@
 				this.phoneError = checkPhone(v)
 			}
 		},
-		onLoad() {
+		onLoad(options) {
+			// 从登录页「去绑定手机号」进来：保存后直接回个人中心，别把用户丢在表单页
+			this.fromBind = !!(options && options.from === 'bind')
 			// 登录响应里只有 id/username/nickname/role，
 			// 其余字段必须走 GET /auth/me 才能拿到
 			const cached = getUserInfo() || {}
@@ -170,7 +174,19 @@
 						}
 					} catch (e) {}
 					uni.showToast({ title: '已保存', icon: 'success' })
-					setTimeout(() => uni.navigateBack(), 500)
+					setTimeout(() => {
+						if (this.fromBind) {
+							uni.reLaunch({ url: '/pages/mine/index' })
+							return
+						}
+						// 栈底页时 navigateBack 会静默失败，用户会卡在没有返回按钮的编辑页
+						const pages = getCurrentPages()
+						if (pages.length > 1) {
+							uni.navigateBack()
+						} else {
+							uni.reLaunch({ url: '/pages/mine/index' })
+						}
+					}, 500)
 				} catch (e) {
 					// 错误提示已在 request 层处理
 				} finally {

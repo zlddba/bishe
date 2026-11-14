@@ -174,7 +174,7 @@
 		<view class="block patnest-card">
 			<view class="b-title">
 				<text>积分抵扣</text>
-				<text class="points-balance">可用 {{ pointsBalance }} 分（100 分 = 1 元）</text>
+				<text class="points-balance">可用 {{ pointsBalance }} 分（100 分 = 1 元{{ pointsHint }}）</text>
 			</view>
 			<view class="points-row">
 				<input
@@ -211,7 +211,7 @@
 			</block>
 			<block v-else>
 				<view class="fee-line">
-					<text>{{ est.priceMode === 'per_visit' ? '上门喂养费' : '基础寄养费' }}（{{ est.days }} 天 × {{ selectedPets.length }} 只）</text>
+					<text>{{ est.priceMode === 'per_visit' ? ('上门喂养费（' + selectedPets.length + ' 只）') : ('基础寄养费（' + est.days + ' 天 × ' + selectedPets.length + ' 只）') }}</text>
 					<text class="fee-val">¥{{ fmtMoney(est.baseAmount) }}</text>
 				</view>
 				<view v-if="est.addonAmount > 0" class="fee-line">
@@ -246,6 +246,10 @@
 	import { calcEstimate } from '../../utils/estimate.js'
 	import { today, addDays, fmtMoney } from '../../utils/format.js'
 	import { saveOrder } from '../../utils/orderCache.js'
+
+	// 只有这些状态的订单才真正占用宠物档期（与后端 CreateOrder 的冲突查询一致）。
+	// completed / evaluated / cancelled / rejected 都不占档期，可以再次下单。
+	const ACTIVE_STAY_STATUS = ['pending_pay', 'confirmed', 'accepted', 'staying']
 
 	export default {
 		data() {
@@ -283,7 +287,9 @@
 				loadingEstimate: false,
 				// 每只宠物的历史寄养记录，用于提交前预检日期冲突
 				petStays: {},
-				submitting: false
+				submitting: false,
+				// onShow 在 onLoad 后还会触发一次，用它区分「首次进入」与「从别的页面回来」
+				shownOnce: false
 			}
 		},
 		computed: {
@@ -315,9 +321,27 @@
 				const n = parseInt(this.pointsInput, 10)
 				return isNaN(n) || n < 0 ? 0 : n
 			},
+			// 本次最多可抵扣的积分数：
+			//   ① 不超过积分余额；② 不超过「优惠后应付金额 × 兑换率」（后端 order_pricing.go 同口径）。
+			// 注意 pointsBalance 本身已经是积分数，不能再乘兑换率。
+			maxUsablePoints() {
+				const rate = Number(this.pointsRate) || 100
+				const remaining = Math.max(0, (this.est.subtotal || 0) - (this.est.discountAmount || 0))
+				return Math.max(0, Math.min(Number(this.pointsBalance) || 0, Math.floor(remaining * rate)))
+			},
+			// 余额够但本单金额不足以全部抵扣时，提示本单上限（避免用户以为「全部使用」没用）
+			pointsHint() {
+				const max = this.maxUsablePoints
+				const bal = Number(this.pointsBalance) || 0
+				if (max > 0 && max === bal) return ''
+				if (max > 0) return '，本单最多抵扣 ' + max + ' 分'
+				return ''
+			},
 			// 与所选日期区间重叠的寄养记录（提交前预检）
-			// 判定规则与服务端一致：start_date < 结束 且 end_date > 开始
-			// 已取消 / 已拒绝的订单不占用床位，服务端也放行，这里同步排除
+			// 判定规则必须与服务端完全一致：只有「进行中」的订单才占用宠物档期
+			// （order_handler.go:86-92 的 status IN ('pending_pay','confirmed','accepted','staying')）。
+			// 之前只排除了 cancelled / rejected，把 completed / evaluated 也算成冲突：
+			// 订单被拒、被取消、甚至提前完成后，同一只宠物在同日期段仍然下不了单。
 			conflicts() {
 				if (!this.startDate || !this.endDate || !this.selectedPets.length) return []
 				const list = []
@@ -325,7 +349,7 @@
 					const stays = this.petStays[pid] || []
 					stays.forEach((st) => {
 						if (!st.start_date || !st.end_date) return
-						if (st.status === 'cancelled' || st.status === 'rejected') return
+						if (ACTIVE_STAY_STATUS.indexOf(st.status) < 0) return
 						if (st.start_date < this.endDate && st.end_date > this.startDate) {
 							list.push({ petId: pid, stay: st })
 						}
@@ -396,6 +420,33 @@
 			this.loadPets()
 			this.loadWallet()
 		},
+		onShow() {
+			const firstShow = !this.shownOnce
+			this.shownOnce = true
+			// 从机构选择页返回：picker 只负责写标记，真正切换在这里做，
+			// 这样页面栈里始终只有一个下单页，已选宠物/日期也不会丢。
+			const picked = uni.getStorageSync('patnest_picked_sitter')
+			if (picked) {
+				uni.removeStorageSync('patnest_picked_sitter')
+				const sid = parseInt(picked, 10)
+				if (sid && String(sid) !== String(this.sitterId)) {
+					this.sitterId = sid
+					this.sitter = {}
+					this.addons = []
+					this.addonQty = {}
+					this.serverEst = null
+					this.capacityItems = []
+					// 机构专属券可能不属于新机构，重置选择避免提交时被服务端拒绝
+					this.pickedCoupon = null
+					this.couponIndex = 0
+					this.loadSitter()
+				}
+			}
+			// 首次进入由 onLoad 负责加载；之后每次回到本页（例如刚在订单页取消 / 被机构拒单）
+			// 都要重拉档期与容量，否则页面还拿着旧数据，会把已经释放的日期继续判成冲突。
+			if (firstShow) return
+			this.refreshAvailability()
+		},
 		methods: {
 			async loadSitter() {
 				this.loadingSitter = true
@@ -455,27 +506,6 @@
 					this.loadingWallet = false
 				}
 			},
-			async loadPets() {
-				try {
-					const res = await petApi.list({ per_page: 50 })
-					this.pets = (res && res.items) || []
-					// 预选从宠物详情页带过来的宠物
-					if (this.presetPetId && this.pets.some((p) => p.id === this.presetPetId)) {
-						this.selectedPets = [this.presetPetId]
-						this.presetPetId = null
-						this.loadStays(this.selectedPets[0])
-					}
-					this.loadEstimate()
-				} catch (e) {}
-			},
-			async loadWallet() {
-				try {
-					const [pts, cps] = await Promise.all([walletApi.points(), walletApi.coupons()])
-					this.pointsBalance = (pts && pts.balance) || 0
-					this.pointsRate = (pts && pts.rate) || 100
-					this.coupons = (cps && cps.items) || []
-				} catch (e) {}
-			},
 			chooseSitter() {
 				uni.navigateTo({ url: '/pages/sitter/picker?sitter_id=' + (this.sitterId || '') })
 			},
@@ -503,6 +533,12 @@
 				} catch (e) {
 					this.petStays = Object.assign({}, this.petStays, { [petId]: [] })
 				}
+			},
+			// 重新校准「档期 + 容量」：订单被取消/拒单/完成后占用的资源会释放，
+			// 回到本页时必须重新拉一次，否则冲突提示和床位提示都停在旧状态。
+			refreshAvailability() {
+				this.selectedPets.forEach((pid) => this.loadStays(pid))
+				if (this.sitterId) this.loadCapacity()
 			},
 			// 服务端费用预估（与下单同一套核算口径，含节假日上浮与券归属校验）
 			async loadEstimate() {
@@ -646,16 +682,17 @@
 			},
 			onPointsInput(e) {
 				let v = e.detail.value
-				const max = Math.floor(this.pointsBalance * this.pointsRate)
+				const max = this.maxUsablePoints
 				if (v !== '' && Number(v) > max) v = String(max)
 				this.pointsInput = v
 				this.loadEstimate()
 			},
 			useMaxPoints() {
-				if (!this.pointsBalance) {
-					return uni.showToast({ title: '暂无可用积分', icon: 'none' })
+				const max = this.maxUsablePoints
+				if (max <= 0) {
+					return uni.showToast({ title: '本单暂无可抵扣积分', icon: 'none' })
 				}
-				this.pointsInput = String(Math.floor(this.pointsBalance * this.pointsRate))
+				this.pointsInput = String(max)
 				this.loadEstimate()
 			},
 			unitText(u) {

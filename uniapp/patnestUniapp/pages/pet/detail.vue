@@ -79,7 +79,7 @@
 			<view class="section patnest-card">
 				<view class="sec-title">寄养记录</view>
 				<view v-if="stays.length === 0" class="no-stay">暂无寄养记录</view>
-				<view v-for="s in stays" :key="s.id" class="stay-row" @click="openOrder(s)">
+				<view v-for="s in stays" :key="s.order_id" class="stay-row" @click="openOrder(s)">
 					<view class="s-info">
 						<text class="s-sitter">{{ s.sitter_name || '寄养机构' }}</text>
 						<text class="s-date">{{ s.start_date }} ~ {{ s.end_date }}</text>
@@ -151,7 +151,7 @@
 				uni.showToast({ title: '缺少宠物 ID', icon: 'none' })
 				return
 			}
-			this.load()
+			// 加载交给 onShow，避免首屏重复请求
 		},
 		onShow() {
 			if (this.id) this.load()
@@ -187,7 +187,9 @@
 				uni.navigateTo({ url: '/pages/order/create?pet_id=' + this.id })
 			},
 			openOrder(s) {
-				uni.navigateTo({ url: '/pages/order/detail?id=' + s.id })
+				// 寄养记录接口返回的订单主键字段是 order_id，没有 id
+				if (!s || !s.order_id) return
+				uni.navigateTo({ url: '/pages/order/detail?id=' + s.order_id })
 			},
 			remove() {
 				uni.showModal({

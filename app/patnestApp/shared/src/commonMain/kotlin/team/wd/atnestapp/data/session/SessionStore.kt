@@ -126,20 +126,27 @@ class SessionStore(private val dataStore: DataStore<Preferences>) {
     fun setTokens(access: String, refresh: String?) =
         update { it.copy(token = access, refreshToken = refresh.orEmpty()) }
 
-    /** 登录 / 注册成功后一次性写入。 */
+    /**
+     * 登录 / 注册成功后一次性写入。
+     *
+     * activeRole（上次用的工作台）必须显式保留：原先这里 new 了一个 SessionData，
+     * 把 activeRole 重置成空串，机构账号每次重登都要重新切一次机构端。
+     */
     fun saveAuth(
         token: String,
         refreshToken: String?,
         account: String,
         nickname: String,
         role: String,
-    ) = update {
+        activeRole: String = "",
+    ) = update { prev ->
         SessionData(
             token = token,
             refreshToken = refreshToken.orEmpty(),
             account = account,
             nickname = nickname,
             role = role.ifBlank { "owner" },
+            activeRole = activeRole.ifBlank { prev.activeRole },
         )
     }
 

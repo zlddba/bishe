@@ -959,7 +959,7 @@ fun D38SearchResults(nav: DNav) {
                                 }
                                 Spacer(Modifier.height(3.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    C_StarsText(sitter.score)
+                                    C_StarsText(sitter.score.roundToInt())
                                     Spacer(Modifier.width(5.dp))
                                     Text(sitter.dRatingText(), fontSize = 11.5.sp, color = DColor.Ink3)
                                 }
@@ -1058,15 +1058,19 @@ fun D40Register(nav: DNav) {
     var password by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
+    var inviteCode by remember { mutableStateOf("") }
 
     val doRegister: () -> Unit = {
         when {
             account.trim().length < 3 -> nav.toast("用户名至少 3 个字符")
+            account.trim().length > 50 -> nav.toast("用户名不能超过 50 个字符")
             account.trim().matches(Regex("^1[3-9]\\d{9}$")) -> nav.toast("用户名不能是手机号")
             password.length < 8 -> nav.toast("密码至少 8 位")
+            password.length > 128 -> nav.toast("密码不能超过 128 位")
             !phone.trim().matches(Regex("^1[3-9]\\d{9}$")) -> nav.toast("请填写正确的手机号")
+            inviteCode.trim().length > 16 -> nav.toast("邀请码不能超过 16 位")
             else -> scope.launch {
-                store.register(account.trim(), password, phone.trim())
+                store.register(account.trim(), password, phone.trim(), inviteCode.trim(), nickname.trim())
                 // 注册页是从登录页点进来的，成功后要连登录页一起换掉，不能只 back()
                 if (store.loggedIn) nav.afterLogin()
             }
@@ -1084,6 +1088,7 @@ fun D40Register(nav: DNav) {
             DFieldInput("密码", password, { password = it }, placeholder = "至少 8 位", secret = true)
             DFieldInput("手机号", phone, { phone = it }, placeholder = "中国大陆 11 位手机号", numeric = true)
             DFieldInput("昵称（可选）", nickname, { nickname = it }, placeholder = "不填则使用用户名")
+            DFieldInput("邀请码（选填）", inviteCode, { inviteCode = it }, placeholder = "填写好友的邀请码，双方各得 100 积分")
             Spacer(Modifier.height(6.dp))
             DButton(if (store.busy) "注册中…" else "注册并登录", doRegister)
             Spacer(Modifier.height(14.dp))
@@ -1108,13 +1113,18 @@ fun D41ProfileEdit(nav: DNav) {
     var address by remember { mutableStateOf(store.profile?.address.orEmpty()) }
     var contactName by remember { mutableStateOf(store.profile?.contactName.orEmpty()) }
     var contactPhone by remember { mutableStateOf(store.profile?.contactPhone.orEmpty()) }
+    // 只在首次拿到资料时回填输入框。原先 profile 一变就整体覆盖，
+    // 用户在网络回来前输入的内容会被后台刷新瞬间冲掉。
+    var hydrated by remember { mutableStateOf(false) }
     LaunchedEffect(store.profile) {
         val p = store.profile ?: return@LaunchedEffect
+        if (hydrated) return@LaunchedEffect
         nickname = p.nickname.orEmpty()
         phone = p.phone.orEmpty()
         address = p.address.orEmpty()
         contactName = p.contactName.orEmpty()
         contactPhone = p.contactPhone.orEmpty()
+        hydrated = true
     }
     LaunchedEffect(Unit) { store.loadProfile() }
     DFrame(nav = nav, title = "个人资料") {
@@ -1249,8 +1259,8 @@ fun D43ClaimCenter(nav: DNav) {
             DPad {
                 DGrid(claimable, minItemWidth = 320.dp) { coupon ->
                     C_CouponCard(
-                        amount = if (coupon.type == "percent") "${coupon.value.toInt()}折" else "¥${coupon.value.toInt()}",
-                        threshold = if (coupon.minAmount > 0) "满 ${coupon.minAmount.toInt()} 可用" else "无门槛",
+                        amount = if (coupon.type == "percent") "减${coupon.value.toInt()}%" else store.money(coupon.value),
+                        threshold = if (coupon.minAmount > 0) "满 ${store.money(coupon.minAmount)} 可用" else "无门槛",
                         title = coupon.title,
                         sub = if (coupon.sitterId > 0) "仅限 ${coupon.issuer.ifBlank { "发券机构" }}" else "全平台通用",
                         expiry = if (coupon.endsAt.isNotBlank()) "有效期至 ${coupon.endsAt.take(10)}" else "",

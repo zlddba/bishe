@@ -4,11 +4,18 @@
 param(
     [string]$Version = "",
     [int]$HealthRetries = 60,
-    [switch]$NoAgentAutostart
+    [switch]$NoAgentAutostart,
+    [string]$Engine = ""
 )
 
 # Windows equivalent of scripts/install.sh
 $ErrorActionPreference = "Stop"
+if ($Engine) {
+    if ($Engine -notin @("docker", "podman", "auto")) {
+        throw "Unknown engine '$Engine'. Use docker, podman or auto."
+    }
+    $env:PATNEST_ENGINE = $Engine
+}
 . (Join-Path $PSScriptRoot "common.ps1")
 
 $root = Get-PackageRoot
@@ -41,6 +48,10 @@ Assert-EngineRunning "[install]"
 Ensure-NginxMountFiles
 
 New-Item -ItemType Directory -Force -Path "data\redis" | Out-Null
+
+# acme.sh (inside the API container) keeps its account store and the Cloudflare
+# token here. Creating it up front keeps Docker from mounting a root-owned empty dir.
+New-Item -ItemType Directory -Force -Path "data\acme" | Out-Null
 
 Write-Host "[install] Building images patnest-api:$Version / patnest-web:$Version" -ForegroundColor Cyan
 Invoke-Compose @("--profile", "app", "build", "--pull", "api-blue", "nginx")

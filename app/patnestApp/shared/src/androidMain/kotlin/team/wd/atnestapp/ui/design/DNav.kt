@@ -307,6 +307,7 @@ class DNav(
     /** 打开机构详情：先记住机构，详情页读 store.selectedSitter。 */
     fun openSitter(sitter: Sitter) {
         store?.selectedSitter = sitter
+        store?.resetBookingExtras()
         go(DScreen.SitterDetail)
     }
 
@@ -339,9 +340,7 @@ class DNav(
         }
         s.selectedSitter = sitter
         s.bookingPetIds = listOf(s.pets.first().id)
-        s.bookingCoupon = null
-        s.bookingPoints = 0
-        s.bookingAddons = emptyList()
+        s.resetBookingExtras()
         go(DScreen.Booking)
     }
 }

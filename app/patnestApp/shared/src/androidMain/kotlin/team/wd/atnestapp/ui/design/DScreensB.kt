@@ -1,5 +1,6 @@
 package team.wd.atnestapp.ui.design
 
+import team.wd.atnestapp.utils.formatScore
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -373,6 +375,16 @@ fun DSitterOrders(nav: DNav) {
                         },
                     )
                 }
+            }
+            if (shown.isNotEmpty() && store.receivedOrdersHasMore) {
+                Spacer(Modifier.height(10.dp))
+                DButton(
+                    if (store.receivedOrdersLoadingMore) "正在加载…" else "加载更多订单",
+                    { scope.launch { store.loadMoreReceivedOrders() } },
+                    style = DButtonStyle.Outline,
+                    height = 40.dp,
+                    enabled = !store.receivedOrdersLoadingMore,
+                )
             }
         }
     }
@@ -1001,7 +1013,9 @@ fun D22PaySuccess(nav: DNav) {
         },
     ) {
         Column(
-            Modifier.fillMaxWidth().height(410.dp).padding(horizontal = 30.dp),
+            // 固定 410dp 在大字号（fontScale 1.3+）和小屏上会把标题/金额裁掉，
+            // 改成最小高度，内容多了由 DFrame 的滚动容器接管
+            Modifier.fillMaxWidth().heightIn(min = 410.dp).padding(horizontal = 30.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -1056,7 +1070,7 @@ fun D23SitterCompare(nav: DNav) {
     val rows: List<Pair<String, List<String>>> = listOf(
         "类型" to list.map { it.type },
         "单价" to list.map { "${store.money(it.price.toDouble())}/${it.unit}" },
-        "评分" to list.map { if (it.score > 0) "${it.score}.0" else "—" },
+        "评分" to list.map { if (it.score > 0) formatScore(it.score) else "—" },
         "评价" to list.map { it.tags },
         "容量" to list.map { it.cap },
         "区域" to list.map { it.addr.split("区").firstOrNull()?.plus("区") ?: "—" },
@@ -1465,7 +1479,8 @@ fun D25RoleSwitch(nav: DNav) {
                 ) {
                     Box(
                         Modifier.size(40.dp).clip(DShape.Md)
-                            .background(if (sitterMode) Color(0xFF7BA383) else DColor.BrandSoft),
+                            // 用主题语义色，别写死浅绿：深色模式下浅底 + 白图标几乎看不清
+                            .background(if (sitterMode) DColor.Ok else DColor.BrandSoft),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(

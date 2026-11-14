@@ -107,7 +107,12 @@
 		},
 		methods: {
 			switchTab(t) {
+				if (this.tab === t) return
 				this.tab = t
+				// 切换筛选条件必须从头拉：否则会把「新筛选条件的第 2 页」拼到
+				// 「旧筛选条件的第 1 页」后面，出现漏单和重复。
+				if (!this.logged) return
+				this.reload()
 			},
 			async reload() {
 				this.page = 1
@@ -143,6 +148,8 @@
 			mergeLocal(items, allowLocal = true) {
 				if (items.length) return items
 				if (!allowLocal) return []
+				const cur = this.tabs.find((t) => t.value === this.tab)
+				const statuses = (cur && cur.statuses) || []
 				return listOrders()
 					.map((o) => ({
 						id: o.id,
@@ -157,7 +164,7 @@
 						sitter_name: o.sitter_name,
 						_local: true
 					}))
-					.filter((o) => !cur || !cur.statuses.length || cur.statuses.indexOf(o.status) >= 0)
+					.filter((o) => !statuses.length || statuses.indexOf(o.status) >= 0)
 			},
 			open(o) {
 				uni.navigateTo({ url: '/pages/order/detail?id=' + o.id })

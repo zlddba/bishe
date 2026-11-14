@@ -1,5 +1,8 @@
 package team.wd.atnestapp.ui.components
 
+import kotlin.math.roundToInt
+import team.wd.atnestapp.utils.formatScore
+import team.wd.atnestapp.utils.formatMoney
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -593,8 +596,8 @@ fun SitterCard(
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                StarRating(sitter.score, size = 12.dp)
-                Text("· ${sitter.score}.0", color = PatNestColors.Ink2, fontSize = 12.sp)
+                StarRating(sitter.score.roundToInt(), size = 12.dp)
+                Text("· ${formatScore(sitter.score)}", color = PatNestColors.Ink2, fontSize = 12.sp)
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -616,7 +619,7 @@ fun SitterCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("¥${sitter.price}", color = PatNestColors.BrandInk, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("¥${formatMoney(sitter.price)}", color = PatNestColors.BrandInk, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(" /${sitter.unit}", color = PatNestColors.Ink3, fontSize = 11.5.sp, modifier = Modifier.padding(bottom = 2.dp))
                 }
                 Spacer(Modifier.weight(1f))

@@ -109,7 +109,7 @@ fun SittersPage(app: AppState) {
                 }
                 filtered = when (priceOptions[priceIndex]) {
                     "¥100 以下" -> filtered.filter { it.value.price < 100 }
-                    "¥100-200" -> filtered.filter { it.value.price in 100..200 }
+                    "¥100-200" -> filtered.filter { it.value.price in 100.0..200.0 }
                     "¥200 以上" -> filtered.filter { it.value.price > 200 }
                     else -> filtered
                 }

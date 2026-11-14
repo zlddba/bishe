@@ -7,9 +7,11 @@ data class Sitter(
     val name: String,
     val addr: String,
     val type: String,
-    val price: Int,
+    /** 展示单价（元，保留后端小数） */
+    val price: Double,
     val unit: String,
-    val score: Int,
+    /** 平均评分（0~5，保留一位小数） */
+    val score: Double,
     val cap: String,
     val owner: String,
     val tel: String,
@@ -44,7 +46,8 @@ data class Order(
     val pet: String,
     val range: String,
     val days: String,
-    val amount: Int,
+    /** 实付金额（元，后端 float64，不要取整 */
+    val amount: Double,
     val fee: String,
     val status: String,
     val made: String,

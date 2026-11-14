@@ -52,20 +52,37 @@ dependencies {
 }
 
 android {
+    /**
+     * 签名文件定位：优先读环境变量（CI 会把 jks 从 Secrets 解码到 runner 临时目录），
+     * 找不到再回落到项目内 buildkeys/。
+     *
+     * 之前的绝对路径 D:\schoollearn\... 只在本机能用：GitHub Actions 的 Linux runner
+     * 在配置阶段就会因为文件不存在而直接失败。
+     */
+    fun keystore(envName: String, fileName: String): java.io.File {
+        val fromEnv = providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() }
+        return if (fromEnv != null) {
+            file(fromEnv)
+        } else {
+            rootProject.layout.projectDirectory.dir("buildkeys").file(fileName).asFile
+        }
+    }
+
+    fun secret(envName: String, fallback: String): String =
+        providers.environmentVariable(envName).orNull?.takeIf { it.isNotBlank() } ?: fallback
+
     signingConfigs {
         getByName("debug") {
-            storeFile =
-                file("D:\\schoollearn\\biyezuopin\\app\\patnestApp\\buildkeys\\patnestapp_debug.jks")
-            storePassword = "patnestapp_debug"
-            keyPassword = "patnestapp_debug"
-            keyAlias = "key0"
+            storeFile = keystore("PATNEST_DEBUG_KEYSTORE", "patnestapp_debug.jks")
+            storePassword = secret("PATNEST_DEBUG_STORE_PASSWORD", "patnestapp_debug")
+            keyPassword = secret("PATNEST_DEBUG_KEY_PASSWORD", "patnestapp_debug")
+            keyAlias = secret("PATNEST_DEBUG_KEY_ALIAS", "key0")
         }
         create("release") {
-            storeFile =
-                file("D:\\schoollearn\\biyezuopin\\app\\patnestApp\\buildkeys\\patnestapp_release.jks")
-            storePassword = "patnestapp_release"
-            keyPassword = "patnestapp_release"
-            keyAlias = "key0"
+            storeFile = keystore("PATNEST_RELEASE_KEYSTORE", "patnestapp_release.jks")
+            storePassword = secret("PATNEST_RELEASE_STORE_PASSWORD", "patnestapp_release")
+            keyPassword = secret("PATNEST_RELEASE_KEY_PASSWORD", "patnestapp_release")
+            keyAlias = secret("PATNEST_RELEASE_KEY_ALIAS", "key0")
         }
     }
     namespace = "team.wd.atnestapp"

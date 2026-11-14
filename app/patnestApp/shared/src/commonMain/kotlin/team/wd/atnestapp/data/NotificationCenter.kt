@@ -68,7 +68,10 @@ class NotificationCenter(
      */
     suspend fun loadScopedNotifications(force: Boolean = false, isSitter: Boolean = false) {
         if (scopedNotificationsLoading) return
-        if (!force && (personalNotifications.isNotEmpty() || businessNotifications.isNotEmpty())) return
+        // 只看「当前视角」是否已有数据：原来用「任一视角非空」短路，
+        // 个人消息一有数据，切换身份后就再也不刷新商家消息了。
+        val current = if (notificationScope == "business") businessNotifications else personalNotifications
+        if (!force && current.isNotEmpty()) return
         scopedNotificationsLoading = true
         scopedNotificationsError = null
         try {

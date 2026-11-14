@@ -176,10 +176,14 @@
 				<!-- 改期费用明细：把每天多少钱、总额变化讲清楚 -->
 				<view class="fee-box">
 					<view class="fb-row">
-						<text>机构日单价</text>
-						<text class="fb-val">{{ dailyPrice > 0 ? ('¥' + fmtMoney(dailyPrice) + ' / 天') : '未获取到' }}</text>
+						<text>{{ perVisit ? '机构单次价格' : '机构日单价' }}</text>
+						<text class="fb-val">
+							{{ perVisit
+								? (visitPrice > 0 ? ('¥' + fmtMoney(visitPrice) + ' / 次') : '未获取到')
+								: (dailyPrice > 0 ? ('¥' + fmtMoney(dailyPrice) + ' / 天') : '未获取到') }}
+						</text>
 					</view>
-					<view class="fb-row">
+					<view v-if="!perVisit" class="fb-row">
 						<text>寄养天数</text>
 						<text class="fb-val">{{ rescheduleDays }} 天</text>
 					</view>
@@ -195,6 +199,7 @@
 						<text>{{ rescheduleDiff > 0 ? '需补差价' : '可退差额' }}</text>
 						<text class="fb-val">{{ rescheduleDiff > 0 ? '+' : '' }}¥{{ fmtMoney(rescheduleDiff) }}</text>
 					</view>
+					<text v-if="amountIsEstimate" class="fb-note">以上为预估金额，遇节假日上浮时以提交后服务端返回的金额为准。</text>
 				</view>
 				<view class="sheet-actions">
 					<view class="sheet-btn cancel" @click="showReschedule = false">取消</view>
@@ -219,10 +224,14 @@
 				<!-- 续费费用明细 -->
 				<view class="fee-box">
 					<view class="fb-row">
-						<text>机构日单价</text>
-						<text class="fb-val">{{ dailyPrice > 0 ? ('¥' + fmtMoney(dailyPrice) + ' / 天') : '未获取到' }}</text>
+						<text>{{ perVisit ? '机构单次价格' : '机构日单价' }}</text>
+						<text class="fb-val">
+							{{ perVisit
+								? (visitPrice > 0 ? ('¥' + fmtMoney(visitPrice) + ' / 次') : '未获取到')
+								: (dailyPrice > 0 ? ('¥' + fmtMoney(dailyPrice) + ' / 天') : '未获取到') }}
+						</text>
 					</view>
-					<view class="fb-row">
+					<view v-if="!perVisit" class="fb-row">
 						<text>延长天数</text>
 						<text class="fb-val">{{ renewDays }} 天</text>
 					</view>
@@ -234,6 +243,7 @@
 						<text>续费后总额</text>
 						<text class="fb-val">¥{{ fmtMoney(Number(o.total_amount || 0) + renewAmount) }}</text>
 					</view>
+					<text v-if="amountIsEstimate" class="fb-note">以上为预估金额，遇节假日上浮时以提交后服务端返回的金额为准。</text>
 				</view>
 				<view class="sheet-actions">
 					<view class="sheet-btn cancel" @click="showRenew = false">取消</view>
@@ -266,6 +276,9 @@
 				review: null,
 				refunds: [],
 				followupText: '',
+				// 追评 / 点赞的 in-flight 标记，避免连点造成请求竞态
+				followupSending: false,
+				liking: false,
 				// 当前展示的是本地快照（服务端详情接口不可用）
 				fromCache: false,
 				// 服务端与本地都取不到该订单
@@ -301,10 +314,21 @@
 			amountZero() {
 				return this.o.payment_status !== 'paid' && Number(this.o.total_amount) === 0
 			},
+			// 机构计价方式：按次 / 按天（后端 computeStayAmount 的分支依据）
+			perVisit() {
+				return !!this.sitter && this.sitter.price_mode === 'per_visit'
+			},
 			// 机构日单价（改期/续费算费用用）
 			dailyPrice() {
 				if (this.sitter && this.sitter.daily_price != null) {
 					return Number(this.sitter.daily_price) || 0
+				}
+				return 0
+			},
+			// 机构次单价（按次机构用）
+			visitPrice() {
+				if (this.sitter && this.sitter.visit_price != null) {
+					return Number(this.sitter.visit_price) || 0
 				}
 				return 0
 			},
@@ -313,9 +337,11 @@
 				if (!this.newStart || !this.newEnd) return 0
 				return Math.max(0, diffDays(this.newStart, this.newEnd))
 			},
-			// 改期后预计金额（按日单价 × 天数 × 宠物数）
+			// 改期后预计金额：按次机构 = 次单价 × 宠物数；按天机构 = 日单价 × 天数 × 宠物数
+			// 注意：按天机构如遇节假日上浮，服务端会更高，这里只作预估展示。
 			rescheduleAmount() {
 				const pets = Number(this.o.pet_count) || 1
+				if (this.perVisit) return this.visitPrice * pets
 				return this.dailyPrice * this.rescheduleDays * pets
 			},
 			// 与原订单的差额：正数=需补差价，负数=可退差额
@@ -327,10 +353,15 @@
 				if (!this.newEndDate || !this.o.end_date) return 0
 				return Math.max(0, diffDays(this.o.end_date, this.newEndDate))
 			},
-			// 续费需付金额
+			// 续费金额：按次机构相当于再买一次服务（不看天数），按天机构按新增夜间计费
 			renewAmount() {
 				const pets = Number(this.o.pet_count) || 1
+				if (this.perVisit) return this.visitPrice * pets
 				return this.dailyPrice * this.renewDays * pets
+			},
+			// 前端是本地估算，节假日上浮无法感知，需要明确告知以免用户以为扣款出错
+			amountIsEstimate() {
+				return !this.perVisit && (this.rescheduleDays > 0 || this.renewDays > 0)
 			},
 			// 可选支付方式
 			payMethods() {
@@ -361,12 +392,18 @@
 				return ['pending_pay', 'confirmed', 'accepted'].indexOf(this.o.status) >= 0
 			},
 			canReschedule() {
-				// 后端要求：状态 ∈ {pending_pay, confirmed, accepted} 且订单尚未开始
-				return ['pending_pay', 'confirmed', 'accepted'].indexOf(this.o.status) >= 0
+				// 后端：状态 ∈ {pending_pay, confirmed, accepted} 且订单尚未开始
+				// （order_extra.go:114-120，已开始再改期必然 400）
+				if (['pending_pay', 'confirmed', 'accepted'].indexOf(this.o.status) < 0) return false
+				if (!this.o.start_date) return false
+				const now = this.today || today()
+				return String(now) < String(this.o.start_date)
 			},
 			canRenew() {
-				// 后端要求：payment_status=paid 且 status ∈ {completed, cancelled, pending_pay}
-				return this.o.payment_status === 'paid' && this.o.status === 'completed'
+				// 后端：payment_status=paid 且 status ∉ {completed, cancelled, pending_pay}
+				// （order_extra.go:216-221，原先写成「必须 completed」正好与后端相反）
+				if (this.o.payment_status !== 'paid') return false
+				return ['completed', 'cancelled', 'pending_pay'].indexOf(this.o.status) < 0
 			},
 			canRefund() {
 				return this.o.payment_status === 'paid'
@@ -381,7 +418,7 @@
 		onLoad(options) {
 			this.id = options.id
 			this.today = today()
-			this.load()
+			// 加载交给 onShow（onLoad 后紧跟一次 onShow，都调会首屏打两遍详情）
 		},
 		onShow() {
 			if (this.id) this.load()
@@ -570,6 +607,7 @@
 				}
 			},
 			async doReschedule() {
+				if (this.rescheduling) return
 				if (!this.newStart || !this.newEnd || this.newEnd <= this.newStart) {
 					return uni.showToast({ title: '结束日期需晚于开始日期', icon: 'none' })
 				}
@@ -605,6 +643,7 @@
 				this.loadSitter()
 			},
 			async doRenew() {
+				if (this.renewing) return
 				if (!this.newEndDate || this.newEndDate <= this.o.end_date) {
 					return uni.showToast({ title: '续费日期需晚于原结束日期', icon: 'none' })
 				}
@@ -667,6 +706,8 @@
 				uni.navigateTo({ url: '/pages/dynamic/list' })
 			},
 			async toggleLike(d) {
+				if (this.liking) return
+				this.liking = true
 				try {
 					if (d.liked) {
 						await dynamicApi.unlike(d.id)
@@ -678,18 +719,26 @@
 						d.like_count = (d.like_count || 0) + 1
 					}
 					this.dynamics = this.dynamics.slice()
-				} catch (e) {}
+				} catch (e) {
+				} finally {
+					this.liking = false
+				}
 			},
 			async submitFollowup() {
+				if (this.followupSending) return
 				const content = this.followupText.trim()
 				if (content.length < 2) {
 					return uni.showToast({ title: '追评内容至少 2 个字', icon: 'none' })
 				}
+				this.followupSending = true
 				try {
 					await reviewApi.followup(this.review.id, content)
 					this.followupText = ''
 					uni.showToast({ title: '追评成功', icon: 'success' })
-				} catch (e) {}
+				} catch (e) {
+				} finally {
+					this.followupSending = false
+				}
 			},
 			fmtMoney,
 			fmtTime(s) {
@@ -1102,6 +1151,13 @@
 	.fb-row.diff .fb-val {
 		color: #D97706;
 		font-size: 26rpx;
+	}
+	.fb-note {
+		display: block;
+		margin-top: 10rpx;
+		font-size: 22rpx;
+		line-height: 1.5;
+		color: #9AA3AF;
 	}
 	.sr-label {
 		font-size: 27rpx;

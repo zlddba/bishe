@@ -189,6 +189,65 @@
         <el-descriptions-item label="证书目录" :span="2">{{ tls.dir || '-' }}</el-descriptions-item>
       </el-descriptions>
 
+      <!-- Let's Encrypt：镜像内置 acme.sh，走 Cloudflare DNS-01 验证，续期由后端 worker 负责 -->
+      <div class="tls-acme">
+        <div class="tls-acme-head">
+          <div>
+            <div class="tls-acme-title">
+              Let's Encrypt 自动证书
+              <span class="pn-tag" :class="acme.managed ? 'pn-tag-ok' : 'pn-tag-soft'">
+                {{ acme.managed ? '已接管' : '未启用' }}
+              </span>
+              <span v-if="acme.version" class="pn-tag pn-tag-soft">acme.sh {{ acme.version }}</span>
+            </div>
+            <p class="tls-acme-desc">
+              服务器镜像里已经带了 acme.sh，不用另外装 certbot。验证走 Cloudflare 的 DNS 记录，
+              不需要开放 80 端口；签完和手工上传落在同一个证书目录，nginx 会自己重载。
+            </p>
+          </div>
+          <el-button :loading="acmeChecking" @click="checkACME">验证 Token</el-button>
+        </div>
+
+        <el-form label-width="88px" class="tls-acme-form">
+          <el-form-item label="域名">
+            <el-input v-model="acmeForm.domain" placeholder="www.example.com" style="width:300px" />
+            <span class="tls-hint">多个域名用英文逗号分隔，第一个作为主名</span>
+          </el-form-item>
+          <el-form-item label="CF Token">
+            <el-input
+              v-model="acmeForm.token"
+              type="password"
+              show-password
+              :placeholder="acme.token_set ? '已保存，留空表示不修改' : 'Cloudflare API Token'"
+              style="width:300px"
+            />
+            <span class="tls-hint">权限要有 Zone:Zone:Read 与 Zone:DNS:Edit</span>
+          </el-form-item>
+          <el-form-item label="邮箱">
+            <el-input v-model="acmeForm.email" placeholder="选填，用于接收到期提醒" style="width:300px" />
+          </el-form-item>
+          <el-form-item label="自动续期">
+            <el-switch v-model="acmeForm.auto_renew" :loading="acmeSaving" @change="saveACMESettings" />
+            <span class="tls-hint">剩余 {{ acmeForm.renew_days }} 天时自动续，每 12 小时检查一次</span>
+          </el-form-item>
+          <el-form-item label="测试环境">
+            <el-switch v-model="acmeForm.staging" />
+            <span class="tls-hint">先签测试证书验证流程（浏览器不信任），避免撞上每周 5 张的频率限制</span>
+          </el-form-item>
+        </el-form>
+
+        <div class="tls-actions">
+          <el-button type="primary" :loading="acmeIssuing" :disabled="!acme.available" @click="issueACME">
+            申请 / 更新证书
+          </el-button>
+          <el-button :loading="acmeRenewing" :disabled="!acme.managed" @click="renewACME">立即续期</el-button>
+          <el-button v-if="acme.last_run" link @click="showACMELog">上次执行日志</el-button>
+          <span v-if="!acme.available" class="tls-hint tls-backend-warn">
+            当前镜像里没有 acme.sh，请重建 api 镜像（Dockerfile.api 会从 vendor/acme.sh 带进去）
+          </span>
+        </div>
+      </div>
+
       <!-- 后端自己终结 TLS：开关一拨就生效，不用重启、不用改 .env -->
       <div class="tls-backend">
         <div class="tls-backend-text">
@@ -269,6 +328,11 @@
 
     <el-dialog v-model="logDialog" title="更新日志" width="760px">
       <pre class="log-box">{{ jobLog || '暂无日志' }}</pre>
+    </el-dialog>
+
+    <!-- acme.sh 的原始输出：签发失败时这里会告诉到底是 DNS、80 端口还是速率限制的问题 -->
+    <el-dialog v-model="acmeLogDialog" title="acme.sh 执行记录" width="760px">
+      <pre class="log-box">{{ acmeLogText || '暂无日志' }}</pre>
     </el-dialog>
   </div>
 </template>
@@ -572,9 +636,154 @@ async function removeTLS() {
   }
 }
 
+/* ---------- Let's Encrypt（镜像内置 acme.sh，Cloudflare DNS-01 验证） ---------- */
+const acme = ref({})
+const acmeForm = reactive({
+  domain: '',
+  email: '',
+  // Token 只写不读：后端只回 token_set，页面上永远拿不到明文，
+  // 留空提交表示沿用已保存的那份。
+  token: '',
+  auto_renew: true,
+  renew_days: 30,
+  staging: false,
+})
+const acmeIssuing = ref(false)
+const acmeRenewing = ref(false)
+const acmeSaving = ref(false)
+const acmeChecking = ref(false)
+const acmeLogDialog = ref(false)
+const acmeLogText = ref('')
+
+async function loadACME() {
+  try {
+    const res = await adminApi.getACME()
+    acme.value = res.data || {}
+    acmeForm.domain = acme.value.domain || (acme.value.cert && acme.value.cert.domains ? acme.value.cert.domains[0] : '') || ''
+    acmeForm.email = acme.value.email || ''
+    acmeForm.auto_renew = acme.value.auto_renew !== false
+    acmeForm.renew_days = acme.value.renew_days || 30
+  } catch {
+    // 老版本后端没有这组接口时静默失败，手工上传证书那一块照常可用
+  }
+}
+
+// 失败响应里带着 acme.sh 的原始输出（见后端 FailWithDetail），
+// 比只弹一句「签发失败」有用得多。
+function acmeErrorPayload(err) {
+  return (err && err.response && err.response.data && err.response.data.data) || {}
+}
+
+function openACMELog(text) {
+  acmeLogText.value = text
+  acmeLogDialog.value = true
+}
+
+function showACMELog() {
+  const r = acme.value.last_run
+  if (!r) return openACMELog('暂无日志')
+  openACMELog(`${formatTime(r.at)}  ${r.domain || ''}  ${r.ok ? '成功' : '失败'}\n\n${r.output || ''}`)
+}
+
+async function issueACME() {
+  const domain = acmeForm.domain.trim()
+  if (!domain) return ElMessage.warning('请填写域名')
+  if (acme.value.cert) {
+    const cur = (acme.value.cert.domains || []).join(', ') || '未知域名'
+    try {
+      await ElMessageBox.confirm(
+        `新证书会覆盖当前正在使用的证书（${cur}），确定继续吗？`,
+        '申请证书',
+        { type: 'warning' }
+      )
+    } catch {
+      return
+    }
+  }
+  acmeIssuing.value = true
+  try {
+    const res = await adminApi.issueACME({
+      domain,
+      email: acmeForm.email.trim(),
+      token: acmeForm.token.trim(),
+      staging: acmeForm.staging,
+    })
+    const d = res.data || {}
+    ElMessage.success(d.message || '证书已签发')
+    acmeForm.token = ''
+    await Promise.all([loadACME(), loadTLS()])
+  } catch (e) {
+    const p = acmeErrorPayload(e)
+    openACMELog([p.hint || e.message || '签发失败', '', p.output ? `—— acme.sh 输出 ——\n${p.output}` : ''].join('\n').trim())
+    loadACME()
+    loadTLS()
+  } finally {
+    acmeIssuing.value = false
+  }
+}
+
+async function renewACME() {
+  acmeRenewing.value = true
+  try {
+    const res = await adminApi.renewACME({ domain: acmeForm.domain.trim() })
+    ElMessage.success((res.data && res.data.message) || '续期完成')
+    await Promise.all([loadACME(), loadTLS()])
+  } catch (e) {
+    const p = acmeErrorPayload(e)
+    openACMELog([p.hint || e.message || '续期失败', '', p.output || ''].join('\n').trim())
+  } finally {
+    acmeRenewing.value = false
+  }
+}
+
+async function saveACMESettings() {
+  acmeSaving.value = true
+  try {
+    await adminApi.updateACMESettings({
+      auto_renew: acmeForm.auto_renew,
+      email: acmeForm.email.trim(),
+      renew_days: acmeForm.renew_days,
+      token: acmeForm.token.trim(),
+    })
+    ElMessage.success('已保存')
+    acmeForm.token = ''
+    loadACME()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+    loadACME()
+  } finally {
+    acmeSaving.value = false
+  }
+}
+
+// Cloudflare Token 自检：后端会真的调一次 CF API，
+// 顺带告出这个 Token 能管哪些 zone、目标域名是否落在里面。
+async function checkACME() {
+  const domain = acmeForm.domain.trim()
+  if (!domain) return ElMessage.warning('请先填写域名')
+  if (!acmeForm.token.trim() && !acme.value.token_set) {
+    return ElMessage.warning('请先填写 Cloudflare API Token')
+  }
+  acmeChecking.value = true
+  try {
+    const res = await adminApi.checkACME({ domain, token: acmeForm.token.trim() })
+    const d = res.data || {}
+    if (d.ok) {
+      ElMessage.success(d.hint || 'Token 有效，可以开始申请证书')
+    } else {
+      openACMELog([d.detail || '', d.hint || '', (d.zones || []).length ? `\nToken 可管理的域名：\n${d.zones.join('\n')}` : ''].join('\n').trim())
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '检测失败')
+  } finally {
+    acmeChecking.value = false
+  }
+}
+
 onMounted(() => {
   load()
   loadTLS()
+  loadACME()
 })
 onUnmounted(stopPolling)
 </script>
@@ -739,6 +948,39 @@ onUnmounted(stopPolling)
   color: var(--ink, #3A2A2F);
 }
 .tls-backend-warn { margin-top: 6px; color: #E6A23C; }
+
+/* Let's Encrypt 自动签发卡片：和手工上传区分开，但读同一份证书状态 */
+.tls-acme {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: #FAF7F8;
+  border: 1px solid var(--line, #EDE4E7);
+  border-radius: 10px;
+}
+.tls-acme-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.tls-acme-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink, #3A2A2F);
+}
+.tls-acme-desc {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink3, #9AA3AF);
+}
+.tls-acme-form { margin-top: 4px; }
+.tls-acme-form .el-form-item { margin-bottom: 10px; }
+.tls-acme-form .tls-hint { margin-left: 10px; }
 .tls-actions {
   display: flex;
   align-items: center;

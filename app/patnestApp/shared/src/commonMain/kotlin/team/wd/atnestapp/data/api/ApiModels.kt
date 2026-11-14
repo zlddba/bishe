@@ -25,6 +25,8 @@ data class RegisterPayload(
     val role: String = "owner",
     val nickname: String = "",
     val phone: String = "",
+    /** 0022：好友邀请码，选填；服务端校验后绑定邀请关系。 */
+    @SerialName("invite_code") val inviteCode: String = "",
 )
 
 @Serializable
@@ -203,6 +205,14 @@ data class CreateOrderPayload(
     val remark: String = "",
     @SerialName("user_coupon_id") val userCouponId: Long = 0,
     @SerialName("points_used") val pointsUsed: Int = 0,
+    /** 加购服务：后端按 addon_id + qty 逐项计价 */
+    val addons: List<CreateOrderAddonPayload> = emptyList(),
+)
+
+@Serializable
+data class CreateOrderAddonPayload(
+    @SerialName("addon_id") val addonId: Long,
+    val qty: Int = 1,
 )
 
 @Serializable
@@ -236,13 +246,18 @@ data class ReviewResult(val id: Long = 0)
 @Serializable
 data class FollowupPayload(val content: String)
 
+/**
+ * 修改资料：后端是「指针 + COALESCE」的局部更新（member_ops.go:36-70），
+ * 只有 null 才会被跳过，空串会被真的写进库。所以这里必须允许 null，
+ * 未填写的字段不能发空串，否则只改昵称也会把地址/联系人清空。
+ */
 @Serializable
 data class UpdateProfilePayload(
-    val nickname: String,
-    val phone: String,
-    val address: String = "",
-    @SerialName("contact_name") val contactName: String = "",
-    @SerialName("contact_phone") val contactPhone: String = "",
+    val nickname: String? = null,
+    val phone: String? = null,
+    val address: String? = null,
+    @SerialName("contact_name") val contactName: String? = null,
+    @SerialName("contact_phone") val contactPhone: String? = null,
 )
 
 @Serializable
@@ -850,6 +865,24 @@ data class PointsDto(
     val balance: Int = 0,
     val rate: Int = 0,
     val items: List<PointsEntryDto> = emptyList(),
+)
+
+/** 我作为被邀请人的首单奖励状态（GET /pet-owner/invite 的 my_reward） */
+@Serializable
+data class InviteRewardDto(
+    val granted: Boolean = false,
+    @SerialName("order_id") val orderId: Long = 0,
+)
+
+/** 邀请码与邀请统计（迁移 0022，GET /pet-owner/invite） */
+@Serializable
+data class InviteDto(
+    @SerialName("invite_code") val inviteCode: String = "",
+    @SerialName("invited_by") val invitedBy: Long = 0,
+    @SerialName("invited_count") val invitedCount: Int = 0,
+    @SerialName("rewarded_count") val rewardedCount: Int = 0,
+    @SerialName("points_per_invite") val pointsPerInvite: Int = 100,
+    @SerialName("my_reward") val myReward: InviteRewardDto = InviteRewardDto(),
 )
 
 /** 下单前估价的明细行：type 为 base / addon / discount / points */
