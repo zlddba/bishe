@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -1223,11 +1224,15 @@ fun D24MapPicker(nav: DNav) {
     // 全屏地图选点：和「机构位置」页保持同一套交互——地图铺满整屏，
     // 返回与位置说明浮在上方，地址编辑区浮在下方，任何浮层都不占地图面积。
     // 之前是 240dp 的小地图加一整列表单，既看不清位置，拖动也只剩一小块可用。
+    // 液态玻璃浮层：地图绘制层挂进 backdrop 记录（同机构位置页的统一方案，
+    // surfaceAlpha 让真实地图透出一半，SDK/瓦片两种渲染路径观感一致）
+    val mapBackdrop = rememberDGlassBackdrop()
+    CompositionLocalProvider(LocalDGlassBackdrop provides mapBackdrop) {
     Box(Modifier.fillMaxSize().background(DColor.MapWash)) {
         DMapView(
             latitude = centerLat,
             longitude = centerLng,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().dGlassBackdropSource(mapBackdrop),
             zoom = zoom,
             interactive = true,
             // 铺满整屏时不能要圆角描边，否则四角会露出页面底色
@@ -1264,20 +1269,38 @@ fun D24MapPicker(nav: DNav) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(DColor.Scrim)
-                    .clickable { nav.back() },
-                contentAlignment = Alignment.Center,
+            DGlassSurface(
+                modifier = Modifier.size(40.dp).clickable { nav.back() },
+                shape = CircleShape,
+                tint = Color.White.copy(alpha = 0.22f),
+                blurRadius = 16f,
+                cornerDp = 20.dp,
+                surfaceAlpha = 0.55f,
+                fallbackColor = DColor.Scrim,
+                fallbackBorderColor = Color.Transparent,
             ) {
-                AppIcon(AppIcon.Back, Modifier.size(19.dp), DColor.White)
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(AppIcon.Back, Modifier.size(19.dp), DColor.White)
+                }
             }
             Spacer(Modifier.width(10.dp))
-            Column(
-                Modifier.weight(1f).clip(DShape.Md).background(DColor.Card)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            DGlassSurface(
+                modifier = Modifier.weight(1f),
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.35f),
+                blurRadius = 16f,
+                cornerDp = 8.dp,
+                surfaceAlpha = 0.55f,
+                fallbackColor = DColor.Card,
             ) {
-                Text(
-                    "选择地址位置",
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        "选择地址位置",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = DColor.Ink,
@@ -1301,8 +1324,19 @@ fun D24MapPicker(nav: DNav) {
                 .widthIn(max = LocalDWindow.current.contentMaxWidth)
                 .navigationBarsPadding().padding(12.dp),
         ) {
-            DCard {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            DGlassSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = DShape.Lg,
+                tint = DColor.Card.copy(alpha = 0.35f),
+                blurRadius = 16f,
+                cornerDp = 12.dp,
+                surfaceAlpha = 0.55f,
+                fallbackColor = DColor.Card,
+            ) {
+                // 玻璃面是 BoxScope：内部套一层 Column 承载纵向排布
+                // （地址行 / 展开表单 / 确认按钮），否则会全部叠在同一个位置
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
                             if (resolving) "正在解析地址…" else "选中的位置",
@@ -1402,8 +1436,10 @@ fun D24MapPicker(nav: DNav) {
                         color = DColor.Ink3,
                     )
                 }
+                }
             }
         }
+    }
     }
 }
 
