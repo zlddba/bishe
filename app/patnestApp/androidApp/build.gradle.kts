@@ -97,8 +97,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         // 版本号随发布 tag 走：CI 构建时注入 PATNEST_VERSION / PATNEST_VERSION_CODE
-        versionCode = System.getenv("PATNEST_VERSION_CODE")?.toIntOrNull() ?: 4
-        versionName = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.2"
+        versionCode = System.getenv("PATNEST_VERSION_CODE")?.toIntOrNull() ?: 5
+        versionName = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.3"
 
         // 接口根地址：构建期从 .env 的 PATNEST_API_BASE 注入，运行时不可修改
         buildConfigField("String", "API_BASE", "\"$patnestApiBase\"")

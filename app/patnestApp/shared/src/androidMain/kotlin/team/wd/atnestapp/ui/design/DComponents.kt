@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -44,15 +45,19 @@ import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +66,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -72,7 +80,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -94,6 +104,9 @@ fun DFrame(
     immersiveTop: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
+    // 下拉刷新（Android）：传 onRefresh 即启用，refreshing 传当前加载标志
+    refreshing: Boolean? = null,
+    onRefresh: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
@@ -114,18 +127,22 @@ fun DFrame(
             //
             // 没有底栏 / Tab 的页面，滚动内容要自己让开系统导航条。
             val needBottomInset = bottomBar == null && activeTab == null
-            Column(
-                Modifier
-                    .dPageWidth(win)
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    // 清单声明 adjustResize + EdgeToEdge 时，键盘高度不会自动变成内容留白，
-                    // 不加 imePadding 页尾输入框会被键盘直接盖住
-                    .imePadding()
-                    .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
-                    .padding(bottom = 14.dp),
-                content = content,
-            )
+            val colModifier = Modifier
+                .dPageWidth(win)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                // 清单声明 adjustResize + EdgeToEdge 时，键盘高度不会自动变成内容留白，
+                // 不加 imePadding 页尾输入框会被键盘直接盖住
+                .imePadding()
+                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                .padding(bottom = 14.dp)
+            if (onRefresh != null) {
+                DPullRefresh(refreshing = refreshing == true, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+                    Column(colModifier, content = content)
+                }
+            } else {
+                Column(colModifier, content = content)
+            }
         }
         if (bottomBar != null) {
             // 底部结算栏同样限宽：否则宽屏下按钮会拉成一米长，和居中的正文脱节。
@@ -158,6 +175,9 @@ fun DLazyFrame(
     immersiveTop: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
+    // 下拉刷新（Android）：传 onRefresh 即启用，refreshing 传当前加载标志
+    refreshing: Boolean? = null,
+    onRefresh: (() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     val win = LocalDWindow.current
@@ -169,15 +189,26 @@ fun DLazyFrame(
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             val needBottomInset = bottomBar == null && activeTab == null
-            LazyColumn(
-                Modifier
-                    .dPageWidth(win)
-                    .fillMaxSize()
-                    .imePadding()
-                    .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier),
-                contentPadding = PaddingValues(bottom = 14.dp),
-                content = content,
-            )
+            val scrollModifier = Modifier
+                .dPageWidth(win)
+                .fillMaxSize()
+                .imePadding()
+                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+            if (onRefresh != null) {
+                DPullRefresh(refreshing = refreshing == true, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        scrollModifier,
+                        contentPadding = PaddingValues(bottom = 14.dp),
+                        content = content,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    scrollModifier,
+                    contentPadding = PaddingValues(bottom = 14.dp),
+                    content = content,
+                )
+            }
         }
         if (bottomBar != null) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
@@ -1147,6 +1178,104 @@ fun DDropdown(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 极简下拉刷新容器（Android）。
+ *
+ * 用 [NestedScrollConnection] 捕获「子滚动容器已在顶部、用户继续下拉」的剩余手势，
+ * 拉出顶部指示器；松手超过阈值（64dp）触发 [onRefresh]。
+ * 不依赖 accompanist，也不要求 material3 版本自带 PullToRefresh；
+ * LazyColumn 与 Column(verticalScroll) 都适用（通过 nestedScroll 交接手势）。
+ *
+ * 视觉：内容整体随手势下移（translationY），顶部露出带转圈的指示条。
+ */
+@Composable
+fun DPullRefresh(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 64.dp.toPx() }
+    val maxDragPx = with(density) { 120.dp.toPx() }
+    val snapPx = with(density) { 44.dp.toPx() }
+
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    // lambda 里始终读最新值，避免 remember{} 缓存旧闭包
+    val currentRefreshing by rememberUpdatedState(refreshing)
+    val currentOnRefresh by rememberUpdatedState(onRefresh)
+
+    val connection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // 刷新中指示器钉在固定高度；向上滑动时先收指示器，再放行给列表
+                if (dragOffset > 0f && available.y < 0f) {
+                    val floor = if (currentRefreshing) snapPx else 0f
+                    dragOffset = (dragOffset + available.y).coerceAtLeast(floor)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (currentRefreshing) return Offset.Zero
+                // 只吃「用户手指」在列表顶部继续下拉的剩余距离
+                if (available.y > 0f && source == NestedScrollSource.UserInput) {
+                    dragOffset = (dragOffset + available.y).coerceAtMost(maxDragPx)
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (dragOffset >= thresholdPx) {
+                    currentOnRefresh()
+                } else if (dragOffset > 0f) {
+                    scope.launch { animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v } }
+                }
+                return available
+            }
+        }
+    }
+
+    // 刷新开始/结束时钉住或收起指示器
+    LaunchedEffect(refreshing) {
+        if (refreshing) {
+            dragOffset = snapPx
+        } else if (dragOffset > 0f) {
+            animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
+        }
+    }
+
+    Box(modifier.nestedScroll(connection)) {
+        // 内容随手势整体下移，露出顶部指示条
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = dragOffset }) {
+            content()
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(with(density) { dragOffset.toDp() }),
+        ) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (currentRefreshing) "正在刷新…" else "松手刷新",
+                    fontSize = 12.sp,
+                    color = DColor.Ink3,
+                )
             }
         }
     }

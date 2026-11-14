@@ -173,7 +173,7 @@ fun D18SitterWorkspace(nav: DNav) {
     }
     val shop = store.myShop
     // 机构身份下的「首页」：底部导航换成工作台 / 订单 / 动态 / 我的这一套
-    DFrame(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false) {
+    DFrame(nav = nav, title = null, activeTab = DTab.SitterHome, backable = false, refreshing = store.shopLoading, onRefresh = { scope.launch { store.loadMyShop(force = true); store.loadSitterStats() } }) {
         Column(
             Modifier.fillMaxWidth().background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 16.dp),
@@ -331,7 +331,7 @@ fun DSitterOrders(nav: DNav) {
         }
     }
 
-    DFrame(nav = nav, title = "接单管理", activeTab = DTab.SitterOrders) {
+    DFrame(nav = nav, title = "接单管理", activeTab = DTab.SitterOrders, refreshing = store.receivedOrdersLoading, onRefresh = { scope.launch { store.loadReceivedOrders(force = true) } }) {
         DPad {
             Spacer(Modifier.height(12.dp))
             DCard {
@@ -933,11 +933,13 @@ fun DTicketChat(nav: DNav) {
 @Composable
 fun D21Points(nav: DNav) {
     val store = DLocalStore.current
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { store.loadPoints() }
     val balance = store.pointsBalance
     val gained = store.pointsHistory.filter { it.change > 0 }.sumOf { it.change }
     val spent = store.pointsHistory.filter { it.change < 0 }.sumOf { -it.change }
-    DFrame(nav = nav, title = null, backable = false) {
+    DFrame(nav = nav, title = null, backable = false, refreshing = refreshing, onRefresh = { refreshing = true; scope.launch { store.loadPoints(); refreshing = false } }) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
@@ -1985,7 +1987,7 @@ fun D29SitterIncome(nav: DNav) {
     val activeLabel = presets.firstOrNull {
         it.second.first == store.earningsFrom && it.second.second == store.earningsTo
     }?.first ?: if (store.earningsFrom.isBlank()) "近 30 天" else ""
-    DFrame(nav = nav, title = null, backable = false) {
+    DFrame(nav = nav, title = null, backable = false, refreshing = store.earningsLoading, onRefresh = { scope.launch { store.loadEarnings(force = true); store.loadSettlements(); store.loadSitterStats(); store.loadSettleWindow() } }) {
         Column(
             Modifier.fillMaxWidth().clip(B_HeroBottomShape).background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
@@ -2113,6 +2115,7 @@ fun D29SitterIncome(nav: DNav) {
 fun D30SitterCoupons(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
+    var couponsRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { store.loadSitterCoupons() }
     var tab by remember { mutableStateOf(0) }
     var creating by remember { mutableStateOf(false) }
@@ -2133,6 +2136,11 @@ fun D30SitterCoupons(nav: DNav) {
         title = "我的优惠券",
         actions = {
             DSmallButton(if (creating) "取消" else "+ 发布", { creating = !creating })
+        },
+        refreshing = couponsRefreshing,
+        onRefresh = {
+            couponsRefreshing = true
+            scope.launch { store.loadSitterCoupons(); couponsRefreshing = false }
         },
     ) {
         DTabLine(listOf("全部", "进行中", "已停用"), tab) { tab = it }

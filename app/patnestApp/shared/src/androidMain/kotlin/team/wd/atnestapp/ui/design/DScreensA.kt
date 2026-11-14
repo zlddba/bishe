@@ -195,6 +195,8 @@ fun D02FindSitters(nav: DNav) {
         title = null,
         activeTab = DTab.Sitters,
         backable = false,
+        refreshing = store.sittersLoading,
+        onRefresh = { scope.launch { store.loadSitters(force = true) } },
     ) {
         item { DSearchBar("搜索机构", onClick = { nav.go(DScreen.SearchResults) }) }
         item { A_ChipRow(chips, chip) { chip = it } }
@@ -733,7 +735,7 @@ fun D05Orders(nav: DNav) {
         if (statuses.isEmpty()) store.orders else store.orders.filter { it.rawStatus in statuses }
     }
     // 订单也可能一次返回几十条，同样用惰性骨架。
-    DLazyFrame(nav = nav, title = "我的订单", backable = false) {
+    DLazyFrame(nav = nav, title = "我的订单", backable = false, refreshing = store.ordersLoading, onRefresh = { scope.launch { store.loadOrders(force = true) } }) {
         item { DTabLine(labels, tab) { tab = it } }
         item { Spacer(Modifier.height(10.dp)) }
         when {
@@ -818,6 +820,8 @@ fun D06Dynamics(nav: DNav) {
         title = "寄养动态",
         activeTab = DTab.Dynamics,
         backable = false,
+        refreshing = store.dynamicsLoading,
+        onRefresh = { scope.launch { store.loadOwnerDynamics(force = true) } },
     ) {
         when {
             store.dynamicsLoading && store.ownerDynamics.isEmpty() -> DPad { DLoading("正在加载动态…") }
@@ -1026,6 +1030,8 @@ fun D08Pets(nav: DNav) {
         nav = nav,
         title = "我的宠物",
         actions = { DSmallButton("+ 添加", { nav.go(DScreen.PetAdd) }) },
+        refreshing = store.petsLoading,
+        onRefresh = { scope.launch { store.loadPets(force = true) } },
     ) {
         DPad {
             Spacer(Modifier.height(14.dp))
@@ -1395,8 +1401,10 @@ fun D12PetAdd(nav: DNav) {
 @Composable
 fun D13Favorites(nav: DNav) {
     val store = DLocalStore.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadFavorites() }
-    DFrame(nav = nav, title = "我的收藏", backable = false) {
+    DFrame(nav = nav, title = "我的收藏", backable = false, refreshing = store.favoritesLoading,
+        onRefresh = { scope.launch { store.loadFavorites(force = true) } }) {
         DPad {
             Spacer(Modifier.height(14.dp))
             when {
@@ -1413,6 +1421,7 @@ fun D13Favorites(nav: DNav) {
 @Composable
 fun D14Coupons(nav: DNav) {
     val store = DLocalStore.current
+    val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) { store.loadCoupons() }
     val items = store.coupons?.items.orEmpty()
@@ -1423,6 +1432,8 @@ fun D14Coupons(nav: DNav) {
         nav = nav,
         title = "优惠券",
         actions = { DSmallButton("领券中心", { nav.go(DScreen.ClaimCenter) }) },
+        refreshing = store.couponsLoading,
+        onRefresh = { scope.launch { store.loadCoupons(force = true) } },
     ) {
         DTabLine(listOf("可用 (${usable.size})", "已使用", "已过期"), tab) { tab = it }
         Spacer(Modifier.height(12.dp))
@@ -1479,6 +1490,8 @@ fun D15Messages(nav: DNav) {
         nav = nav,
         title = "消息通知",
         backable = false,
+        refreshing = store.notificationsCenter.notificationsLoading,
+        onRefresh = { scope.launch { store.loadScopedNotifications(true) } },
         actions = {
             DSmallButton("全部已读", { scope.launch { store.markAllScopedRead() } })
         },

@@ -78,6 +78,12 @@ func AdminCreateReview(c *gin.Context) {
 		"SELECT fn_audit($1, 'CREATE_REVIEW', 'review', $2, $3, NULLIF($4, '')::inet)",
 		adminID, id, fmt.Sprintf(`{"order_id": %d}`, req.OrderID), auditClientIP(c))
 
+	// 与主人端 SubmitReview 口径一致：评价后订单进入 evaluated，
+	// 否则后台代录的评价会让订单永远停在 completed，客户端「已评价」页签看不到它。
+	_, _ = db.Pool.Exec(context.Background(),
+		"UPDATE orders SET status = 'evaluated', evaluated_at = now() WHERE id = $1 AND status = 'completed'",
+		req.OrderID)
+
 	Created(c, "评价已创建", gin.H{"id": id})
 }
 

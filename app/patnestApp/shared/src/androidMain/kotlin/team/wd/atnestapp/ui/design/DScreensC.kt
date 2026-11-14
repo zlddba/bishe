@@ -50,6 +50,7 @@ import team.wd.atnestapp.ui.components.AppIcon
 fun D31SitterReviews(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
+    var reviewsRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { store.loadSitterReviews() }
     val reviews = store.sitterReviews
     var replyFor by remember { mutableStateOf(0L) }
@@ -62,7 +63,11 @@ fun D31SitterReviews(nav: DNav) {
         val rounded = (average * 10).roundToInt() / 10.0
         if (rounded % 1.0 == 0.0) "${rounded.toLong()}.0" else rounded.toString()
     }
-    DFrame(nav = nav, title = "我的评价", backable = true) {
+    DFrame(nav = nav, title = "我的评价", backable = true, refreshing = reviewsRefreshing,
+        onRefresh = {
+            reviewsRefreshing = true
+            scope.launch { store.loadSitterReviews(); reviewsRefreshing = false }
+        }) {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
