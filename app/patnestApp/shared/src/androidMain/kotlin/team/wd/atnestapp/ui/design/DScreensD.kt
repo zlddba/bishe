@@ -107,10 +107,10 @@ fun D46SitterOnboarding(nav: DNav) {
         }
         DPad {
             Spacer(Modifier.height(16.dp))
-            DFieldInput("机构名称", name, { name = it }, placeholder = "例如：萌宠之家")
+            DMiuixField("机构名称", name, { name = it }, placeholder = "例如：萌宠之家")
             D_SelectChipRow("机构类型", types, type) { type = it }
-            DFieldInput("联系人", contact, { contact = it }, placeholder = "负责人姓名")
-            DFieldInput("机构地址", address, { address = it }, placeholder = "省市区 + 街道门牌")
+            DMiuixField("联系人", contact, { contact = it }, placeholder = "负责人姓名")
+            DMiuixField("机构地址", address, { address = it }, placeholder = "省市区 + 街道门牌")
             DUploadRow(
                 label = "营业执照 / 证件",
                 url = license,
@@ -123,7 +123,7 @@ fun D46SitterOnboarding(nav: DNav) {
                 uploading = uploading == "idcard",
                 onPick = pickIdCard,
             )
-            DFieldInput(
+            DMiuixField(
                 label = "服务介绍",
                 value = intro,
                 onValueChange = { intro = it },
@@ -285,7 +285,7 @@ fun D48OrderCancel(nav: DNav) {
                     }
                 }
                 if (reason == "其他原因") {
-                    DFieldInput("补充说明", other, { other = it }, placeholder = "请简单说明原因")
+                    DMiuixField("补充说明", other, { other = it }, placeholder = "请简单说明原因")
                 }
             }
         }
@@ -348,7 +348,7 @@ fun D49ReviewAppend(nav: DNav) {
                 Spacer(Modifier.height(10.dp))
                 DButton("去我的订单", { nav.go(DScreen.Orders) }, style = DButtonStyle.Outline)
             } else {
-                DFieldInput(
+                DMiuixField(
                     label = "追评内容",
                     value = content,
                     onValueChange = { content = it },
@@ -606,7 +606,7 @@ fun D52SearchHistory(nav: DNav) {
     DMiuixScrollScaffold(nav = nav, title = null) {
         DPad {
             Spacer(Modifier.height(8.dp))
-            DFieldInput(
+            DMiuixField(
                 label = "搜索机构 / 服务",
                 value = keyword,
                 onValueChange = { keyword = it },
@@ -1243,7 +1243,7 @@ fun D60Wallet(nav: DNav) {
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    DFieldInput(
+                    DMiuixField(
                         label = "自定义金额",
                         value = custom,
                         onValueChange = { input ->
@@ -1274,7 +1274,7 @@ fun D60Wallet(nav: DNav) {
                 DCard {
                     Text("余额退款", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
                     Spacer(Modifier.height(10.dp))
-                    DFieldInput(
+                    DMiuixField(
                         label = "退款金额（元）",
                         value = wdAmount,
                         onValueChange = { input ->
@@ -1286,21 +1286,21 @@ fun D60Wallet(nav: DNav) {
                         numeric = true,
                     )
                     Spacer(Modifier.height(8.dp))
-                    DFieldInput(
+                    DMiuixField(
                         label = "收款人姓名",
                         value = wdName,
                         onValueChange = { wdName = it.take(32) },
                         placeholder = "与银行卡/支付宝一致",
                     )
                     Spacer(Modifier.height(8.dp))
-                    DFieldInput(
+                    DMiuixField(
                         label = "收款账号",
                         value = wdNo,
                         onValueChange = { wdNo = it.take(64) },
                         placeholder = "银行卡号 / 支付宝账号",
                     )
                     Spacer(Modifier.height(8.dp))
-                    DFieldInput(
+                    DMiuixField(
                         label = "联系电话",
                         value = wdContact,
                         onValueChange = { wdContact = it.take(20) },
@@ -1397,11 +1397,11 @@ fun D61SettingsDetail(nav: DNav) {
             if (passwordOpen) {
                 Spacer(Modifier.height(12.dp))
                 DCard {
-                    DFieldInput(
+                    DMiuixField(
                         "原密码", oldPassword, { oldPassword = it },
                         secret = true, placeholder = "当前登录密码",
                     )
-                    DFieldInput(
+                    DMiuixField(
                         "新密码", newPassword, { newPassword = it },
                         secret = true, placeholder = "至少 6 位",
                     )

@@ -1111,12 +1111,8 @@ fun D09Login(nav: DNav) {
     var password by remember { mutableStateOf("") }
     val gutter = LocalDWindow.current.gutter
 
-    val accountState = rememberTextFieldState(store.account)
-    LaunchedEffect(Unit) {
-        snapshotFlow { accountState.text.toString() }.collect { account = it }
-    }
-    // 密码框用 DMiuixField(secret = true)：内部 BasicSecureTextField 走系统混淆渲染，
-    // 修复「退格一次清空整框」的掩码映射 bug；value/onValueChange 由组件内部桥接
+    // 账号/密码统一走 DMiuixField：密码分支内部 BasicSecureTextField 走系统混淆渲染
+    // （修复退格清空整框 bug），value/onValueChange 由组件内部桥接
 
     val doLogin: () -> Unit = {
         when {
@@ -1200,11 +1196,11 @@ fun D09Login(nav: DNav) {
                 modifier = Modifier.padding(horizontal = gutter).fillMaxWidth(),
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
-                    TextField(
-                        state = accountState,
+                    DMiuixField(
                         label = "账号",
-                        useLabelAsPlaceholder = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        value = account,
+                        onValueChange = { account = it },
+                        placeholder = "用户名或手机号",
                     )
                     Spacer(Modifier.height(12.dp))
                     DMiuixField(
@@ -1389,7 +1385,7 @@ fun D11ReviewWrite(nav: DNav) {
         }
         DPad {
             Spacer(Modifier.height(14.dp))
-            DFieldInput(
+            DMiuixField(
                 label = "评价内容",
                 value = content,
                 onValueChange = { content = it },

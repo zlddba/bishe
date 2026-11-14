@@ -797,8 +797,8 @@ fun D20Tickets(nav: DNav) {
                 B_SelectField("问题分类", category, listOf("订单问题", "账户问题", "服务投诉", "其他")) {
                     category = it
                 }
-                DFieldInput("标题", title, { title = it }, placeholder = "例如：寄养期间突发状况")
-                DFieldInput(
+                DMiuixField("标题", title, { title = it }, placeholder = "例如：寄养期间突发状况")
+                DMiuixField(
                     label = "详细描述",
                     value = detail,
                     onValueChange = { detail = it },
@@ -858,7 +858,7 @@ fun DTicketChat(nav: DNav) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f)) {
-                    DFieldInput(
+                    DMiuixField(
                         label = "继续追问",
                         value = reply,
                         onValueChange = { reply = it },
@@ -1317,13 +1317,13 @@ fun D24MapPicker(nav: DNav) {
                 // 需要精确输入时再展开，省下的高度全给地图。
                 if (formOpen) {
                     Spacer(Modifier.height(10.dp))
-                    DFieldInput(
+                    DMiuixField(
                         "详细地址",
                         address,
                         { address = it },
                         placeholder = "省市区 + 街道门牌，至少 4 个字",
                     )
-                    DFieldInput("城市（可选）", city, { city = it }, placeholder = "如：呼和浩特")
+                    DMiuixField("城市（可选）", city, { city = it }, placeholder = "如：呼和浩特")
                     Spacer(Modifier.height(4.dp))
                     DButton(
                         if (resolving) "解析中…" else "按地址定位",
@@ -1615,30 +1615,30 @@ fun D26ShopProfile(nav: DNav) {
         }
         DPad {
             Spacer(Modifier.height(14.dp))
-            DFieldInput("机构名称", name, { name = it }, placeholder = "例如：萌宠之家")
+            DMiuixField("机构名称", name, { name = it }, placeholder = "例如：萌宠之家")
             B_SelectField("机构类型", typeLabel, B_SHOP_TYPES.map { it.first }) { typeLabel = it }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                DFieldInput(
+                DMiuixField(
                     "日单价（¥/天）", price, { price = it },
                     modifier = Modifier.weight(1f), numeric = true, placeholder = "130",
                 )
-                DFieldInput(
+                DMiuixField(
                     "上门价（¥/次）", visitPrice, { visitPrice = it },
                     modifier = Modifier.weight(1f), numeric = true, placeholder = "60",
                 )
             }
-            DFieldInput(
+            DMiuixField(
                 "默认容量（只）", capacity, { capacity = it },
                 numeric = true, placeholder = "3",
             )
-            DFieldInput("地址", address, { address = it }, placeholder = "省市区 + 街道门牌")
+            DMiuixField("地址", address, { address = it }, placeholder = "省市区 + 街道门牌")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("坐标：$coordText", fontSize = 12.sp, color = DColor.Ink3)
                 Spacer(Modifier.weight(1f))
                 B_TextLink("选择位置", DColor.BrandInk) { nav.go(DScreen.MapPicker) }
             }
             Spacer(Modifier.height(12.dp))
-            DFieldInput(
+            DMiuixField(
                 label = "机构介绍",
                 value = intro,
                 onValueChange = { intro = it },
@@ -2147,14 +2147,14 @@ fun D30SitterCoupons(nav: DNav) {
         if (creating) {
             DPad {
                 DCard {
-                    DFieldInput("券名称", title, { title = it }, placeholder = "例如：本店寄养立减 20")
+                    DMiuixField("券名称", title, { title = it }, placeholder = "例如：本店寄养立减 20")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         B_ToggleTag("满减金额", !isPercent) { isPercent = false }
                         B_ToggleTag("折扣百分比", isPercent) { isPercent = true }
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        DFieldInput(
+                        DMiuixField(
                             if (isPercent) "减免百分比（%）" else "立减金额（¥）",
                             value,
                             { value = it },
@@ -2162,12 +2162,12 @@ fun D30SitterCoupons(nav: DNav) {
                             numeric = true,
                             placeholder = if (isPercent) "20" else "20",
                         )
-                        DFieldInput(
+                        DMiuixField(
                             "门槛（¥）", minAmount, { minAmount = it },
                             modifier = Modifier.weight(1f), numeric = true, placeholder = "100",
                         )
                     }
-                    DFieldInput("发放总量", totalQty, { totalQty = it }, numeric = true, placeholder = "100")
+                    DMiuixField("发放总量", totalQty, { totalQty = it }, numeric = true, placeholder = "100")
                     DButton(
                         if (store.busy) "发布中…" else "发布优惠券",
                         {

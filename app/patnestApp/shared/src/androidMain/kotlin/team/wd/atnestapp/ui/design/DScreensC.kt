@@ -117,7 +117,7 @@ fun D31SitterReviews(nav: DNav) {
                     )
                     if (replyFor == review.id) {
                         DCard {
-                            DFieldInput(
+                            DMiuixField(
                                 label = "回复内容",
                                 value = replyText,
                                 onValueChange = { replyText = it },
@@ -249,7 +249,7 @@ fun D32DynamicDetail(nav: DNav) {
         }
         DPad {
             DCard {
-                DFieldInput(
+                DMiuixField(
                     label = "写留言",
                     value = draft,
                     onValueChange = { draft = it },
@@ -475,13 +475,13 @@ fun D35Addons(nav: DNav) {
             DPad {
                 Spacer(Modifier.height(14.dp))
                 DCard {
-                    DFieldInput("服务名称", name, { name = it }, placeholder = "例如：遛宠")
+                    DMiuixField("服务名称", name, { name = it }, placeholder = "例如：遛宠")
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        DFieldInput(
+                        DMiuixField(
                             "价格（¥）", price, { price = it },
                             modifier = Modifier.weight(1f), numeric = true, placeholder = "20",
                         )
-                        DFieldInput(
+                        DMiuixField(
                             "计价单位", unit, { unit = it },
                             modifier = Modifier.weight(1f), placeholder = "次",
                         )
@@ -598,18 +598,18 @@ fun D36HolidayRules(nav: DNav) {
             DPad {
                 Spacer(Modifier.height(14.dp))
                 DCard {
-                    DFieldInput("规则名称", name, { name = it }, placeholder = "例如：国庆上浮")
+                    DMiuixField("规则名称", name, { name = it }, placeholder = "例如：国庆上浮")
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        DFieldInput(
+                        DMiuixField(
                             "开始日期", startDate, { startDate = it },
                             modifier = Modifier.weight(1f), placeholder = "2026-10-01",
                         )
-                        DFieldInput(
+                        DMiuixField(
                             "结束日期", endDate, { endDate = it },
                             modifier = Modifier.weight(1f), placeholder = "2026-10-07",
                         )
                     }
-                    DFieldInput(
+                    DMiuixField(
                         "上浮倍数", multiplier, { multiplier = it },
                         numeric = true, placeholder = "1.2",
                     )
