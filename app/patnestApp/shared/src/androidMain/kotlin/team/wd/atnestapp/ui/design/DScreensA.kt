@@ -1164,8 +1164,10 @@ fun D09Login(nav: DNav) {
 
         // ② 返回钮（压在渐变上，图标用素材白）
         // 与前景内容共用同一套限宽居中：平板上返回键跟着表单卡走，不孤零零贴窗口边。
+        // 内层必须 fillMaxWidth：它是包裹内容的（只有按钮宽），不撑满就会被
+        // 外层 TopCenter 整个居中到屏幕中间——手机上 dPageWidth 是不限宽的空操作。
         Box(Modifier.matchParentSize(), contentAlignment = Alignment.TopCenter) {
-            Box(Modifier.dPageWidth(win)) {
+            Box(Modifier.fillMaxWidth().dPageWidth(win)) {
                 Box(
                     Modifier
                         .statusBarsPadding()

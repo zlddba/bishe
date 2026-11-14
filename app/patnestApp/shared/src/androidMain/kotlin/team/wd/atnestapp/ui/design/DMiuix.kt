@@ -88,7 +88,7 @@ internal fun DMiuixTopBar(
         Modifier.fillMaxWidth().background(DColor.Bg),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Box(Modifier.dPageWidth(win)) {
+        Box(Modifier.fillMaxWidth().dPageWidth(win)) {
             TopAppBar(
                 title = title,
                 color = DColor.Bg,
@@ -381,7 +381,7 @@ fun DMiuixScrollScaffold(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(Modifier.dPageWidth(win)) { bottomBar() }
+                    Box(Modifier.fillMaxWidth().dPageWidth(win)) { bottomBar() }
                 }
             }
             if (activeTab != null && win.isCompact) {
@@ -472,7 +472,7 @@ fun DMiuixListScaffold(
                         .fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(Modifier.dPageWidth(win)) { bottomBar() }
+                    Box(Modifier.fillMaxWidth().dPageWidth(win)) { bottomBar() }
                 }
             }
             if (activeTab != null && win.isCompact) {
