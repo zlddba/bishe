@@ -234,7 +234,7 @@ private fun Modifier.liquidGlassDraw(
     blurRadius: Float,
     cornerDp: Dp,
     refraction: Boolean,
-    highlight: Highlight,
+    highlight: Highlight?,
     surfaceAlpha: Float = 1f,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
