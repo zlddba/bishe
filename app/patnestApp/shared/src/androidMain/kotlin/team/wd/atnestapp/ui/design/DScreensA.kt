@@ -1109,17 +1109,14 @@ fun D09Login(nav: DNav) {
     val scope = rememberCoroutineScope()
     var account by remember { mutableStateOf(store.account) }
     var password by remember { mutableStateOf("") }
-    var reveal by remember { mutableStateOf(false) }
     val gutter = LocalDWindow.current.gutter
 
     val accountState = rememberTextFieldState(store.account)
-    val passwordState = rememberTextFieldState()
     LaunchedEffect(Unit) {
         snapshotFlow { accountState.text.toString() }.collect { account = it }
     }
-    LaunchedEffect(Unit) {
-        snapshotFlow { passwordState.text.toString() }.collect { password = it }
-    }
+    // 密码框用 DMiuixField(secret = true)：内部 BasicSecureTextField 走系统混淆渲染，
+    // 修复「退格一次清空整框」的掩码映射 bug；value/onValueChange 由组件内部桥接
 
     val doLogin: () -> Unit = {
         when {
@@ -1210,25 +1207,13 @@ fun D09Login(nav: DNav) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(12.dp))
-                    TextField(
-                        state = passwordState,
+                    DMiuixField(
                         label = "密码",
-                        useLabelAsPlaceholder = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        outputTransformation = if (!reveal) DPasswordMask else null,
-                        trailingIcon = {
-                            Text(
-                                if (reveal) "隐藏" else "显示",
-                                fontSize = 12.sp,
-                                color = DColor.BrandInk,
-                                modifier = Modifier.clickable { reveal = !reveal }.padding(horizontal = 6.dp),
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        onKeyboardAction = KeyboardActionHandler { performDefaultAction ->
-                            doLogin()
-                            performDefaultAction()
-                        },
+                        value = password,
+                        onValueChange = { password = it },
+                        placeholder = "至少 8 位",
+                        secret = true,
+                        onSubmit = doLogin,
                     )
                     Spacer(Modifier.height(6.dp))
                     Button(

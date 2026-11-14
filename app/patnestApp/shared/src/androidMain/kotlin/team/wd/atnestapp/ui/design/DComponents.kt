@@ -36,9 +36,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -936,7 +938,8 @@ fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () ->
  *
  * 用新版状态式 BasicTextField(state: TextFieldState, ...)，对外仍是 value / onValueChange：
  * 外部值变化同步进内部 state，内部输入再经 snapshotFlow 回传。
- * secret 用 OutputTransformation 打码，不用已弃用的 VisualTransformation。
+ * secret 走官方 BasicSecureTextField（系统级混淆渲染）——不要用 OutputTransformation
+ * 全量打码：退格时删除区域会被整段掩码映射错，一次删除就清空整框（登录页 bug）。
  */
 @Composable
 fun DFieldInput(
@@ -967,51 +970,44 @@ fun DFieldInput(
     Column(modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Text(label, fontSize = 12.sp, color = DColor.Ink2)
         Spacer(Modifier.height(6.dp))
-        BasicTextField(
-            state = state,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = enabled,
-            textStyle = TextStyle(color = DColor.Ink, fontSize = 14.sp),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
-                imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
-            ),
-            onKeyboardAction = onSubmit?.let { submit ->
-                KeyboardActionHandler { performDefaultAction ->
-                    submit()
-                    performDefaultAction()
-                }
-            },
-            lineLimits = if (multiline) {
-                TextFieldLineLimits.MultiLine(1, Int.MAX_VALUE)
-            } else {
-                TextFieldLineLimits.SingleLine
-            },
-            cursorBrush = SolidColor(DColor.Brand),
-            outputTransformation = if (secret && !reveal) DPasswordMask else null,
-            decorator = { inner ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = if (multiline) 88.dp else 46.dp)
-                        .clip(DShape.Md)
-                        .background(DColor.Card)
-                        .border(1.dp, DColor.Line, DShape.Md)
-                        .padding(
-                            start = 14.dp,
-                            end = if (secret) 8.dp else 14.dp,
-                            top = if (multiline) 12.dp else 0.dp,
-                            bottom = if (multiline) 12.dp else 0.dp,
-                        ),
-                    verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.weight(1f)) {
-                        if (state.text.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
-                        }
-                        inner()
+        if (secret) {
+            // 密码框走官方 BasicSecureTextField（系统级混淆渲染）——不要用
+            // OutputTransformation 全量打码：删除字符时 transformed 坐标系的删除
+            // 区域会被整段掩码映射错，一次退格就清空整框（登录页 v2.0.6 前 bug）。
+            BasicSecureTextField(
+                state = state,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
+                textStyle = TextStyle(color = DColor.Ink, fontSize = 14.sp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
+                ),
+                onKeyboardAction = onSubmit?.let { submit ->
+                    KeyboardActionHandler { performDefaultAction ->
+                        submit()
+                        performDefaultAction()
                     }
-                    if (secret) {
+                },
+                cursorBrush = SolidColor(DColor.Brand),
+                textObfuscationMode = if (reveal) TextObfuscationMode.Visible else TextObfuscationMode.Hidden,
+                decorator = { inner ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 46.dp)
+                            .clip(DShape.Md)
+                            .background(DColor.Card)
+                            .border(1.dp, DColor.Line, DShape.Md)
+                            .padding(start = 14.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            if (state.text.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
+                            }
+                            inner()
+                        }
                         Text(
                             if (reveal) "隐藏" else "显示",
                             fontSize = 12.sp,
@@ -1019,18 +1015,59 @@ fun DFieldInput(
                             modifier = Modifier.clickable { reveal = !reveal }.padding(start = 8.dp),
                         )
                     }
-                }
-            },
-        )
+                },
+            )
+        } else {
+            BasicTextField(
+                state = state,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
+                textStyle = TextStyle(color = DColor.Ink, fontSize = 14.sp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                    imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
+                ),
+                onKeyboardAction = onSubmit?.let { submit ->
+                    KeyboardActionHandler { performDefaultAction ->
+                        submit()
+                        performDefaultAction()
+                    }
+                },
+                lineLimits = if (multiline) {
+                    TextFieldLineLimits.MultiLine(1, Int.MAX_VALUE)
+                } else {
+                    TextFieldLineLimits.SingleLine
+                },
+                cursorBrush = SolidColor(DColor.Brand),
+                decorator = { inner ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = if (multiline) 88.dp else 46.dp)
+                            .clip(DShape.Md)
+                            .background(DColor.Card)
+                            .border(1.dp, DColor.Line, DShape.Md)
+                            .padding(
+                                start = 14.dp,
+                                end = 14.dp,
+                                top = if (multiline) 12.dp else 0.dp,
+                                bottom = if (multiline) 12.dp else 0.dp,
+                            ),
+                        verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            if (state.text.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
+                            }
+                            inner()
+                        }
+                    }
+                },
+            )
+        }
     }
 }
 
-/** 密码掩码：把已有文本全部替换成等长圆点。 */
-internal object DPasswordMask : OutputTransformation {
-    override fun TextFieldBuffer.transformOutput() {
-        if (length > 0) replace(0, length, "•".repeat(length))
-    }
-}
 
 /** 机构封面：有真实 URL 就加载，没有就退回设计稿的渐变占位。 */
 @Composable

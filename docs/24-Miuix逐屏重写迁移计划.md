@@ -39,9 +39,9 @@
 - [x] **批次 1**：认证与表单屏 —— `D40Register`、`D41ProfileEdit`、`D12PetAdd`、`D44AddressAdd`、`D28PublishDynamic`（新增 DMiuix.kt 桥接助手；下拉选择字段暂保留自研 Popup）
 - [x] **批次 2**：主人端主页与列表 —— `D01Home`、`D02FindSitters`、`D05Orders`、`D08Pets`、`D13Favorites`、`D14Coupons`、`D15Messages`（新增 Scroll/List 双骨架，Miuix TopAppBar + PullToRefresh + 底部 Tab；页内卡片组件保留待视觉统一批次）
 - [ ] **批次 3**：主人端详情与流程 —— `D03SitterDetail`、`D04Booking`、`D10Checkout`、`D11ReviewWrite`、`D19OrderDetail`、`D22PaySuccess`、`D23SitterCompare`
-- [ ] **批次 4**：机构端 —— `D18SitterWorkspace`、`DSitterOrders`、`DSitterMoments`、`DSitterProfile`、`D26ShopProfile`、`D27Capacity`、`D28~D31` 收尾
-- [ ] **批次 5**：详情与二级页 —— `D06Dynamics`、`D16Addresses`、`D17Settings`、`D20Tickets`、`DTicketChat`、`D21Points`、`D24MapPicker`、`D25RoleSwitch`
-- [ ] **批次 6**：剩余散屏 —— `D32~D39`、`D42~D45`、`D46~D60` 中未迁移者（逐个核对清单）
+- [x] **批次 4**：机构端 —— `D18SitterWorkspace`、`DSitterOrders`、`DSitterMoments`、`DSitterProfile`、`D26ShopProfile`、`D27Capacity`、`D29/D30/D31`（DScreensB 机构端 9 屏 + D31SitterReviews）
+- [x] **批次 5**：详情与二级页 —— `D06Dynamics`、`D16Addresses`、`D17Settings`、`D20Tickets`、`DTicketChat`、`D21Points`、`D24MapPicker`、`D25RoleSwitch`（D24MapPicker 本就是全屏地图无骨架）
+- [x] **批次 6**：剩余散屏 —— `D32~D39`、`D42~D45`、`D46~D60` 全部（DScreensC x15、DScreensD x21 处骨架）
 - [ ] **批次 7（收尾）**：`DesignApp` 壳（NavigationBar / NavigationRail / Toast）换 Miuix、删除旧设计系统（DComponents 中已被替代的组件）、`docs/README` 与本文件收尾记录
 
 ## 批次验收标准（每批都要过）

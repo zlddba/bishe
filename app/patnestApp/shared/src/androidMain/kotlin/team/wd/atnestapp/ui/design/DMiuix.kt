@@ -23,6 +23,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.BasicSecureTextField
+import androidx.compose.foundation.text.input.TextFieldDecorator
+import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -103,7 +110,7 @@ fun DMiuixFormScaffold(
  *
  * - label 常驻在输入框上方（沿用旧版式）；
  * - placeholder 走 Miuix 浮动 label 机制（空态显示提示文案，有内容后浮成小标签）；
- * - 密码掩码复用 [DPasswordMask]，显隐开关用文字按钮（AppIcon 暂无眼睛图标）；
+ * - 密码框走官方 BasicSecureTextField（系统混淆渲染），显隐开关用文字按钮；
  * - value/onValueChange 通过 TextFieldState + snapshotFlow 桥接，校验逻辑不用动。
  */
 @Composable
@@ -134,39 +141,77 @@ fun DMiuixField(
     Column(modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Text(label, fontSize = 12.sp, color = DColor.Ink2)
         Spacer(Modifier.height(6.dp))
-        TextField(
-            state = state,
-            modifier = Modifier.fillMaxWidth(),
-            label = placeholder.ifBlank { label },
-            useLabelAsPlaceholder = true,
-            enabled = enabled,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
-                imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
-            ),
-            onKeyboardAction = onSubmit?.let { submit ->
-                KeyboardActionHandler { performDefaultAction ->
-                    submit()
-                    performDefaultAction()
-                }
-            },
-            lineLimits = if (multiline) {
-                TextFieldLineLimits.MultiLine(1, Int.MAX_VALUE)
-            } else {
-                TextFieldLineLimits.SingleLine
-            },
-            outputTransformation = if (secret && !reveal) DPasswordMask else null,
-            trailingIcon = if (secret) {
-                {
-                    Text(
-                        if (reveal) "隐藏" else "显示",
-                        fontSize = 12.sp,
-                        color = DColor.BrandInk,
-                        modifier = Modifier.clickable { reveal = !reveal }.padding(horizontal = 6.dp),
-                    )
-                }
-            } else null,
-        )
+        if (secret) {
+            // 密码框走官方 BasicSecureTextField（系统级混淆渲染）——不要用
+            // OutputTransformation 全量打码：退格时删除区域会被整段掩码映射错，
+            // 一次删除就清空整框（登录页 bug）。外观用 decorator 自绘保持 Miuix 风。
+            BasicSecureTextField(
+                state = state,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = enabled,
+                textStyle = TextStyle(color = DColor.Ink, fontSize = 14.sp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
+                ),
+                onKeyboardAction = onSubmit?.let { submit ->
+                    KeyboardActionHandler { performDefaultAction ->
+                        submit()
+                        performDefaultAction()
+                    }
+                },
+                cursorBrush = SolidColor(DColor.Brand),
+                textObfuscationMode = if (reveal) TextObfuscationMode.Visible else TextObfuscationMode.Hidden,
+                decorator = TextFieldDecorator { inner ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 46.dp)
+                            .clip(DShape.Md)
+                            .background(DColor.Card)
+                            .border(1.dp, DColor.Line, DShape.Md)
+                            .padding(start = 14.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            if (state.text.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
+                            }
+                            inner()
+                        }
+                        Text(
+                            if (reveal) "隐藏" else "显示",
+                            fontSize = 12.sp,
+                            color = DColor.BrandInk,
+                            modifier = Modifier.clickable { reveal = !reveal }.padding(start = 8.dp),
+                        )
+                    }
+                },
+            )
+        } else {
+            TextField(
+                state = state,
+                modifier = Modifier.fillMaxWidth(),
+                label = placeholder.ifBlank { label },
+                useLabelAsPlaceholder = true,
+                enabled = enabled,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text,
+                    imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default,
+                ),
+                onKeyboardAction = onSubmit?.let { submit ->
+                    KeyboardActionHandler { performDefaultAction ->
+                        submit()
+                        performDefaultAction()
+                    }
+                },
+                lineLimits = if (multiline) {
+                    TextFieldLineLimits.MultiLine(1, Int.MAX_VALUE)
+                } else {
+                    TextFieldLineLimits.SingleLine
+                },
+            )
+        }
     }
 }
 
