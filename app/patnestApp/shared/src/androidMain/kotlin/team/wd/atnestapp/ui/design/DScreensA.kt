@@ -1168,15 +1168,22 @@ fun D09Login(nav: DNav) {
                         .statusBarsPadding()
                         .padding(start = gutter, top = 9.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(DColor.Scrim)
-                            .clickable { nav.back() },
-                        contentAlignment = Alignment.Center,
+                    // 玻璃返回钮：浮在渐变 hero 上，模糊身后流动的渐变色，
+                    // 比 DColor.Scrim 实心圆钮更有整体感；API<33 退化为原圆钮
+                    DGlassSurface(
+                        modifier = Modifier.size(34.dp).clickable { nav.back() },
+                        shape = CircleShape,
+                        tint = Color.White.copy(alpha = 0.20f),
+                        blurRadius = 18f,
+                        fallbackColor = DColor.Scrim,
+                        fallbackBorderColor = Color.Transparent,
                     ) {
-                        AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+                        }
                     }
                 }
             }
