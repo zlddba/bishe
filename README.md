@@ -2,7 +2,7 @@
 
 宠物寄养服务预约系统，毕业设计项目。一个仓库按目录分模块，三条角色线：**主人**（找机构、下单寄养、支付、评价）、**机构**（开店、排期与容量、定价、接单、发动态）、**管理员**（审核、订单与资金、内容、系统运维）。
 
-当前版本：**v2.0.0**（首个正式版，发布说明见 [docs/release/v2.0.0.md](docs/release/v2.0.0.md)，安装包与部署包见 [GitHub Release](https://github.com/zlddba/bishe/releases/tag/v2.0.0)）。
+当前版本：**v2.0.1**（[发布说明](docs/release/v2.0.1.md) · [Release 附件](https://github.com/zlddba/bishe/releases/tag/v2.0.1)）；首个正式版为 v2.0.0。
 
 线上环境：`https://www.linkzdsada.dpdns.org:9200`（API 与管理后台同域，`/swagger/index.html` 为接口文档）。
 
@@ -72,7 +72,7 @@ cd app/patnestApp
 ./gradlew :shared:jvmTest             # 共享层测试
 ```
 
-桌面端服务地址读 `.env`；Android 端在登录页填写并存 `SharedPreferences`（真机联调改成局域网后端 IP:9200）。工程目标 JVM 21，本机 JDK 不一致时装 JDK 21 或在 Gradle 工具链里指过去。iOS target 已移除。
+桌面端接口地址在**构建期**由 `PATNEST_API_BASE` 固化进启动器，安装包自带裁剪后的 JVM 运行时，**用户不需要安装 Java，也不需要 `.env` 即可直接运行**；想临时指向别的后端可用环境变量或 `.env` 覆盖。Android 端在登录页填写服务地址并存 `SharedPreferences`（真机联调改成局域网后端 IP:9200）。工程目标 JVM 21，本机 JDK 不一致时装 JDK 21 或在 Gradle 工具链里指过去。iOS target 已移除。
 
 ### 小程序
 
@@ -119,7 +119,8 @@ tag 推送后流水线依次执行：
 | --- | --- |
 | `patnest-deploy-bundle` | `patnest-docker-<version>.zip`，服务器部署包 |
 | `patnest-android-apk` | `androidApp-release.apk`，已签名 |
-| `patnest-desktop-deb / -msi / -dmg` | 对应系统的桌面安装包 |
+| `patnest-desktop-linux` | Linux 四种：deb、rpm、`.AppImage`、免安装 `tar.gz` |
+| `patnest-desktop-msi / -dmg` | Windows / macOS 安装包 |
 | `patnest-uniapp-project` | `patnest-uniapp-<version>.zip`，小程序工程源码包（不含 `unpackage/`） |
 
 需要的仓库配置：**Settings → Secrets and variables → Actions**，全部填在 **Repository 级**（不是 Environment 级，工作流没有声明 `environment:`，填 Environment 会读不到）。

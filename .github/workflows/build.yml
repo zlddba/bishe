@@ -259,8 +259,83 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # ---------------------------------------------------- 桌面端安装包（三系统）
-  # jpackage 只能打当前系统的格式，所以三个系统各跑一份
+  # ------------------------------------------- 桌面端 Linux（一次编译出四种格式）
+  # jpackage 的 deb / rpm / app-image 复用同一份编译结果，放一个 job 里只编译一次。
+  # 注意：Compose 的 TargetFormat.AppImage 是「app-image 目录」，不是 AppImage 单文件；
+  # 真正的 .AppImage 要再用 appimagetool 把这个目录封成一体包。
+  linux:
+    name: 桌面端 Linux（deb / rpm / AppImage / tar.gz）
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      # jpackage 打 deb 需要 fakeroot，打 rpm 需要 rpmbuild
+      - name: 安装 Linux 打包依赖
+        run: sudo apt-get update && sudo apt-get install -y fakeroot rpm
+
+      - name: 构建 Linux 安装包与绿色版目录
+        working-directory: app/patnestApp
+        shell: bash
+        env:
+          PATNEST_VERSION: ${{ needs.verify.outputs.version }}
+          PATNEST_API_BASE: ${{ vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE }}
+        run: sh ./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable --no-daemon --stacktrace
+
+      - name: 生成 tar.gz 与 .AppImage
+        working-directory: app/patnestApp
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          BIN="desktopApp/build/compose/binaries/main"
+          APPDIR="$(find "$BIN/app" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          [[ -n "$APPDIR" ]] || { echo "::error::找不到 createDistributable 产出的 app-image 目录"; exit 1; }
+          NAME="patnest-desktop-${VERSION}-linux-x64"
+
+          # 绿色版：解压后直接运行 bin/ 下的启动器，自带 lib/runtime，无需安装 Java
+          mkdir -p "dist/$NAME"
+          cp -a "$APPDIR/." "dist/$NAME/"
+          tar -czf "dist/$NAME.tar.gz" -C dist "$NAME"
+
+          # AppImage：把 app-image 整体挂到 AppDir/usr，启动器仍按相对路径找自带 JVM
+          mkdir -p PatNest.AppDir/usr
+          cp -a "$APPDIR/." PatNest.AppDir/usr/
+          cp desktopApp/src/main/resources/compose-multiplatform.png PatNest.AppDir/patnest.png
+          printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=PatNest' 'Exec=patnest' 'Icon=patnest' 'Categories=Utility;' > PatNest.AppDir/patnest.desktop
+          printf '%s\n' '#!/bin/sh' 'HERE="$(dirname "$(readlink -f "$0")")"' 'BIN="$(find "$HERE/usr/bin" -maxdepth 1 -type f -perm -u+x | head -n1)"' 'exec "$BIN" "$@"' > PatNest.AppDir/AppRun
+          chmod +x PatNest.AppDir/AppRun
+          curl -fsSL -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+          (cd /tmp && ./appimagetool --appimage-extract > /dev/null)
+          ARCH=x86_64 /tmp/squashfs-root/AppRun PatNest.AppDir "dist/PatNest-${VERSION}-x86_64.AppImage"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patnest-desktop-linux
+          path: |
+            app/patnestApp/desktopApp/build/compose/binaries/main/deb/*.deb
+            app/patnestApp/desktopApp/build/compose/binaries/main/rpm/*.rpm
+            app/patnestApp/dist/*.tar.gz
+            app/patnestApp/dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  # ------------------------------------------------ 桌面端 Windows / macOS
   desktop:
     name: 桌面端（${{ matrix.format }}）
     needs: verify
@@ -268,10 +343,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            task: packageDeb
-            format: deb
-            glob: "*.deb"
           - os: windows-latest
             task: packageMsi
             format: msi
@@ -301,6 +372,7 @@ jobs:
         shell: bash
         env:
           PATNEST_VERSION: ${{ needs.verify.outputs.version }}
+          PATNEST_API_BASE: ${{ vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE }}
         run: sh ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
@@ -315,7 +387,7 @@ jobs:
   # 文档改了什么，Release 页就是什么。
   release:
     name: 发布 GitHub Release
-    needs: [verify, bundle, miniapp, android, desktop]
+    needs: [verify, bundle, miniapp, android, linux, desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

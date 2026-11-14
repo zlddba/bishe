@@ -164,7 +164,7 @@ class ApiClient(rawBaseUrl: String) {
 
     internal val apiBase: String
         get() = baseUrl.ifBlank {
-            throw ApiException("接口地址未配置，请检查 .env 中的 PATNEST_API_BASE")
+            throw ApiException("接口地址未配置，请检查 PATNEST_API_BASE")
         }
 
     internal suspend inline fun <reified T> getData(
@@ -300,10 +300,10 @@ class ApiClient(rawBaseUrl: String) {
     internal fun describeNonEnvelope(text: String, status: HttpStatusCode): String {
         val snippet = text.replace(Regex("\\s+"), " ").trim().take(80)
         return if (snippet.isEmpty()) {
-            "服务返回空响应（HTTP ${status.value}），请检查 .env 里的 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
+            "服务返回空响应（HTTP ${status.value}），请检查接口地址 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
         } else {
             "服务返回的不是接口数据（HTTP ${status.value}）：$snippet —— " +
-                "请检查 .env 里的 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
+                "请检查接口地址 PATNEST_API_BASE 是否为「主机:端口/api/v1」"
         }
     }
 

@@ -199,7 +199,8 @@ class AppState {
      */
     val sessionStore = desktopSessionStore()
 
-    val api = ApiClient(runCatching { AppConfig.apiBaseUrl }.getOrDefault("")).also { client ->
+    // AppConfig 已保证任何情况下都返回有效地址（构建期固化 + 运行时覆盖 + 兜底），无需 runCatching
+    val api = ApiClient(AppConfig.apiBaseUrl).also { client ->
         // 任意接口返回"用户不存在"（账号已被删除）→ 强制退出并清空本地会话数据
         client.onSessionInvalid = { forceLogoutOnMissingUser() }
         // 静默续期也换不到令牌（刷新令牌过期/被吊销）→ 退出登录，避免停在"看着已登录、请求全失败"的状态

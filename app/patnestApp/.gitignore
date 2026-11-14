@@ -19,3 +19,8 @@ captures
 node_modules/
 /logs/
 /buildkeys/
+
+# 桌面端绿色版 / AppImage 的本地打包输出（CI 里由 linux job 生成）
+/dist/
+/PatNest.AppDir/
+*.AppImage

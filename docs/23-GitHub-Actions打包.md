@@ -12,7 +12,8 @@
 | --- | --- | --- |
 | 后端二进制 + 管理后台 dist + Docker 部署包 | 可以（ubuntu） | 直接复用 `build.sh`，产出 `release/patnest-docker-*.zip` |
 | Android Release APK | 可以（ubuntu + Android SDK） | 签名、接口地址、高德 Key 全部走 Secrets |
-| 桌面端 deb / msi / dmg | 可以（三个系统各跑一份） | Compose Desktop 的 jpackage 只能打当前系统格式 |
+| 桌面端 Linux deb / rpm / AppImage / tar.gz | 可以（ubuntu，一次编译出四种） | deb/rpm 走 jpackage，AppImage 用 appimagetool 封 app-image 目录 |
+| 桌面端 msi / dmg | 可以（Windows / macOS 各一份） | jpackage 只能打当前系统格式 |
 | 微信小程序 | 可以（只打包工程，不编译） | 产出 `patnest-uniapp-<version>.zip`，下载后用 HBuilderX 导入发行 |
 
 工作流只在**推送 tag**（`v1.2.0`）或**手动指定 tag 重跑**时运行，不跟随 push 分支，避免每次提交都消耗私有仓库的 Actions 分钟数。
@@ -140,7 +141,8 @@ git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
 | --- | --- |
 | `patnest-deploy-bundle` | `patnest-docker-<version>.zip`，含 API/migrate 二进制、`web/`、`db/migrations`、compose 与安装脚本 |
 | `patnest-android-apk` | `androidApp-release.apk` |
-| `patnest-desktop-deb` / `-msi` / `-dmg` | 对应系统的安装包 |
+| `patnest-desktop-linux` | Linux 四种：`*.deb`、`*.rpm`、`PatNest-*.AppImage`、`patnest-desktop-*-linux-x64.tar.gz` |
+| `patnest-desktop-msi` / `-dmg` | Windows / macOS 安装包 |
 | `patnest-uniapp-project` | `patnest-uniapp-<version>.zip`，小程序 HBuilderX 工程源码包（不含 `unpackage/`） |
 
 四类产物同时上传为 Artifact（保留 14 天）与 Release 附件。版本号统一取 tag 去掉 `v`，不再从 `package.json` / `manifest.json` 猜。
@@ -161,7 +163,7 @@ git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
 
 ### 两个产物注意事项
 
-- **桌面安装包不包含 `.env`**：桌面端运行时从工作目录向上找 `.env`（或读环境变量 `PATNEST_API_BASE`），分发时要把 `.env` 放在安装目录/启动目录旁边。
+- **桌面端开箱即用，不需要 `.env`，也不需要用户安装 Java**：接口地址在构建期由 `PATNEST_API_BASE` 写成 `-Dpatnest.api.base=...` 固化进启动器；jlink 裁剪的 JVM 也一并打进产物（deb/rpm/msi/dmg/tar.gz/AppImage 都自带）。运行时若想临时换后端，仍可用环境变量 `PATNEST_API_BASE` 或 `.env` 覆盖；二者都缺失时用固化值，不会抛异常。
 - **APK 的接口地址在构建期写死**（`BuildConfig.API_BASE`），换环境要改 Variable 重新构建，App 内没有修改入口。
 
 ---
@@ -239,7 +241,7 @@ npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appi
 
 ## 五、成本与限制
 
-- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。桌面端三系统一次约 30~50 分钟，所以只在打 tag 时跑；日常调试在本地构建，不要为了验证代码去推 tag。
+- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。桌面端 Windows / macOS / Linux 三组一次约 30~50 分钟，所以只在打 tag 时跑；日常调试在本地构建，不要为了验证代码去推 tag。
 - 首次构建要下载 Gradle 9.8.2、Android SDK 37、Kotlin/Compose 依赖，单次可能 15~25 分钟；`gradle/actions/setup-gradle` 已开启缓存，后续会快很多。
 - Android 编译需要 SDK Platform 37；工作流只接受 license，缺失的 platform/build-tools 由 AGP 自动下载。若 AGP 版本更新导致包名变化，在 `sdkmanager` 里显式安装即可。
 - 桌面端 macOS runner 是 arm64，打出来的 dmg 只适用于 Apple Silicon；要 Intel 包需要 `macos-13`。
@@ -258,6 +260,11 @@ cd app/patnestApp && ./gradlew :androidApp:assembleRelease
 
 # 桌面端（当前系统）
 cd app/patnestApp && ./gradlew :desktopApp:packageDistributionForCurrentOS
+
+# Linux 四种格式（需先 apt install fakeroot rpm）
+cd app/patnestApp && ./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable
+# createDistributable 的产物 build/compose/binaries/main/app/<name>/ 可直接运行，
+# 打包成 tar.gz 或用 appimagetool 封成 .AppImage 见工作流 linux job
 ```
 
 ---
