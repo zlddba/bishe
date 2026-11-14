@@ -131,9 +131,6 @@ fun DBottomTabs(active: DTab, nav: DNav) {
             modifier = Modifier.fillMaxWidth(),
             // 与玻璃面相接的只有上缘：顶部两个圆角，下缘贴屏幕底
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
-            tint = DColor.Card.copy(alpha = 0.32f),
-            border = Color.White.copy(alpha = 0.30f),
-            fallbackColor = DColor.Card,
         ) {
             Row(
                 Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp).padding(top = 8.dp),
@@ -765,7 +762,6 @@ fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () ->
         DGlassSurface(
             modifier = Modifier.fillMaxWidth(),
             shape = DShape.Lg,
-            tint = DColor.Card.copy(alpha = 0.32f),
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
