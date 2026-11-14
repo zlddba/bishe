@@ -1,5 +1,15 @@
 package team.wd.atnestapp.ui.design
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import team.wd.atnestapp.ui.components.AppIcon
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -174,5 +185,147 @@ fun DMiuixPrimaryButton(
         colors = ButtonDefaults.buttonColorsPrimary(),
     ) {
         Text(text)
+    }
+}
+
+/**
+ * 滚动列骨架：Miuix 版 DFrame（title=null + immersiveTop 时可做沉浸 hero 页）。
+ * 结构与 DFrame 同构：TopAppBar / 状态栏 spacer → PullToRefresh(滚动列) → 底部 Tab。
+ * content 直接是 ColumnScope，页内继续用 DPad / DCard 等内容组件。
+ */
+@Composable
+fun DMiuixScrollScaffold(
+    nav: DNav,
+    title: String? = null,
+    activeTab: DTab? = null,
+    backable: Boolean = true,
+    immersiveTop: Boolean = false,
+    actions: @Composable RowScope.() -> Unit = {},
+    refreshing: Boolean? = null,
+    onRefresh: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val win = LocalDWindow.current
+    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+        if (title != null) {
+            TopAppBar(
+                title = title,
+                color = DColor.Bg,
+                navigationIcon = if (backable) {
+                    {
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .clickable { nav.back() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+                        }
+                    }
+                } else {
+                    {}
+                },
+                actions = actions,
+            )
+        } else if (!immersiveTop) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            val needBottomInset = activeTab == null
+            val colModifier = Modifier
+                .dPageWidth(win)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+                .padding(bottom = 14.dp)
+            if (onRefresh != null) {
+                PullToRefresh(
+                    isRefreshing = refreshing == true,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                ) {
+                    Column(colModifier, content = content)
+                }
+            } else {
+                Column(colModifier, content = content)
+            }
+        }
+        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
+    }
+}
+
+/**
+ * 惰性列表骨架：Miuix 版 DLazyFrame。长列表（机构 / 订单 / 优惠券）用这个，
+ * content 是 LazyListScope，页内 item { } 组织。
+ */
+@Composable
+fun DMiuixListScaffold(
+    nav: DNav,
+    title: String? = null,
+    activeTab: DTab? = null,
+    backable: Boolean = true,
+    actions: @Composable RowScope.() -> Unit = {},
+    refreshing: Boolean? = null,
+    onRefresh: (() -> Unit)? = null,
+    content: @Composable LazyListScope.() -> Unit,
+) {
+    val win = LocalDWindow.current
+    Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+        if (title != null) {
+            TopAppBar(
+                title = title,
+                color = DColor.Bg,
+                navigationIcon = if (backable) {
+                    {
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .clickable { nav.back() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.Ink)
+                        }
+                    }
+                } else {
+                    {}
+                },
+                actions = actions,
+            )
+        } else if (win.isCompact) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            val needBottomInset = activeTab == null
+            val scrollModifier = Modifier
+                .dPageWidth(win)
+                .fillMaxSize()
+                .imePadding()
+                .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
+            if (onRefresh != null) {
+                PullToRefresh(
+                    isRefreshing = refreshing == true,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                ) {
+                    LazyColumn(
+                        scrollModifier,
+                        contentPadding = PaddingValues(bottom = 14.dp),
+                        content = content,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    scrollModifier,
+                    contentPadding = PaddingValues(bottom = 14.dp),
+                    content = content,
+                )
+            }
+        }
+        if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }

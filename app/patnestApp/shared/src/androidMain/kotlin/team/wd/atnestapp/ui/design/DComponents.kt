@@ -159,7 +159,7 @@ fun DFrame(
 }
 
 /** 正文限宽：只在 Medium / Expanded 生效，手机返回原 Modifier。 */
-private fun Modifier.dPageWidth(win: DWindow): Modifier =
+internal fun Modifier.dPageWidth(win: DWindow): Modifier =
     if (win.hasContentLimit) this.widthIn(max = win.contentMaxWidth) else this
 
 /**

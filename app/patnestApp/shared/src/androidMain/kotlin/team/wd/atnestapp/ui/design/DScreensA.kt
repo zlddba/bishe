@@ -77,7 +77,7 @@ fun D01Home(nav: DNav) {
         store.loadPets()
         store.loadNotifications()
     }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = null,
         activeTab = DTab.Home,
@@ -207,7 +207,7 @@ fun D02FindSitters(nav: DNav) {
         }
     }
     // 机构一次最多返回 50 家，用惰性骨架：首屏只组合可见的几张卡片。
-    DLazyFrame(
+    DMiuixListScaffold(
         nav = nav,
         title = null,
         activeTab = DTab.Sitters,
@@ -752,7 +752,7 @@ fun D05Orders(nav: DNav) {
         if (statuses.isEmpty()) store.orders else store.orders.filter { it.rawStatus in statuses }
     }
     // 订单也可能一次返回几十条，同样用惰性骨架。
-    DLazyFrame(nav = nav, title = "我的订单", backable = false, refreshing = store.ordersLoading, onRefresh = { scope.launch { store.loadOrders(force = true) } }) {
+    DMiuixListScaffold(nav = nav, title = "我的订单", backable = false, refreshing = store.ordersLoading, onRefresh = { scope.launch { store.loadOrders(force = true) } }) {
         item { DTabLine(labels, tab) { tab = it } }
         item { Spacer(Modifier.height(10.dp)) }
         when {
@@ -1043,7 +1043,7 @@ fun D08Pets(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadPets() }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "我的宠物",
         actions = { DSmallButton("+ 添加", { nav.go(DScreen.PetAdd) }) },
@@ -1500,7 +1500,7 @@ fun D13Favorites(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { store.loadFavorites() }
-    DFrame(nav = nav, title = "我的收藏", backable = false, refreshing = store.favoritesLoading,
+    DMiuixScrollScaffold(nav = nav, title = "我的收藏", backable = false, refreshing = store.favoritesLoading,
         onRefresh = { scope.launch { store.loadFavorites(force = true) } }) {
         DPad {
             Spacer(Modifier.height(14.dp))
@@ -1525,7 +1525,7 @@ fun D14Coupons(nav: DNav) {
     val usable = items.filter { it.status == "unused" }
     val used = items.filter { it.status == "used" }
     val expired = items.filter { it.status == "expired" }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "优惠券",
         actions = { DSmallButton("领券中心", { nav.go(DScreen.ClaimCenter) }) },
@@ -1583,7 +1583,7 @@ fun D15Messages(nav: DNav) {
     var tab by remember { mutableStateOf(0) }
     val labels = listOf("全部", "订单", "动态", "系统")
     LaunchedEffect(Unit) { store.loadScopedNotifications(true) }
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = "消息通知",
         backable = false,

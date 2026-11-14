@@ -36,7 +36,7 @@
 ## 批次划分（每批一个 DScreensX 文件或一组自包含屏幕）
 
 - [ ] **批次 0（已完成）**：地基。依赖接入（6 模块）、`DTheme` 加 MiuixTheme 桥、试点屏 **D09Login** 重写（Scaffold/TopAppBar/Card/TextField/Button 全 Miuix 化）
-- [ ] **批次 1**：认证与表单屏 —— `D40Register`、`D41ProfileEdit`、`D12PetAdd`、`D44AddressAdd`、`D28PublishDynamic`
+- [x] **批次 1**：认证与表单屏 —— `D40Register`、`D41ProfileEdit`、`D12PetAdd`、`D44AddressAdd`、`D28PublishDynamic`（新增 DMiuix.kt 桥接助手；下拉选择字段暂保留自研 Popup）
 - [ ] **批次 2**：主人端主页与列表 —— `D01Home`、`D02FindSitters`、`D05Orders`、`D08Pets`、`D13Favorites`、`D14Coupons`、`D15Messages`
 - [ ] **批次 3**：主人端详情与流程 —— `D03SitterDetail`、`D04Booking`、`D10Checkout`、`D11ReviewWrite`、`D19OrderDetail`、`D22PaySuccess`、`D23SitterCompare`
 - [ ] **批次 4**：机构端 —— `D18SitterWorkspace`、`DSitterOrders`、`DSitterMoments`、`DSitterProfile`、`D26ShopProfile`、`D27Capacity`、`D28~D31` 收尾
