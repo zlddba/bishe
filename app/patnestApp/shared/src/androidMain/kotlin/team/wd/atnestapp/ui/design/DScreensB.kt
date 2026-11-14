@@ -1886,65 +1886,59 @@ fun D28PublishDynamic(nav: DNav) {
         }
     }
     val orderId = orders.firstOrNull { B_orderLabel(it) == orderLabel }?.id ?: 0L
-    DFrame(nav = nav, title = "发布寄养动态") {
-        when {
-            orders.isEmpty() -> DPad {
-                Spacer(Modifier.height(16.dp))
-                DEmpty("还没有可关联的订单", "去接单") { nav.back() }
+    DMiuixFormScaffold(nav = nav, title = "发布寄养动态") {
+        if (orders.isEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            DEmpty("还没有可关联的订单", "去接单") { nav.back() }
+        } else {
+            B_SelectField("关联订单", orderLabel, labels) { orderLabel = it }
+            DMiuixField(
+                label = "动态内容",
+                value = content,
+                onValueChange = { content = it },
+                placeholder = "说说今天宠物的状态，例如吃饭、遛弯、便便情况…",
+                multiline = true,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("上传照片（最多 6 张）", fontSize = 12.sp, color = DColor.Ink3)
+                Spacer(Modifier.weight(1f))
+                if (uploading) Text("上传中…", fontSize = 12.sp, color = DColor.BrandInk)
             }
-            else -> {
-                DPad {
-                    Spacer(Modifier.height(14.dp))
-                    B_SelectField("关联订单", orderLabel, labels) { orderLabel = it }
-                    DFieldInput(
-                        label = "动态内容",
-                        value = content,
-                        onValueChange = { content = it },
-                        placeholder = "说说今天宠物的状态，例如吃饭、遛弯、便便情况…",
-                        multiline = true,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("上传照片（最多 6 张）", fontSize = 12.sp, color = DColor.Ink3)
-                        Spacer(Modifier.weight(1f))
-                        if (uploading) Text("上传中…", fontSize = 12.sp, color = DColor.BrandInk)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    val cells = photos.toList() + if (photos.size < 6) listOf("add") else emptyList()
-                    cells.chunked(4).forEach { rowItems ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            rowItems.forEach { cell ->
-                                if (cell == "add") {
-                                    B_AddPhoto { if (!uploading) pickPhoto() }
-                                } else {
-                                    MobileImage(
-                                        url = cell,
-                                        modifier = Modifier.size(72.dp),
-                                        shape = DShape.Md,
-                                        placeholderSize = 16.dp,
-                                    )
-                                }
-                            }
+            Spacer(Modifier.height(8.dp))
+            val cells = photos.toList() + if (photos.size < 6) listOf("add") else emptyList()
+            cells.chunked(4).forEach { rowItems ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowItems.forEach { cell ->
+                        if (cell == "add") {
+                            B_AddPhoto { if (!uploading) pickPhoto() }
+                        } else {
+                            MobileImage(
+                                url = cell,
+                                modifier = Modifier.size(72.dp),
+                                shape = DShape.Md,
+                                placeholderSize = 16.dp,
+                            )
                         }
-                        Spacer(Modifier.height(8.dp))
                     }
-                    Spacer(Modifier.height(10.dp))
-                    DButton(
-                        if (store.busy) "发布中…" else "发布动态",
-                        {
-                            when {
-                                orderId <= 0L -> nav.toast("请先选择关联订单")
-                                content.isBlank() -> nav.toast("动态内容不能为空")
-                                else -> scope.launch {
-                                    store.publishDynamic(orderId, content.trim(), photos.toList())
-                                    store.selectedOrderIdForDynamic = 0L
-                                    nav.back()
-                                }
-                            }
-                        },
-                        enabled = !store.busy,
-                    )
                 }
+                Spacer(Modifier.height(8.dp))
             }
+            Spacer(Modifier.height(10.dp))
+            DMiuixPrimaryButton(
+                if (store.busy) "发布中…" else "发布动态",
+                {
+                    when {
+                        orderId <= 0L -> nav.toast("请先选择关联订单")
+                        content.isBlank() -> nav.toast("动态内容不能为空")
+                        else -> scope.launch {
+                            store.publishDynamic(orderId, content.trim(), photos.toList())
+                            store.selectedOrderIdForDynamic = 0L
+                            nav.back()
+                        }
+                    }
+                },
+                enabled = !store.busy,
+            )
         }
     }
 }

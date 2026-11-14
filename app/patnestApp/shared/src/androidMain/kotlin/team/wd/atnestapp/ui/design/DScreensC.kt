@@ -1082,29 +1082,26 @@ fun D40Register(nav: DNav) {
         }
     }
 
-    DFrame(nav = nav, title = "注册") {
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            Text("创建宠物主人账号", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = DColor.Ink)
-            Spacer(Modifier.height(6.dp))
-            Text("注册后即可预约寄养、管理宠物档案", fontSize = 12.sp, color = DColor.Ink3)
-            Spacer(Modifier.height(18.dp))
-            DFieldInput("用户名", account, { account = it }, placeholder = "3-50 个字符，不能是手机号")
-            DFieldInput("密码", password, { password = it }, placeholder = "至少 8 位", secret = true)
-            DFieldInput("手机号", phone, { phone = it }, placeholder = "中国大陆 11 位手机号", numeric = true)
-            DFieldInput("昵称（可选）", nickname, { nickname = it }, placeholder = "不填则使用用户名")
-            DFieldInput("邀请码（选填）", inviteCode, { inviteCode = it }, placeholder = "填写好友的邀请码，双方各得 100 积分")
-            Spacer(Modifier.height(6.dp))
-            DButton(if (store.busy) "注册中…" else "注册并登录", doRegister)
-            Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    "已有账号？返回登录",
-                    fontSize = 12.5.sp,
-                    color = DColor.BrandInk,
-                    modifier = Modifier.clickable { nav.back() },
-                )
-            }
+    DMiuixFormScaffold(nav = nav, title = "注册") {
+        Text("创建宠物主人账号", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = DColor.Ink)
+        Spacer(Modifier.height(6.dp))
+        Text("注册后即可预约寄养、管理宠物档案", fontSize = 12.sp, color = DColor.Ink3)
+        Spacer(Modifier.height(18.dp))
+        DMiuixField("用户名", account, { account = it }, placeholder = "3-50 个字符，不能是手机号")
+        DMiuixField("密码", password, { password = it }, placeholder = "至少 8 位", secret = true)
+        DMiuixField("手机号", phone, { phone = it }, placeholder = "中国大陆 11 位手机号", numeric = true)
+        DMiuixField("昵称（可选）", nickname, { nickname = it }, placeholder = "不填则使用用户名")
+        DMiuixField("邀请码（选填）", inviteCode, { inviteCode = it }, placeholder = "填写好友的邀请码，双方各得 100 积分")
+        Spacer(Modifier.height(6.dp))
+        DMiuixPrimaryButton(if (store.busy) "注册中…" else "注册并登录", doRegister)
+        Spacer(Modifier.height(14.dp))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text(
+                "已有账号？返回登录",
+                fontSize = 12.5.sp,
+                color = DColor.BrandInk,
+                modifier = Modifier.clickable { nav.back() },
+            )
         }
     }
 }
@@ -1132,27 +1129,22 @@ fun D41ProfileEdit(nav: DNav) {
         hydrated = true
     }
     LaunchedEffect(Unit) { store.loadProfile() }
-    DFrame(nav = nav, title = "个人资料") {
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            DFieldInput("昵称", nickname, { nickname = it }, placeholder = "展示给机构的名字")
-            DFieldInput("手机号", phone, { phone = it }, placeholder = "用于登录与联系", numeric = true)
-            DFieldInput("地址", address, { address = it }, placeholder = "省市区 + 详细地址")
-            DFieldInput("联系人", contactName, { contactName = it }, placeholder = "紧急联系人")
-            DFieldInput("联系电话", contactPhone, { contactPhone = it }, placeholder = "紧急联系人电话", numeric = true)
-        }
-        DPad {
-            Spacer(Modifier.height(8.dp))
-            DButton(
-                if (store.busy) "保存中…" else "保存资料",
-                {
-                    scope.launch {
-                        store.saveProfile(nickname.trim(), phone.trim(), address.trim(), contactName.trim(), contactPhone.trim())
-                        nav.back()
-                    }
-                },
-            )
-        }
+    DMiuixFormScaffold(nav = nav, title = "个人资料") {
+        DMiuixField("昵称", nickname, { nickname = it }, placeholder = "展示给机构的名字")
+        DMiuixField("手机号", phone, { phone = it }, placeholder = "用于登录与联系", numeric = true)
+        DMiuixField("地址", address, { address = it }, placeholder = "省市区 + 详细地址")
+        DMiuixField("联系人", contactName, { contactName = it }, placeholder = "紧急联系人")
+        DMiuixField("联系电话", contactPhone, { contactPhone = it }, placeholder = "紧急联系人电话", numeric = true)
+        Spacer(Modifier.height(8.dp))
+        DMiuixPrimaryButton(
+            if (store.busy) "保存中…" else "保存资料",
+            {
+                scope.launch {
+                    store.saveProfile(nickname.trim(), phone.trim(), address.trim(), contactName.trim(), contactPhone.trim())
+                    nav.back()
+                }
+            },
+        )
     }
 }
 
@@ -1295,82 +1287,70 @@ fun D44AddressAdd(nav: DNav) {
     var address by remember(profile) {
         mutableStateOf(store.pickedAddress.ifBlank { profile?.address.orEmpty() })
     }
-    DFrame(nav = nav, title = "新增地址", backable = true) {
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            Box(
-                Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.MapWash)
-                    .border(1.dp, DColor.Line, DShape.Lg)
-                    .clickable { nav.go(DScreen.MapPicker) }
-                    .padding(14.dp),
-            ) {
-                C_SplitRow(
-                    fixedWidth = 22.dp,
-                    gap = 10.dp,
-                    fixed = { AppIcon(AppIcon.Paw, Modifier.size(22.dp), DColor.Ok) },
-                    flexible = {
-                        Text(
-                            "地图选点定位",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DColor.Ink,
-                        )
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            when {
-                                store.pickedAddress.isNotBlank() -> store.pickedAddress
-                                store.pickedLatitude != null -> "已解析坐标，点击可重新选择"
-                                else -> "点击按地址解析坐标"
-                            },
-                            fontSize = 12.sp,
-                            color = DColor.Ink3,
-                        )
-                    },
-                )
-            }
-        }
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            DFieldInput("联系人", contact, { contact = it }, placeholder = "收宠联系人姓名")
-            DFieldInput("手机号", phone, { phone = it }, numeric = true, placeholder = "11 位手机号")
-            DFieldInput(
-                label = "详细地址",
-                value = address,
-                onValueChange = { address = it },
-                placeholder = "省市区 + 街道门牌",
-                multiline = true,
-            )
-            Text(
-                "地址与联系人保存在个人资料里，下单时自动带上；后端暂无独立地址簿。",
-                fontSize = 11.5.sp,
-                color = DColor.Ink3,
-            )
-        }
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            DButton(
-                if (store.busy) "保存中…" else "保存地址",
-                {
-                    when {
-                        contact.isBlank() -> nav.toast("请填写联系人")
-                        phone.filter { it.isDigit() }.length < 7 -> nav.toast("手机号格式不对")
-                        address.isBlank() -> nav.toast("请填写详细地址")
-                        else -> scope.launch {
-                            store.saveProfile(
-                                nicknameInput = store.nickname.ifBlank { store.account },
-                                phone = profile?.phone.orEmpty(),
-                                address = address.trim(),
-                                contactName = contact.trim(),
-                                contactPhone = phone.trim(),
-                            )
-                            store.pickedAddress = ""
-                            nav.back()
-                        }
-                    }
+    DMiuixFormScaffold(nav = nav, title = "新增地址") {
+        Box(
+            Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.MapWash)
+                .border(1.dp, DColor.Line, DShape.Lg)
+                .clickable { nav.go(DScreen.MapPicker) }
+                .padding(14.dp),
+        ) {
+            C_SplitRow(
+                fixedWidth = 22.dp,
+                gap = 10.dp,
+                fixed = { AppIcon(AppIcon.Paw, Modifier.size(22.dp), DColor.Ok) },
+                flexible = {
+                    Text("地图选点定位", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        when {
+                            store.pickedAddress.isNotBlank() -> store.pickedAddress
+                            store.pickedLatitude != null -> "已解析坐标，点击可重新选择"
+                            else -> "点击按地址解析坐标"
+                        },
+                        fontSize = 12.sp,
+                        color = DColor.Ink3,
+                    )
                 },
-                enabled = !store.busy,
             )
         }
+        Spacer(Modifier.height(14.dp))
+        DMiuixField("联系人", contact, { contact = it }, placeholder = "收宠联系人姓名")
+        DMiuixField("手机号", phone, { phone = it }, numeric = true, placeholder = "11 位手机号")
+        DMiuixField(
+            label = "详细地址",
+            value = address,
+            onValueChange = { address = it },
+            placeholder = "省市区 + 街道门牌",
+            multiline = true,
+        )
+        Text(
+            "地址与联系人保存在个人资料里，下单时自动带上；后端暂无独立地址簿。",
+            fontSize = 11.5.sp,
+            color = DColor.Ink3,
+        )
+        Spacer(Modifier.height(14.dp))
+        DMiuixPrimaryButton(
+            if (store.busy) "保存中…" else "保存地址",
+            {
+                when {
+                    contact.isBlank() -> nav.toast("请填写联系人")
+                    phone.filter { it.isDigit() }.length < 7 -> nav.toast("手机号格式不对")
+                    address.isBlank() -> nav.toast("请填写详细地址")
+                    else -> scope.launch {
+                        store.saveProfile(
+                            nicknameInput = store.nickname.ifBlank { store.account },
+                            phone = profile?.phone.orEmpty(),
+                            address = address.trim(),
+                            contactName = contact.trim(),
+                            contactPhone = phone.trim(),
+                        )
+                        store.pickedAddress = ""
+                        nav.back()
+                    }
+                }
+            },
+            enabled = !store.busy,
+        )
     }
 }
 

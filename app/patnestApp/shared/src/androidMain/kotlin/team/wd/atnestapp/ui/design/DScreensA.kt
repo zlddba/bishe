@@ -1449,56 +1449,49 @@ fun D12PetAdd(nav: DNav) {
         mutableStateOf(editing?.note?.takeIf { it.isNotBlank() && it != "暂无健康备注" } ?: "")
     }
 
-    DFrame(nav = nav, title = if (editing == null) "新增宠物" else "编辑宠物") {
-        DPad {
-            Spacer(Modifier.height(14.dp))
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.size(80.dp).clip(CircleShape).background(DColor.BrandSoft)
-                        .clickable { nav.toast("照片请在宠物详情页上传") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppIcon(AppIcon.Paw, Modifier.size(34.dp), DColor.BrandInk)
-                }
-                Spacer(Modifier.height(8.dp))
-                Text("照片可在详情页补充", fontSize = 12.5.sp, color = DColor.Ink3)
+    DMiuixFormScaffold(nav = nav, title = if (editing == null) "新增宠物" else "编辑宠物") {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(80.dp).clip(CircleShape).background(DColor.BrandSoft)
+                    .clickable { nav.toast("照片请在宠物详情页上传") },
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Paw, Modifier.size(34.dp), DColor.BrandInk)
             }
+            Spacer(Modifier.height(8.dp))
+            Text("照片可在详情页补充", fontSize = 12.5.sp, color = DColor.Ink3)
         }
-        DPad {
-            Spacer(Modifier.height(16.dp))
-            DFieldInput("宠物名字", name, { name = it }, placeholder = "例如：豆包")
-            A_SelectField("宠物类型", type, listOf("猫", "狗", "其他")) { type = it }
-            A_SelectField("体型", size, listOf("迷你", "小型", "中型", "大型", "超大型")) { size = it }
-            DFieldInput("月龄（月）", ageMonth, { ageMonth = it }, placeholder = "例如：18", numeric = true)
-            DField("疫苗情况", if (vaccinated) "已接种" else "待接种", onClick = { vaccinated = !vaccinated })
-            DFieldInput(
-                label = "健康备注",
-                value = note,
-                onValueChange = { note = it },
-                placeholder = "绝育 / 慢性病 / 饮食习惯…",
-                multiline = true,
-            )
-        }
-        DPad {
-            Spacer(Modifier.height(18.dp))
-            DButton(
-                if (store.busy) "保存中…" else "保存宠物",
-                {
-                    scope.launch {
-                        val ok = store.savePet(
-                            name = name,
-                            typeLabel = type,
-                            sizeLabel = size,
-                            ageText = ageMonth,
-                            vaccinated = vaccinated,
-                            note = note,
-                            avatarUrl = "",
-                        )
-                        if (ok) nav.back()
-                    }
-                },
-            )
-        }
+        Spacer(Modifier.height(16.dp))
+        DMiuixField("宠物名字", name, { name = it }, placeholder = "例如：豆包")
+        A_SelectField("宠物类型", type, listOf("猫", "狗", "其他")) { type = it }
+        A_SelectField("体型", size, listOf("迷你", "小型", "中型", "大型", "超大型")) { size = it }
+        DMiuixField("月龄（月）", ageMonth, { ageMonth = it }, placeholder = "例如：18", numeric = true)
+        DField("疫苗情况", if (vaccinated) "已接种" else "待接种", onClick = { vaccinated = !vaccinated })
+        DMiuixField(
+            label = "健康备注",
+            value = note,
+            onValueChange = { note = it },
+            placeholder = "绝育 / 慢性病 / 饮食习惯…",
+            multiline = true,
+        )
+        Spacer(Modifier.height(18.dp))
+        DMiuixPrimaryButton(
+            if (store.busy) "保存中…" else "保存宠物",
+            {
+                scope.launch {
+                    val ok = store.savePet(
+                        name = name,
+                        typeLabel = type,
+                        sizeLabel = size,
+                        ageText = ageMonth,
+                        vaccinated = vaccinated,
+                        note = note,
+                        avatarUrl = "",
+                    )
+                    if (ok) nav.back()
+                }
+            },
+        )
     }
 }
 
