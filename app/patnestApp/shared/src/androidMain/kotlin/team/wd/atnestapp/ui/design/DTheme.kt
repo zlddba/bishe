@@ -17,6 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import top.yukonga.miuix.kmp.theme.Colors as MiuixColors
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
 /**
  * 一套配色的全部令牌。
@@ -274,8 +278,51 @@ fun DTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -
         }
     }
     CompositionLocalProvider(LocalDPalette provides palette) {
-        MaterialTheme(colorScheme = colorScheme, content = content)
+        // Miuix 主题桥：逐屏重写期间新旧组件并存，两边共享同一套品牌配色。
+        // Miuix 的颜色只在这里构造一次（remember 挂 darkTheme），重写完成后
+        // MaterialTheme 一层会被移除，现在先双层主题共存。
+        MiuixTheme(colors = remember(darkTheme) { dMiuixColors(palette, darkTheme) }) {
+            MaterialTheme(colorScheme = colorScheme, content = content)
+        }
     }
+}
+
+/**
+ * 把 [DPalette] 语义令牌映射进 Miuix 的 HyperOS 配色。
+ *
+ * 映射原则与 Material 版一致：
+ * - `primary` 用「填充级」的 brandStrong（选中胶囊 / 白字底），深浅色都不跟随变亮，
+ *   保证白字始终可读；
+ * - 文字 / 图标级的 brandInk 不进 Miuix（Miuix 组件里的强调色一律走 primary），
+ *   现有屏幕的重音仍走 DColor.BrandInk，等逐屏重写时再逐个收敛；
+ * - 表面色（bg / card / line / ink / neutralSoft）一一对应，深浅色自动翻转。
+ *
+ * 只传 Miuix lightColorScheme / darkColorScheme 签名里确认存在的字段；
+ * 未覆盖的字段（dividerLine、tertiary 等）落在官方深浅色默认值上。
+ */
+private fun dMiuixColors(p: DPalette, dark: Boolean): MiuixColors {
+    val base = if (dark) miuixDarkColorScheme() else miuixLightColorScheme()
+    return base.copy(
+        primary = p.brandStrong,
+        onPrimary = DColor.White,
+        primaryVariant = p.brand,
+        onPrimaryVariant = p.brandInk,
+        primaryContainer = p.brandSoft,
+        onPrimaryContainer = p.brandInk,
+        secondary = p.neutralSoft,
+        onSecondary = p.ink,
+        secondaryVariant = p.line,
+        onSecondaryVariant = p.ink2,
+        error = p.danger,
+        onError = DColor.White,
+        errorContainer = p.dangerSoft,
+        onErrorContainer = p.danger,
+        disabledPrimary = p.line2,
+        disabledOnPrimary = p.ink3,
+        disabledPrimaryButton = p.line2,
+        disabledOnPrimaryButton = p.ink3,
+        disabledPrimarySlider = p.line2,
+    )
 }
 
 /**

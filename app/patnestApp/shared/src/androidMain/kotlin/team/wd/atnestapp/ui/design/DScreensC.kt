@@ -977,7 +977,7 @@ fun D38SearchResults(nav: DNav) {
                                 Spacer(Modifier.height(6.dp))
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
-                                        store.money(sitter.price.toDouble()),
+                                        store.money(sitter.price),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = DColor.BrandInk,

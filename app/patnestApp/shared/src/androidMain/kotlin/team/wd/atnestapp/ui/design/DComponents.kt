@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -50,13 +49,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -66,9 +62,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -80,11 +73,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.view.WindowCompat
 import team.wd.atnestapp.ui.components.AppIcon
@@ -137,7 +130,17 @@ fun DFrame(
                 .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
                 .padding(bottom = 14.dp)
             if (onRefresh != null) {
-                DPullRefresh(refreshing = refreshing == true, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+                // Miuix 的下拉刷新：指示器的拉出、驻留、收回全部由组件按 isRefreshing
+                // 状态驱动，刷新结束 isRefreshing=false 即走完成动画收回；即使刷新请求
+                // 被忽略（store 的「加载中直接 return」守卫）或极速完成，也不会卡住。
+                // contentAlignment 虽是 Miuix 组件没有的参数，但该容器是全宽的——
+                // 正文限宽居中靠内容自己的布局完成，这里无需额外处理。
+                PullToRefresh(
+                    isRefreshing = refreshing == true,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                ) {
                     Column(colModifier, content = content)
                 }
             } else {
@@ -195,7 +198,12 @@ fun DLazyFrame(
                 .imePadding()
                 .then(if (needBottomInset) Modifier.navigationBarsPadding() else Modifier)
             if (onRefresh != null) {
-                DPullRefresh(refreshing = refreshing == true, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+                PullToRefresh(
+                    isRefreshing = refreshing == true,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                    refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
+                ) {
                     LazyColumn(
                         scrollModifier,
                         contentPadding = PaddingValues(bottom = 14.dp),
@@ -1018,7 +1026,7 @@ fun DFieldInput(
 }
 
 /** 密码掩码：把已有文本全部替换成等长圆点。 */
-private object DPasswordMask : OutputTransformation {
+internal object DPasswordMask : OutputTransformation {
     override fun TextFieldBuffer.transformOutput() {
         if (length > 0) replace(0, length, "•".repeat(length))
     }
@@ -1179,131 +1187,6 @@ fun DDropdown(
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * 极简下拉刷新容器（Android）。
- *
- * 用 [NestedScrollConnection] 捕获「子滚动容器已在顶部、用户继续下拉」的剩余手势，
- * 拉出顶部指示器；松手超过阈值（64dp）触发 [onRefresh]。
- * 不依赖 accompanist，也不要求 material3 版本自带 PullToRefresh；
- * LazyColumn 与 Column(verticalScroll) 都适用（通过 nestedScroll 交接手势）。
- *
- * 视觉：内容整体随手势下移（translationY），顶部露出文字指示条（下拉刷新 / 松手刷新 /
- * 正在刷新…）。刻意不放转圈图标——转圈组件只要可见就会一直自转，收回逻辑一旦有
- * 疏漏就会变成「刷新完还在转」；纯文字随收随走没有这个观感问题。
- */
-@Composable
-fun DPullRefresh(
-    refreshing: Boolean,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-    // 内容列的对齐方式。DFrame / DLazyFrame 在宽屏会把正文限宽后居中，
-    // 这里的容器（嵌套滚动 Box）是全宽的，必须把同样的对齐传进来——
-    // 否则宽屏下限宽的正文会贴到左边，与居中的顶栏、底栏脱节。
-    contentAlignment: Alignment = Alignment.TopCenter,
-    content: @Composable () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val density = LocalDensity.current
-    val thresholdPx = with(density) { 64.dp.toPx() }
-    val maxDragPx = with(density) { 120.dp.toPx() }
-    val snapPx = with(density) { 44.dp.toPx() }
-
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    // lambda 里始终读最新值，避免 remember{} 缓存旧闭包
-    val currentRefreshing by rememberUpdatedState(refreshing)
-    val currentOnRefresh by rememberUpdatedState(onRefresh)
-
-    val connection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // 刷新中指示器钉在固定高度；向上滑动时先收指示器，再放行给列表
-                if (dragOffset > 0f && available.y < 0f) {
-                    val floor = if (currentRefreshing) snapPx else 0f
-                    dragOffset = (dragOffset + available.y).coerceAtLeast(floor)
-                    return Offset(0f, available.y)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (currentRefreshing) return Offset.Zero
-                // 只吃「用户手指」在列表顶部继续下拉的剩余距离
-                if (available.y > 0f && source == NestedScrollSource.UserInput) {
-                    dragOffset = (dragOffset + available.y).coerceAtMost(maxDragPx)
-                    return Offset(0f, available.y)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                // 刷新中指示器钉在固定高度，不受 fling 收回逻辑影响
-                if (currentRefreshing) return available
-                if (dragOffset >= thresholdPx) {
-                    // 先把指示器钉住再触发刷新：不能等外部 loading 标志变 true 才钉，
-                    // 否则快速完成的刷新 / 守卫早退的加载都等不到那个状态。
-                    dragOffset = snapPx
-                    currentOnRefresh()
-                    // 兜底收回：onRefresh 的实现可能根本没产生加载（比如上一次
-                    // 加载还在进行中，store 的「加载中直接 return」守卫命中），
-                    // 这时不会有任何刷新态变化来收回指示器。150ms 后仍未进入
-                    // 刷新态就自己收回去。
-                    scope.launch {
-                        delay(150)
-                        if (!currentRefreshing && dragOffset > 0f) {
-                            animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
-                        }
-                    }
-                } else if (dragOffset > 0f) {
-                    scope.launch { animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v } }
-                }
-                return available
-            }
-        }
-    }
-
-    // 刷新态变化时钉住 / 收回。用 snapshotFlow 持续观察而不是 LaunchedEffect(refreshing)：
-    // 旧实现的问题在于「观察 key 变化」——快速完成的刷新（true→false 在下一帧重组前
-    // 就结束）根本不会让重组观察到 true，key 不变 LaunchedEffect 不重跑，指示器
-    // 就永远收不回去，也就是「刷新完还一直转」的根因。snapshotFlow 对状态值的
-    // 任何变化都会发值，且 false 分支只看 dragOffset>0，不依赖「曾经见过 true」。
-    LaunchedEffect(Unit) {
-        snapshotFlow { currentRefreshing }.collect { r ->
-            if (r) {
-                dragOffset = snapPx
-            } else if (dragOffset > 0f) {
-                animate(dragOffset, 0f, animationSpec = tween(180)) { v, _ -> dragOffset = v }
-            }
-        }
-    }
-
-    Box(modifier.nestedScroll(connection)) {
-        // 内容随手势整体下移，露出顶部指示条；对齐方式与外层骨架保持一致
-        Box(Modifier.fillMaxSize().graphicsLayer { translationY = dragOffset }, contentAlignment = contentAlignment) {
-            content()
-        }
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(with(density) { dragOffset.toDp() }),
-        ) {
-            // 只有文字，不放转圈图标：CircularProgressIndicator 只要可见就一直自转，
-            // 一旦收回逻辑有疏漏就会变成「刷新完还在转」；纯文字随收随走没有这个问题。
-            Text(
-                when {
-                    currentRefreshing -> "正在刷新…"
-                    dragOffset >= thresholdPx -> "松手刷新"
-                    dragOffset > 0f -> "下拉刷新"
-                    else -> ""
-                },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
-                fontSize = 12.sp,
-                color = DColor.Ink3,
-            )
         }
     }
 }

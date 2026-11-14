@@ -1071,7 +1071,7 @@ fun D23SitterCompare(nav: DNav) {
     var selected by remember { mutableStateOf(0) }
     val rows: List<Pair<String, List<String>>> = listOf(
         "类型" to list.map { it.type },
-        "单价" to list.map { "${store.money(it.price.toDouble())}/${it.unit}" },
+        "单价" to list.map { "${store.money(it.price)}/${it.unit}" },
         "评分" to list.map { if (it.score > 0) formatScore(it.score) else "—" },
         "评价" to list.map { it.tags },
         "容量" to list.map { it.cap },

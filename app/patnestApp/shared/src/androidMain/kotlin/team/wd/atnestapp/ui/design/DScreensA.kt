@@ -16,6 +16,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +51,17 @@ import kotlinx.coroutines.launch
 import team.wd.atnestapp.data.model.Sitter
 import team.wd.atnestapp.ui.app.MapNavigation
 import team.wd.atnestapp.ui.components.AppIcon
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.ui.text.input.ImeAction
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TopAppBar
 
 /* ================================================================== *
  * 第 1 组：①~⑮ 屏。版式按 docs/KMP-Android端UI设计稿.html 还原，
@@ -1092,6 +1109,17 @@ fun D09Login(nav: DNav) {
     val scope = rememberCoroutineScope()
     var account by remember { mutableStateOf(store.account) }
     var password by remember { mutableStateOf("") }
+    var reveal by remember { mutableStateOf(false) }
+    val gutter = LocalDWindow.current.gutter
+
+    val accountState = rememberTextFieldState(store.account)
+    val passwordState = rememberTextFieldState()
+    LaunchedEffect(Unit) {
+        snapshotFlow { accountState.text.toString() }.collect { account = it }
+    }
+    LaunchedEffect(Unit) {
+        snapshotFlow { passwordState.text.toString() }.collect { password = it }
+    }
 
     val doLogin: () -> Unit = {
         when {
@@ -1100,54 +1128,128 @@ fun D09Login(nav: DNav) {
             store.busy -> Unit
             else -> scope.launch {
                 store.login(account.trim(), password)
-                // 被拦到登录页的：登录后直接去原来点的那一页；主动进来的：退回上一页
                 if (store.loggedIn) nav.afterLogin()
             }
         }
     }
 
-    // title 为 null 时 DFrame 不画 DTopBar，backable 也就失效了；
-    // 登录页必须能退出去（未登录用户也要能回首页逛），所以给一个真标题栏
-    DFrame(nav = nav, title = "登录") {
-        DPad {
-            Spacer(Modifier.height(30.dp))
-            A_IconBox(AppIcon.Paw, DColor.BrandSoft, DColor.BrandInk, 64.dp, 34.dp)
-            Spacer(Modifier.height(18.dp))
-            Text("欢迎使用宠栖", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = DColor.Ink)
-            Spacer(Modifier.height(8.dp))
-            Text("为宠物找个温暖的家，节假日寄养不再愁。", fontSize = 13.5.sp, color = DColor.Ink2)
+    // 玻璃质感（miuix-blur）：两层模型——
+    // ① 背景层（页面底色 + 品牌渐变 hero + 装饰圆）记录进 backdrop；
+    // ② 前景滚动列里，登录表单卡是 DGlassPanel，真实模糊它身后骑跨的渐变。
+    //    Android 13 以下 DGlassPanel 自动退化为实体卡，布局不变。
+    val backdrop = rememberDGlassBackdrop()
+
+    Box(Modifier.fillMaxSize()) {
+        // ① 被玻璃模糊的背景层（不透明内容才值得记录）
+        Box(Modifier.matchParentSize().dGlassBackdropSource(backdrop)) {
+            Column(Modifier.fillMaxSize().background(DColor.Bg)) {
+                Box(Modifier.fillMaxWidth().height(250.dp).background(DColor.HeroGradient)) {
+                    // 装饰圆：给模糊提供明暗变化，玻璃上才看得出「后面有东西在动」的层次
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 24.dp, end = gutter)
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(DColor.White.copy(alpha = 0.10f)),
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = gutter + 30.dp)
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(DColor.White.copy(alpha = 0.08f)),
+                    )
+                }
+            }
         }
-        DPad {
-            Spacer(Modifier.height(24.dp))
-            DFieldInput(
-                label = "账号",
-                value = account,
-                onValueChange = { account = it },
-                placeholder = "用户名或手机号",
-            )
-            DFieldInput(
-                label = "密码",
-                value = password,
-                onValueChange = { password = it },
-                placeholder = "至少 8 位",
-                secret = true,
-                onSubmit = doLogin,
-            )
-            Spacer(Modifier.height(4.dp))
-            DButton(if (store.busy) "登录中…" else "登录", doLogin)
+
+        // ② 返回钮（压在渐变上，图标用素材白）
+        Box(
+            Modifier
+                .statusBarsPadding()
+                .padding(start = gutter, top = 9.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(DColor.Scrim)
+                    .clickable { nav.back() },
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+            }
+        }
+
+        // ③ 前景滚动列：渐变上的欢迎文案（白）+ 骑跨渐变下缘的玻璃表单卡
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Spacer(Modifier.height(42.dp))
+            Column(Modifier.padding(horizontal = gutter)) {
+                Text("欢迎使用宠栖", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = DColor.White)
+                Spacer(Modifier.height(8.dp))
+                Text("为宠物找个温暖的家，节假日寄养不再愁。", fontSize = 13.5.sp, color = DColor.White.copy(alpha = 0.88f))
+            }
+            // 玻璃卡上缘压进渐变 46dp，模糊里同时包含「渐变 + 页面底」，质感最明显
+            Spacer(Modifier.height(46.dp))
+            DGlassPanel(
+                backdrop = backdrop,
+                modifier = Modifier.padding(horizontal = gutter).fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
+                    TextField(
+                        state = accountState,
+                        label = "账号",
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    TextField(
+                        state = passwordState,
+                        label = "密码",
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        outputTransformation = if (!reveal) DPasswordMask else null,
+                        trailingIcon = {
+                            Text(
+                                if (reveal) "隐藏" else "显示",
+                                fontSize = 12.sp,
+                                color = DColor.BrandInk,
+                                modifier = Modifier.clickable { reveal = !reveal }.padding(horizontal = 6.dp),
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        onKeyboardAction = KeyboardActionHandler { performDefaultAction ->
+                            doLogin()
+                            performDefaultAction()
+                        },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Button(
+                        onClick = doLogin,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !store.busy,
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                    ) {
+                        Text(if (store.busy) "登录中…" else "登录")
+                    }
+                }
+            }
             Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(Modifier.padding(horizontal = gutter), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "还没有账号？去注册",
                     fontSize = 12.5.sp,
                     color = DColor.BrandInk,
                     modifier = Modifier.clickable { nav.go(DScreen.Register) },
                 )
-            }
-        }
-        DPad {
-            Spacer(Modifier.height(18.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Spacer(Modifier.height(18.dp))
                 Text(
                     "登录即代表同意《用户协议》与《隐私政策》",
                     fontSize = 11.sp,
@@ -1155,6 +1257,8 @@ fun D09Login(nav: DNav) {
                     modifier = Modifier.clickable { nav.go(DScreen.Agreements) },
                 )
             }
+            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.navigationBarsPadding())
         }
     }
 }
@@ -1555,7 +1659,7 @@ private fun Sitter.toACard(): A_SitterInfo {
     return A_SitterInfo(
         name = name,
         cover = name,
-        rating = score.toDouble(),
+        rating = score,
         ratingText = dRatingText(),
         desc = listOfNotNull(type, area, "容量 $cap").joinToString(" · "),
         tags = buildList {

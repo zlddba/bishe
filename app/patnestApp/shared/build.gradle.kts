@@ -73,6 +73,16 @@ kotlin {
             implementation(libs.compose.uiTooling)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.navigation.compose)
+            // Miuix（HyperOS 风格 KMP 组件库）全家桶：逐屏重写 UI 用。
+            // miuix-ui 是核心组件（含 PullToRefresh）；preference 是设置项组件；
+            // icons 扩展图标；blur 玻璃模糊（背景模糊/渐进模糊/倾斜反光，玻璃效果够用）；
+            // squircle 平滑圆角；nav 导航。
+            implementation(libs.miuix)
+            implementation(libs.miuix.preference)
+            implementation(libs.miuix.icons)
+            implementation(libs.miuix.blur)
+            implementation(libs.miuix.squircle)
+            implementation(libs.miuix.nav)
             if (useLocalAmapAar) {
                 implementation("com.amap.api:amap-bundle:$amapLocalVersion")
             } else {

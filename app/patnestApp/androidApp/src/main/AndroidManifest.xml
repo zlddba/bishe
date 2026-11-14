@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Miuix 的 miuix-blur / miuix-shader 模块把 minSdk 声明成 33（玻璃模糊依赖
+        Android 13 的 RuntimeShader），而本应用 minSdk 是 28。overrideLibrary 放行合并：
+        Android 13+ 设备模糊/玻璃效果全速生效；API 28~32 自动降级为不透明色，
+        其余功能不受影响（官方文档 docs/zh_CN/guide/glass.md 的建议做法）。
+    -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur,top.yukonga.miuix.kmp.shader" />
 
     <!-- 后端是局域网 http 地址， cleartext 必须放开，否则 9 以上会直接拦掉请求 -->
     <uses-permission android:name="android.permission.INTERNET" />
