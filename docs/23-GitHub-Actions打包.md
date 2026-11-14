@@ -383,3 +383,7 @@ Linux 四种格式由同一个 `linux` job 产出，实际文件名：
 运行 `43577735376` 全绿（11 个 job，墙钟约 6 分钟），<https://github.com/zlddba/bishe/releases/tag/v2.0.4>，15 个附件，命名全部符合规范。正文与 `docs/release/v2.0.4.md` 逐字一致（1159 字）。
 
 本版内容：DPullRefresh 增加 contentAlignment 对齐参数，修复 v2.0.3 引入的「平板上限宽正文贴左」问题；D27Capacity 月历格子宽屏限宽居中。服务端无变更。
+
+### v2.0.5 发布结果
+
+运行 `43579255203` 全绿（11 个 job，墙钟约 5.5 分钟），<https://github.com/zlddba/bishe/releases/tag/v2.0.5>，15 个附件，命名全部符合规范。正文与 `docs/release/v2.0.5.md` 逐字一致。本版内容：下拉刷新指示条收回修复（snapshotFlow 持续观察刷新态 + 触发时先钉住 + 150ms 兜底），转圈图标改为三态纯文字提示。服务端无变更。
