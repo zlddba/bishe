@@ -14,32 +14,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.blur.BlurBlendMode
-import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
 
 /**
- * 玻璃质感（基于已发布的 miuix-blur 0.9.4，官方未发布的 miuix-glass 不引入）。
+ * 液态玻璃（基于已发布的 miuix-blur 0.9.4，官方未发布的 miuix-glass 不引入）。
  *
- * 通透配方来自官方 blur 指南（iOS/HyperOS 同款思路）——玻璃感不是靠白 tint 堆出来的：
- * 1. 模糊（20~28dp）：底下内容变软；
- * 2. **提饱和度（1.45）**：模糊后的内容保持色彩，玻璃才「活」——纯白磨砂板
- *    的最大原因就是模糊把色彩抹掉了；
- * 3. **Screen 混合轻提亮（白 16%）**：代替厚白 tint，提亮但不遮底；
- * 4. Overlay 轻压暗（黑 6%）+ 亮度 +0.04 + 对比 1.08：保住层次；
- * 5. **官方边缘光 highlight**：受光边缘（上半亮、下半弱），模拟玻璃厚度折光，
- *    比 1px 白描边真实得多；
- * 6. 极薄中和层 tint（~10%）：只负责统一底色，不负责「填白」。
+ * 与普通「磨砂」的本质区别是**边缘折射**：真实玻璃不是均匀介质，
+ * 光线穿过边缘时会向内弯折，把边缘外的内容「压」进边框里，
+ * 红蓝两色折射率不同还会产生极细的色散描边——这就是液态玻璃的「液」。
  *
- * 能力边界：模糊依赖 Android 13（API 33）的 RuntimeShader。
- * - Android 13+：完整玻璃质感；
+ * 实现走 miuix-blur 的底层效果链（官方 blur 指南的进阶用法）：
+ * `drawBackdrop(effects = { blur → colorControls → blendColors → 折射着色器 })`。
+ * 折射是一段自定义 AGSL 着色器：圆角矩形 SDF 求出每个像素到边缘的距离，
+ * 越靠边采样坐标越向外偏移（透镜压缩），同时红蓝通道反向微量偏移（色散）。
+ *
+ * 全链路依赖 Android 13（API 33）RuntimeShader：
+ * - Android 13+：完整液态玻璃；
  * - API 28~32：自动退化为 DColor.Card 实体卡，布局与内容完全一致
  *   （manifest 里 tools:overrideLibrary 已放行 minSdk 33 的 blur 模块合并）。
  */
@@ -75,24 +76,6 @@ fun Modifier.dGlassBackdropSource(backdrop: LayerBackdrop): Modifier =
 val LocalDGlassBackdrop: ProvidableCompositionLocal<LayerBackdrop?> =
     staticCompositionLocalOf { null }
 
-/**
- * 通透玻璃的光学配方（官方 blur 指南推荐区间）。
- * remember 包装：BlurColors 含 List 字段，Compose 把它视为不稳定对象，
- * 每次重组新建会让 textureBlur 的效果链失效重建。
- */
-@Composable
-private fun rememberDGlassOptics(): BlurColors = BlurDefaults.blurColors(
-    blendColors = listOf(
-        // Screen 混合：提亮但不遮底（对比 SrcOver 的奶白效果）
-        BlendColorEntry(Color.White.copy(alpha = 0.16f), BlurBlendMode.Screen),
-        // Overlay 压暗：模糊内容过曝时保住对比
-        BlendColorEntry(Color.Black.copy(alpha = 0.06f), BlurBlendMode.Overlay),
-    ),
-    brightness = 0.04f,
-    contrast = 1.08f,
-    saturation = 1.45f,
-)
-
 /** 按主题选官方边缘光预设（上半受光、下半衰减，模拟玻璃折光）。 */
 @Composable
 private fun rememberDGlassHighlight(): Highlight =
@@ -106,11 +89,103 @@ private fun rememberDGlassBarHighlight(): Highlight =
     else Highlight.GlassStrokeSmallLight
 
 /**
+ * 液态折射 AGSL 着色器。
+ *
+ * 圆角矩形 SDF 给出每个像素到边缘的有符号距离：越靠边（距离趋近 0），
+ * 采样坐标越沿「向外」方向偏移——等于把边缘外一小圈内容压进来，
+ * 呈现透镜般的内缩折射；红蓝通道再做一次反向微量偏移产生色散。
+ * 所有 uniform 都是「降采样后图层」的像素空间，块内要除以 downscaleFactor
+ * （官方 runtimeShaderEffect 文档的明确要求，否则采样全部落在图层外）。
+ */
+private const val LIQUID_REFRACTION_AGSL = """
+    uniform shader inputShader;
+    uniform float2 uSize;      // 表面尺寸（降采样 px）
+    uniform float uRadius;     // 圆角半径（降采样 px）
+    uniform float uBand;       // 折射带宽（降采样 px）
+    uniform float uAmount;     // 边缘最大位移（降采样 px）
+    uniform float uChroma;     // 色散位移（降采样 px）
+
+    half4 main(float2 fragCoord) {
+        float2 halfSize = uSize * 0.5;
+        float2 p = fragCoord - halfSize;
+        float2 q = abs(p) - (halfSize - float2(uRadius));
+        float sd = length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - uRadius;
+        float inside = -sd;                              // >0 在形状内
+        float t = clamp(inside / uBand, 0.0, 1.0);       // 1=深处 0=贴边
+        float disp = (1.0 - t) * uAmount;
+        float2 dir = p / (length(p) + 0.0001);           // 向外的方向
+        float2 lo = float2(0.0);
+        float2 hi = uSize - float2(1.0);
+        float2 base = clamp(fragCoord + dir * disp, lo, hi);
+        half4 c = inputShader.eval(base);
+        if (uChroma > 0.5 && disp > 0.0) {
+            float2 ca = dir * disp * 0.35;
+            half4 cr = inputShader.eval(clamp(base + ca, lo, hi));
+            half4 cb = inputShader.eval(clamp(base - ca, lo, hi));
+            c = half4(cr.r, c.g, cb.b, c.a);
+        }
+        return c;
+    }
+"""
+
+/**
+ * 液态玻璃效果链：模糊 → 光学配方 → 色彩混合 → 折射着色器。
+ * 抽出来让 [DGlassPanel] 和 [DGlassSurface] 共用同一套光学。
+ */
+@Composable
+private fun Modifier.liquidGlassDraw(
+    backdrop: LayerBackdrop,
+    shape: Shape,
+    blurRadius: Float,
+    cornerDp: Dp,
+    refraction: Boolean,
+    highlight: Highlight,
+): Modifier {
+    val density = LocalDensity.current
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            noiseCoefficient = BlurDefaults.NoiseCoefficient
+            blur(with(density) { blurRadius.dp.toPx() })
+            colorControls(brightness = 0.04f, contrast = 1.08f, saturation = 1.45f)
+            blendColors(
+                BlurColors(
+                    blendColors = listOf(
+                        BlendColorEntry(Color.White.copy(alpha = 0.16f), BlurBlendMode.Screen),
+                        BlendColorEntry(Color.Black.copy(alpha = 0.06f), BlurBlendMode.Overlay),
+                    ),
+                ),
+            )
+            if (refraction) {
+                runtimeShaderEffect(
+                    key = "patnest_liquid_refraction",
+                    shaderString = LIQUID_REFRACTION_AGSL,
+                    uniformShaderName = "inputShader",
+                ) {
+                    // 官方要求：像素空间 uniform 必须除以 downscaleFactor，
+                    // 折射几何才会落在（降采样后的）图层范围内
+                    val ds = downscaleFactor.toFloat()
+                    setFloatUniform("uSize", size.width / ds, size.height / ds)
+                    setFloatUniform("uRadius", with(density) { cornerDp.toPx() } / ds)
+                    setFloatUniform("uBand", with(density) { 16.dp.toPx() } / ds)
+                    setFloatUniform("uAmount", with(density) { 14.dp.toPx() } / ds)
+                    setFloatUniform("uChroma", with(density) { 2.5f.dp.toPx() } / ds)
+                }
+            }
+        },
+        highlight = { highlight },
+    )
+}
+
+/**
  * 玻璃面板（登录页表单卡等 Column 内容场景），显式传入背景记录器。
  *
  * @param backdrop [rememberDGlassBackdrop] 返回的背景记录器
- * @param tint    极薄中和层：只统一底色，通透感来自上面的光学配方
- * @param blurRadius 模糊半径（dp），库内部转像素，官方悬浮栏 20 / 弹层 60
+ * @param tint    极薄中和层：只统一底色，通透感来自光学配方与折射
+ * @param blurRadius 模糊半径（dp），官方悬浮栏 20 / 弹层 60
+ * @param cornerDp 圆角半径（dp），折射 SDF 用，与传入 shape 的圆角保持一致
+ * @param refraction 是否启用液态折射（大面积卡建议开，视觉最「液」）
  */
 @Composable
 fun DGlassPanel(
@@ -119,19 +194,15 @@ fun DGlassPanel(
     shape: Shape = DShape.Lg,
     tint: Color = Color.White.copy(alpha = 0.22f),
     blurRadius: Float = 24f,
+    cornerDp: Dp = 12.dp,
+    refraction: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (isGlassSupported) {
         Box(
             modifier
                 .clip(shape)
-                .textureBlur(
-                    backdrop = backdrop,
-                    shape = shape,
-                    blurRadius = blurRadius,
-                    colors = rememberDGlassOptics(),
-                    highlight = rememberDGlassHighlight(),
-                )
+                .liquidGlassDraw(backdrop, shape, blurRadius, cornerDp, refraction, rememberDGlassHighlight())
                 .background(tint),
         ) {
             androidx.compose.foundation.layout.Column(content = content)
@@ -149,14 +220,16 @@ fun DGlassPanel(
 }
 
 /**
- * 通用玻璃面（任意内容、跟随主题的自动退化）。
+ * 通用液态玻璃面（任意内容、跟随主题的自动退化）。
  *
  * 与 [DGlassPanel] 的差别：不需要显式传 backdrop——从 [LocalDGlassBackdrop] 取
  * 当前骨架记录的页面背景；取不到（或设备不支持）就退化为 [fallbackColor] 实体面，
  * 布局与内容零差异。浮层组件（结算栏 / 底部 Tab / Toast）统一走这里。
  *
- * tint 默认只有 10%：通透感来自 [rememberDGlassOptics] 的光学配方与边缘光，
- * tint 只是极薄的中和层——给高了就回到奶白磨砂板。
+ * tint 默认只有 10%：通透感来自光学配方、边缘光与液态折射，tint 只是极薄的中和层。
+ * 矮表面（条状浮层）折射带宽 16dp 也只占小半高度，不会糊成一团。
+ *
+ * @param cornerDp 折射 SDF 的圆角半径，需与 shape 的实际圆角一致（胶囊/圆形传半径）
  */
 @Composable
 fun DGlassSurface(
@@ -164,6 +237,8 @@ fun DGlassSurface(
     shape: Shape = DShape.Lg,
     tint: Color = DColor.Card.copy(alpha = 0.10f),
     blurRadius: Float = 24f,
+    cornerDp: Dp = 12.dp,
+    refraction: Boolean = true,
     fallbackColor: Color = DColor.Card,
     fallbackBorderColor: Color = DColor.Line,
     content: @Composable BoxScope.() -> Unit,
@@ -173,11 +248,12 @@ fun DGlassSurface(
         Box(
             modifier
                 .clip(shape)
-                .textureBlur(
+                .liquidGlassDraw(
                     backdrop = backdrop,
                     shape = shape,
                     blurRadius = blurRadius,
-                    colors = rememberDGlassOptics(),
+                    cornerDp = cornerDp,
+                    refraction = refraction,
                     highlight = rememberDGlassBarHighlight(),
                 )
                 .background(tint),

@@ -239,6 +239,7 @@ private fun DToastHost(store: MobileState, backdrop: LayerBackdrop?, modifier: M
                 // 玻璃分支比实体降一档不透明度：底色发暗但能透出身后内容，更通透
                 tint = DColor.Toast.copy(alpha = 0.72f),
                 blurRadius = 28f,
+                cornerDp = 20.dp,
                 fallbackColor = DColor.Toast,
                 fallbackBorderColor = Color.Transparent,
             ) {

@@ -131,6 +131,7 @@ fun DBottomTabs(active: DTab, nav: DNav) {
             modifier = Modifier.fillMaxWidth(),
             // 与玻璃面相接的只有上缘：顶部两个圆角，下缘贴屏幕底
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            cornerDp = 18.dp,
         ) {
             Row(
                 Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp).padding(top = 8.dp),

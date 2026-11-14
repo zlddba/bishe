@@ -1180,6 +1180,7 @@ fun D09Login(nav: DNav) {
                         shape = CircleShape,
                         tint = Color.White.copy(alpha = 0.20f),
                         blurRadius = 18f,
+                        cornerDp = 17.dp,
                         fallbackColor = DColor.Scrim,
                         fallbackBorderColor = Color.Transparent,
                     ) {
