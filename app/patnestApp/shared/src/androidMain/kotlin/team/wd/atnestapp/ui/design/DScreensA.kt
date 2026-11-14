@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -1131,9 +1132,11 @@ fun D09Login(nav: DNav) {
     // ① 背景层（页面底色 + 品牌渐变 hero + 装饰圆）记录进 backdrop；
     // ② 前景滚动列里，登录表单卡是 DGlassPanel，真实模糊它身后骑跨的渐变。
     //    Android 13 以下 DGlassPanel 自动退化为实体卡，布局不变。
+    // 登录页不走骨架，这里自己 provide：页内玻璃面（返回钮）才能取到背景记录器。
     val backdrop = rememberDGlassBackdrop()
 
-    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalDGlassBackdrop provides backdrop) {
+        Box(Modifier.fillMaxSize()) {
         // ① 被玻璃模糊的背景层（不透明内容才值得记录）
         Box(Modifier.matchParentSize().dGlassBackdropSource(backdrop)) {
             Column(Modifier.fillMaxSize().background(DColor.Bg)) {
@@ -1258,6 +1261,7 @@ fun D09Login(nav: DNav) {
             Spacer(Modifier.navigationBarsPadding())
             }
         }
+    }
     }
 }
 
