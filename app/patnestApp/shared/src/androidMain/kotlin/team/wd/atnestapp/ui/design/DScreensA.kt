@@ -890,9 +890,7 @@ fun D07Profile(nav: DNav) {
         backable = false,
     ) {
         Column(
-            Modifier.fillMaxWidth()
-                .dGlassPanelStyle()
-                .background(DColor.HeroGradient, alpha = 0.68f)
+            Modifier.fillMaxWidth().background(DColor.HeroGradient)
                 .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

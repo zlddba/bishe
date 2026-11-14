@@ -325,9 +325,7 @@ fun DHero(
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Column(
-        Modifier.fillMaxWidth()
-            .dGlassPanelStyle()
-            .background(DColor.HeroGradient, alpha = 0.68f)
+        Modifier.fillMaxWidth().background(DColor.HeroGradient)
             .then(if (insetTop) Modifier.statusBarsPadding() else Modifier)
             .padding(horizontal = LocalDWindow.current.gutter, vertical = 20.dp),
     ) {
