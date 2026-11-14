@@ -638,7 +638,7 @@ fun D19OrderDetail(nav: DNav) {
     val store = DLocalStore.current
     val order = store.selectedOrder
     if (order == null) {
-        DFrame(nav = nav, title = "订单详情") {
+        DMiuixScrollScaffold(nav = nav, title = "订单详情") {
             DEmpty("还没有选择订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
@@ -998,7 +998,7 @@ fun D21Points(nav: DNav) {
 fun D22PaySuccess(nav: DNav) {
     val store = DLocalStore.current
     val order = store.selectedOrder
-    DFrame(
+    DMiuixScrollScaffold(
         nav = nav,
         title = null,
         backable = false,
@@ -1059,7 +1059,7 @@ fun D23SitterCompare(nav: DNav) {
     LaunchedEffect(Unit) { store.loadSitters() }
     val list = store.sitters.take(3)
     if (list.size < 2) {
-        DFrame(nav = nav, title = "机构对比") {
+        DMiuixScrollScaffold(nav = nav, title = "机构对比") {
             DPad {
                 if (store.sittersLoading) DLoading() else DEmpty("至少需要两家机构才能对比", "去找机构") {
                     nav.tab(DTab.Sitters)

@@ -201,6 +201,7 @@ fun DMiuixScrollScaffold(
     backable: Boolean = true,
     immersiveTop: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
+    bottomBar: (@Composable () -> Unit)? = null,
     refreshing: Boolean? = null,
     onRefresh: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -232,7 +233,7 @@ fun DMiuixScrollScaffold(
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            val needBottomInset = activeTab == null
+            val needBottomInset = bottomBar == null && activeTab == null
             val colModifier = Modifier
                 .dPageWidth(win)
                 .fillMaxSize()
@@ -253,6 +254,12 @@ fun DMiuixScrollScaffold(
                 Column(colModifier, content = content)
             }
         }
+        if (bottomBar != null) {
+            // 底部结算栏同样限宽：宽屏下按钮不会拉成通栏长条
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.dPageWidth(win)) { bottomBar() }
+            }
+        }
         if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)
     }
 }
@@ -268,6 +275,7 @@ fun DMiuixListScaffold(
     activeTab: DTab? = null,
     backable: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
+    bottomBar: (@Composable () -> Unit)? = null,
     refreshing: Boolean? = null,
     onRefresh: (() -> Unit)? = null,
     // LazyColumn 的 DSL 是非 Composable 的接收者 lambda（item 内容才是 @Composable），
@@ -301,7 +309,7 @@ fun DMiuixListScaffold(
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            val needBottomInset = activeTab == null
+            val needBottomInset = bottomBar == null && activeTab == null
             val scrollModifier = Modifier
                 .dPageWidth(win)
                 .fillMaxSize()
@@ -326,6 +334,11 @@ fun DMiuixListScaffold(
                     contentPadding = PaddingValues(bottom = 14.dp),
                     content = content,
                 )
+            }
+        }
+        if (bottomBar != null) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.dPageWidth(win)) { bottomBar() }
             }
         }
         if (activeTab != null && win.isCompact) DBottomTabs(activeTab, nav)

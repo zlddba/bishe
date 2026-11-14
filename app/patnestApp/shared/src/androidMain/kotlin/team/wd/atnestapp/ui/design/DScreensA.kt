@@ -273,7 +273,7 @@ fun D03SitterDetail(nav: DNav) {
     LaunchedEffect(sitter?.id) { sitter?.let { store.loadSitterExtras(it.id) } }
 
     if (sitter == null) {
-        DFrame(nav = nav, title = "机构详情") {
+        DMiuixScrollScaffold(nav = nav, title = "机构详情") {
             DEmpty("还没有选择机构", "去找机构") { nav.tab(DTab.Sitters) }
         }
         return
@@ -545,7 +545,7 @@ fun D04Booking(nav: DNav) {
         }
     }
     if (sitter == null) {
-        DFrame(nav = nav, title = "预约下单") {
+        DMiuixScrollScaffold(nav = nav, title = "预约下单") {
             DEmpty("还没有选择机构", "去找机构") { nav.tab(DTab.Sitters) }
         }
         return
@@ -553,7 +553,7 @@ fun D04Booking(nav: DNav) {
     val days = store.bookingDays
     val total = store.estimate?.totalAmount
 
-    DFrame(nav = nav, title = "预约下单") {
+    DMiuixScrollScaffold(nav = nav, title = "预约下单") {
         DStepHeader(1, "选择寄养日期")
         DPad {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1275,7 +1275,7 @@ fun D10Checkout(nav: DNav) {
     }
 
     if (order == null) {
-        DFrame(nav = nav, title = "收银台") {
+        DMiuixScrollScaffold(nav = nav, title = "收银台") {
             DEmpty("没有待支付的订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
@@ -1363,14 +1363,14 @@ fun D11ReviewWrite(nav: DNav) {
     var content by remember { mutableStateOf("") }
 
     if (order == null) {
-        DFrame(nav = nav, title = "写评价") {
+        DMiuixScrollScaffold(nav = nav, title = "写评价") {
             DEmpty("没有可评价的订单", "查看订单") { nav.go(DScreen.Orders) }
         }
         return
     }
     val average = (overall + service + environment + hygiene) / 4.0
 
-    DFrame(nav = nav, title = "评价 · ${order.org}") {
+    DMiuixScrollScaffold(nav = nav, title = "评价 · ${order.org}") {
         DPad {
             Spacer(Modifier.height(14.dp))
             DCard {
