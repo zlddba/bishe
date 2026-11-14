@@ -1,48 +1,122 @@
-name: Build
+name: Release
 
-# 默认只在打 tag（v1.2.0）或手动触发时构建，避免每次 push 都烧私有仓库的 Actions 分钟数。
-# 想每次 push master 都构建：取消下面 push 分支的注释即可。
+# 发布的前提（三者缺一不可，verify job 会逐项校验并在日志里指出缺哪个）：
+#   1. 存在发布分支 release/vX.Y.Z
+#   2. 存在同名 tag vX.Y.Z（且提交在发布分支上）
+#   3. 存在发布文档 docs/release/vX.Y.Z.md，正文即 Release 页的发布说明
+#
+# 触发方式：
+#   - 推送 tag：git push origin v1.2.0  （主路径）
+#   - 手动重跑：Actions → Release → Run workflow，填 tag（例如 v1.2.0）
+#
+# 校验通过后并行构建四类产物，全部成功后自动创建 / 更新 GitHub Release。
 on:
-  workflow_dispatch:
-    inputs:
-      upload_android:
-        description: "构建 Android Release APK"
-        type: boolean
-        default: true
-      upload_desktop:
-        description: "构建桌面端安装包（deb/msi/dmg）"
-        type: boolean
-        default: true
-      upload_bundle:
-        description: "构建后端 + 管理后台部署包"
-        type: boolean
-        default: true
-      upload_miniapp:
-        description: "打包小程序 uni-app 工程（zip 源码包）"
-        type: boolean
-        default: true
   push:
     tags:
       - "v*"
-#    branches:
-#      - master
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag（如 v1.2.0，必填；留空则取当前 ref）"
+        type: string
+        required: false
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ inputs.tag || github.ref_name }}
+  # 发布不取消进行中的同类任务：宁可排队，也不要打断正在上传附件的流程
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  # 后端二进制 + 管理后台 dist + Docker 部署文件，复用仓库里的 build.sh
+  # ---------------------------------------------------------------- 前置校验
+  verify:
+    name: 校验发布条件
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      doc: ${{ steps.check.outputs.doc }}
+    steps:
+      # 这里不指定 ref：tag 推送时 checkout 到该 tag，手动触发时留在所选 ref。
+      # 具体 tag 由下面的脚本解析并单独 fetch，这样 tag 打错时能给出一句人话，而不是 checkout 报 reference not found。
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检查分支 / tag / 发布文档
+        id: check
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          TAG="${INPUT_TAG:-}"
+          if [[ -z "$TAG" ]]; then
+            # 手动触发没填 tag，且当前 ref 不是 tag 时，直接拒绝
+            if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+              echo "::error::手动触发请填写要发布的 tag（例如 v1.2.0），或直接用 git push origin v1.2.0 触发"
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          TAG="${TAG#refs/tags/}"
+
+          fail() { echo "::error::$*"; exit 1; }
+
+          [[ "$TAG" == v* ]] || fail "标签必须以 v 开头（例：v1.2.0），当前是 '$TAG'"
+          VERSION="${TAG#v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || fail "标签格式必须是 vX.Y.Z（例：v1.2.0），当前是 '$TAG'"
+
+          BRANCH="release/v${VERSION}"
+          DOC="docs/release/v${VERSION}.md"
+
+          # 1) tag 必须存在于远端
+          git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 \
+            || fail "远端不存在 tag ${TAG}，请先 git push origin ${TAG}"
+          git fetch --no-tags origin "+refs/tags/${TAG}:refs/tags/${TAG}"
+          # 之后所有检查都以该 tag 的提交内容为准：手动触发时工作区可能停在分支上
+          git checkout --detach --quiet "refs/tags/${TAG}"
+
+          # 2) 发布分支必须存在
+          git ls-remote --exit-code --heads origin "refs/heads/${BRANCH}" >/dev/null 2>&1 \
+            || fail "远端不存在发布分支 ${BRANCH}，请先从 master 切出该分支并推送"
+          git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+
+          # 3) tag 的提交必须落在发布分支上（分支后续可继续提交，tag 不能凭空打）
+          TAG_SHA="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          BRANCH_SHA="$(git rev-parse "refs/remotes/origin/${BRANCH}")"
+          git merge-base --is-ancestor "$TAG_SHA" "$BRANCH_SHA" \
+            || fail "tag ${TAG}（${TAG_SHA:0:8}）不在分支 ${BRANCH}（${BRANCH_SHA:0:8}）上，请把该提交合入发布分支后重新打 tag"
+
+          # 4) 发布文档必须存在且非空，正文即 Release 说明
+          [[ -f "$DOC" ]] || fail "缺少发布文档 ${DOC}，请参照 docs/release/TEMPLATE.md 编写后再发布"
+          [[ -s "$DOC" ]] || fail "发布文档 ${DOC} 内容为空，Release 正文不能为空"
+
+          echo "标签：${TAG}"
+          echo "分支：${BRANCH}"
+          echo "发布文档：${DOC}（$(wc -l < "$DOC") 行）"
+
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "doc=${DOC}"
+          } >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------- 后端 + 管理后台部署包
   bundle:
     name: 部署包（API + 管理后台）
-    if: github.event_name != 'workflow_dispatch' || inputs.upload_bundle
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       - uses: actions/setup-go@v5
         with:
@@ -59,19 +133,10 @@ jobs:
         working-directory: webadmin/patnestServerAdminWeb
         run: npm ci --no-audit --no-fund
 
+      # 版本号取 tag，产物 release/patnest-docker-<version>.zip
       - name: Build bundle
         shell: bash
-        run: |
-          set -euo pipefail
-          VERSION=""
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if [[ -n "$VERSION" ]]; then
-            bash build.sh --version "$VERSION"
-          else
-            bash build.sh
-          fi
+        run: bash build.sh --version "${{ needs.verify.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -82,36 +147,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # 小程序不做编译：托管 runner 装不了 HBuilderX，这里只把 uni-app 工程打成 zip，
-  # 下载解压后用 HBuilderX 打开，再发行到微信开发者工具。
+  # ------------------------------------------------------- 小程序工程源码包
+  # 托管 runner 装不了 HBuilderX，所以不编译：只把工程打成 zip，
+  # 下载解压后用 HBuilderX 导入，再发行到微信开发者工具。
   miniapp:
     name: 小程序工程包（uniapp zip）
-    if: github.event_name != 'workflow_dispatch' || inputs.upload_miniapp
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - name: 解析版本号
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-          V=""
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            V="${GITHUB_REF_NAME#v}"
-          fi
-          if [[ -z "$V" ]]; then
-            V="$(sed -n 's/.*"versionName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' uniapp/patnestUniapp/manifest.json | head -n1)"
-          fi
-          echo "version=${V:-dev}" >> "$GITHUB_OUTPUT"
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       - name: 打包工程
         shell: bash
         run: |
           set -euo pipefail
           cd uniapp
-          NAME="patnest-uniapp-${{ steps.ver.outputs.version }}"
+          NAME="patnest-uniapp-${{ needs.verify.outputs.version }}"
           zip -qr "../${NAME}.zip" patnestUniapp \
             -x "patnestUniapp/unpackage/*" \
                "patnestUniapp/.hbuilderx/*" \
@@ -126,14 +180,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Android Release APK：签名与接口地址全部来自 Secrets，不在仓库里存密钥
+  # ------------------------------------------------------------ Android APK
+  # 签名、接口地址、高德 Key 全部来自 Secrets，仓库里不存密钥
   android:
     name: Android APK
-    if: github.event_name != 'workflow_dispatch' || inputs.upload_android
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       - uses: actions/setup-java@v4
         with:
@@ -149,7 +206,7 @@ jobs:
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses > /dev/null || true
 
-      # Android 端在构建期读 app/patnestApp/.env 注入接口地址与高德 Key；
+      # Android 端构建期读 app/patnestApp/.env 注入接口地址与高德 Key；
       # .env 被 .gitignore 排除，这里按 Secrets 生成一份。
       - name: Write .env
         working-directory: app/patnestApp
@@ -189,10 +246,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # 桌面端安装包：jpackage 只能打当前系统的格式，所以三个系统各跑一份
+  # ---------------------------------------------------- 桌面端安装包（三系统）
+  # jpackage 只能打当前系统的格式，所以三个系统各跑一份
   desktop:
     name: 桌面端（${{ matrix.format }}）
-    if: github.event_name != 'workflow_dispatch' || inputs.upload_desktop
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +271,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
 
       - uses: actions/setup-java@v4
         with:
@@ -234,3 +294,44 @@ jobs:
           path: app/patnestApp/desktopApp/build/compose/binaries/main/${{ matrix.format }}/${{ matrix.glob }}
           if-no-files-found: error
           retention-days: 14
+
+  # ------------------------------------------------------------- 发布 Release
+  # 发布说明直接用 docs/release/vX.Y.Z.md，不在这里重复拼文案：
+  # 文档改了什么，Release 页就是什么。
+  release:
+    name: 发布 GitHub Release
+    needs: [verify, bundle, miniapp, android, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
+          fetch-depth: 1
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          DOC: ${{ needs.verify.outputs.doc }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh dist
+          TITLE="PatNest 宠栖 ${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG 已存在 Release，按发布文档覆盖更新"
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$DOC"
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" --title "$TITLE" --notes-file "$DOC" dist/*
+          fi
+          echo "发布完成：$(gh release view "$TAG" --json url -q .url)"

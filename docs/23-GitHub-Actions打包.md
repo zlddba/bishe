@@ -15,7 +15,17 @@
 | 桌面端 deb / msi / dmg | 可以（三个系统各跑一份） | Compose Desktop 的 jpackage 只能打当前系统格式 |
 | 微信小程序 | 可以（只打包工程，不编译） | 产出 `patnest-uniapp-<version>.zip`，下载后用 HBuilderX 导入发行 |
 
-工作流默认只在**打 tag**（`v1.2.0`）或**手动触发**时运行，避免每次 push 都消耗私有仓库的 Actions 分钟数。需要每次 push 都构建时，把文件里 `push.branches` 的注释取消即可。
+工作流只在**推送 tag**（`v1.2.0`）或**手动指定 tag 重跑**时运行，不跟随 push 分支，避免每次提交都消耗私有仓库的 Actions 分钟数。
+
+**发布硬前提（三者缺一不可）**：
+
+| 条件 | 说明 | 缺失时的报错 |
+| --- | --- | --- |
+| 发布分支 | 远端存在 `release/vX.Y.Z` | `远端不存在发布分支 release/v1.2.0` |
+| 同名 tag | 远端存在 `vX.Y.Z`，且其提交在发布分支上 | 缺 tag 或 tag 不在该分支 |
+| 发布文档 | `docs/release/vX.Y.Z.md` 存在且非空 | `缺少发布文档 …` |
+
+`verify` job 负责逐项校验，任何一项不满足都会在构建开始前失败，不会出现「打了一半才发现没文档」。
 
 ---
 
@@ -56,9 +66,39 @@ base64 -w0 app/patnestApp/buildkeys/patnestapp_release.jks > release.jks.b64
 
 ---
 
-## 三、运行与产物
+## 三、发布流程与产物
 
-手动触发：**Actions → Build → Run workflow**，可以单独勾选只打某一份产物。
+### 3.1 一张图看懂
+
+```
+release/v1.2.0 分支 ──┐
+                      ├─→ verify（校验分支/tag/文档）──→ 并行构建 ──→ Release（正文=发布文档）
+tag v1.2.0 ───────────┘
+docs/release/v1.2.0.md ┘
+```
+
+### 3.2 操作步骤
+
+```bash
+git switch -c release/v1.2.0              # 1. 从 master 切发布分支
+cp docs/release/TEMPLATE.md docs/release/v1.2.0.md   # 2. 写发布说明
+$EDITOR docs/release/v1.2.0.md
+git add docs/release/v1.2.0.md && git commit -m "docs: v1.2.0 发布说明"
+git push origin release/v1.2.0            # 3. 推分支
+git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
+```
+
+手动重跑：**Actions → Release → Run workflow**，在 `tag` 输入框填 `v1.2.0`。适用于构建失败后重试、或补发附件；不会重复创建 Release，同名时改为覆盖正文与附件。
+
+### 3.3 发布文档即 Release 正文
+
+`docs/release/vX.Y.Z.md` 的全文会作为 Release 说明提交，流水线不额外拼文案。好处是发布说明跟着代码走、能 review、能回滚，不用在 Actions 日志和网页表单之间来回粘贴。
+
+- 模板：`docs/release/TEMPLATE.md`（版本亮点 / 新增功能 / 问题修复 / 升级说明 / 已知问题 / 校验）
+- 文件名必须与 tag 严格对应，`v` 前缀不能省
+- 空文件会被 `verify` 拒绝
+
+### 3.4 产物
 
 | Artifact | 内容 |
 | --- | --- |
@@ -67,7 +107,21 @@ base64 -w0 app/patnestApp/buildkeys/patnestapp_release.jks > release.jks.b64
 | `patnest-desktop-deb` / `-msi` / `-dmg` | 对应系统的安装包 |
 | `patnest-uniapp-project` | `patnest-uniapp-<version>.zip`，小程序 HBuilderX 工程源码包（不含 `unpackage/`） |
 
-保留 14 天。打 tag 时版本号取 tag 去掉 `v`；手动触发时部署包取 `webadmin/.../package.json` 的版本，小程序包取 `manifest.json` 的 `versionName`。
+四类产物同时上传为 Artifact（保留 14 天）与 Release 附件。版本号统一取 tag 去掉 `v`，不再从 `package.json` / `manifest.json` 猜。
+
+### 3.5 校验失败对照表
+
+`verify` 用本地临时仓库跑过六个用例，正常与拦截两条路径都能走通：
+
+| 日志里的报错 | 缺什么 | 怎么补 |
+| --- | --- | --- |
+| `远端不存在 tag v1.2.0` | tag 没推 | `git push origin v1.2.0` |
+| `远端不存在发布分支 release/v1.2.0` | 分支没推或名字不对 | `git switch -c release/v1.2.0 && git push origin release/v1.2.0` |
+| `tag v1.2.0（abc12345）不在分支 release/v1.2.0（def67890）上` | tag 打在分支外的提交上 | 把该提交合入发布分支，删 tag 重打：`git tag -d v1.2.0 && git push origin :refs/tags/v1.2.0` |
+| `缺少发布文档 docs/release/v1.2.0.md` | 没写发布说明 | 复制 `docs/release/TEMPLATE.md` 改名 |
+| `发布文档 … 内容为空` | 文件是空的 | 补内容；Release 正文不能为空 |
+| `标签必须以 v 开头` / `标签格式必须是 vX.Y.Z` | tag 命名不合规 | 用 `v1.2.0` 这种三段式 |
+| `手动触发请填写要发布的 tag` | 在分支上点 Run workflow 但没填 tag | 填 tag，或改用推 tag 触发 |
 
 ### 两个产物注意事项
 
@@ -84,7 +138,7 @@ base64 -w0 app/patnestApp/buildkeys/patnestapp_release.jks > release.jks.b64
 
 - 产物：`patnest-uniapp-project` → `patnest-uniapp-<version>.zip`
 - 排除：`unpackage/`、`.hbuilderx/`、`node_modules/`
-- 版本号：tag 去掉 `v`；手动触发时取 `manifest.json` 的 `versionName`
+- 版本号：tag 去掉 `v`
 
 拿到 zip 之后：
 
@@ -149,11 +203,11 @@ npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appi
 
 ## 五、成本与限制
 
-- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。桌面端三系统一次约 30~50 分钟，建议只在发版时跑；日常调试用 `workflow_dispatch` 单独勾选。
+- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。桌面端三系统一次约 30~50 分钟，所以只在打 tag 时跑；日常调试在本地构建，不要为了验证代码去推 tag。
 - 首次构建要下载 Gradle 9.8.2、Android SDK 37、Kotlin/Compose 依赖，单次可能 15~25 分钟；`gradle/actions/setup-gradle` 已开启缓存，后续会快很多。
 - Android 编译需要 SDK Platform 37；工作流只接受 license，缺失的 platform/build-tools 由 AGP 自动下载。若 AGP 版本更新导致包名变化，在 `sdkmanager` 里显式安装即可。
 - 桌面端 macOS runner 是 arm64，打出来的 dmg 只适用于 Apple Silicon；要 Intel 包需要 `macos-13`。
-- 工作流没有做「发布 Release / 上传到服务器」，只产出 Artifact。需要自动发布可以再加 `softprops/action-gh-release` 或 rsync/scp 步骤。
+- 流水线只负责**构建 + 发布 Release**，不会自动部署到服务器：部署包下载后仍按 `docs/04-部署与热更新.md` 的蓝绿流程上线。想连部署一起自动化，再加 rsync/scp 步骤与环境审批。
 
 ---
 

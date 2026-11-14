@@ -24,11 +24,13 @@ temp/
 !.env.example
 
 # ===== 构建产物（防漏网之鱼，各模块 .gitignore 已有更细规则）=====
-dist/
-build/
-out/
-target/
-release/
+# 只忽略仓库根目录的构建产物目录 /release，
+# 不要写成 release/：那样会把 docs/release 这类同名的文档目录一起忽略掉
+/dist/
+/build/
+/out/
+/target/
+/release/
 .gocache/
 .gotmp
 .workbuddy/
