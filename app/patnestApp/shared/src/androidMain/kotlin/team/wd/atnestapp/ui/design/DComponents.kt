@@ -115,6 +115,10 @@ internal tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+/** 宽屏下把内容限宽到 [DWindow.contentMaxWidth]，窄屏原样放行（顶栏/骨架共用）。 */
+internal fun Modifier.dPageWidth(win: DWindow): Modifier =
+    if (win.hasContentLimit) this.widthIn(max = win.contentMaxWidth) else this
+
 @Composable
 fun DTopBar(
     title: String,
