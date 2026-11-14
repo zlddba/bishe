@@ -8,21 +8,22 @@
 
 ## 一、能打什么
 
-| 产物 | 托管 runner | 说明 |
-| --- | --- | --- |
-| 后端二进制 + 管理后台 dist + Docker 部署包 | 可以（ubuntu） | 直接复用 `build.sh`，产出 `release/patnest-docker-*.zip` |
-| Android Release APK | 可以（ubuntu + Android SDK） | 签名、接口地址、高德 Key 全部走 Secrets |
-| 桌面端 Linux deb / rpm / AppImage / tar.gz | 可以（ubuntu，一次编译出四种） | deb/rpm 走 jpackage，AppImage 用 appimagetool 封 app-image 目录 |
-| 桌面端 msi / dmg | 可以（Windows / macOS 各一份） | jpackage 只能打当前系统格式 |
-| 微信小程序 | 可以（只打包工程，不编译） | 产出 `patnest-uniapp-<version>.zip`，下载后用 HBuilderX 导入发行 |
+| 产物 | 架构 | 构建 runner | 说明 |
+| --- | --- | --- | --- |
+| 后端二进制 + 管理后台 dist + Docker 部署包 | amd64 + arm64 | `ubuntu-latest`（Go 交叉编译） | 复用 `build.sh --arch`，容器镜像由目标架构宿主机本地构建 |
+| Android Release APK | 仅 arm64-v8a | `ubuntu-latest` | `ndk.abiFilters` 限定 64 位 ARM；签名、接口地址、高德 Key 走 Secrets |
+| 桌面端 Linux deb / rpm / AppImage / tar.gz | amd64 + arm64 | `ubuntu-latest` / `ubuntu-24.04-arm` | jpackage 不能交叉打包，两种架构各跑一次；AppImage 用对应架构的 appimagetool |
+| 桌面端 Windows msi | x64 + arm64 | `windows-latest` / `windows-11-arm` | jpackage 只能打当前系统格式 |
+| 桌面端 macOS dmg | 仅 arm64 | `macos-latest` | 按约定不出 Intel 版 |
+| 微信小程序 | 无架构概念 | `ubuntu-latest` | 只打包工程源码，产出 `patnest-uniapp-<version>.zip` |
 
-工作流只在**推送 tag**（`v1.2.0`）或**手动指定 tag 重跑**时运行，不跟随 push 分支，避免每次提交都消耗私有仓库的 Actions 分钟数。
+工作流只在**推送 tag**（`v*`，例 `v2.0.1`）或**手动指定 tag 重跑**时运行，不跟随 push 分支，避免每次提交都消耗私有仓库的 Actions 分钟数。
 
 **发布硬前提（三者缺一不可）**：
 
 | 条件 | 说明 | 缺失时的报错 |
 | --- | --- | --- |
-| 发布分支 | 远端存在 `release/vX.Y.Z` | `远端不存在发布分支 release/v1.2.0` |
+| 发布分支 | 远端存在 `release/vX.Y.Z` | `远端不存在发布分支 release/v2.0.2` |
 | 同名 tag | 远端存在 `vX.Y.Z`，且其提交在发布分支上 | 缺 tag 或 tag 不在该分支 |
 | 发布文档 | `docs/release/vX.Y.Z.md` 存在且非空 | `缺少发布文档 …` |
 
@@ -108,24 +109,24 @@ Environment secrets 只有在 job 显式声明 `environment: <环境名>` 时才
 ### 3.1 一张图看懂
 
 ```
-release/v1.2.0 分支 ──┐
+release/v2.0.2 分支 ──┐
                       ├─→ verify（校验分支/tag/文档）──→ 并行构建 ──→ Release（正文=发布文档）
-tag v1.2.0 ───────────┘
-docs/release/v1.2.0.md ┘
+tag v2.0.2 ───────────┘
+docs/release/v2.0.2.md ┘
 ```
 
 ### 3.2 操作步骤
 
 ```bash
-git switch -c release/v1.2.0              # 1. 从 master 切发布分支
-cp docs/release/TEMPLATE.md docs/release/v1.2.0.md   # 2. 写发布说明
-$EDITOR docs/release/v1.2.0.md
-git add docs/release/v1.2.0.md && git commit -m "docs: v1.2.0 发布说明"
-git push origin release/v1.2.0            # 3. 推分支
-git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
+git switch -c release/v2.0.2              # 1. 从 master 切发布分支
+cp docs/release/TEMPLATE.md docs/release/v2.0.2.md   # 2. 写发布说明
+$EDITOR docs/release/v2.0.2.md
+git add docs/release/v2.0.2.md && git commit -m "docs: v2.0.2 发布说明"
+git push origin release/v2.0.2            # 3. 推分支
+git tag v2.0.2 && git push origin v2.0.2  # 4. 打 tag 触发流水线
 ```
 
-手动重跑：**Actions → Release → Run workflow**，在 `tag` 输入框填 `v1.2.0`。适用于构建失败后重试、或补发附件；不会重复创建 Release，同名时改为覆盖正文与附件。
+手动重跑：**Actions → Release → Run workflow**，在 `tag` 输入框填已存在的 tag（例 `v2.0.1`）。下文示例统一用假设的下一个版本 `v2.0.2`。适用于构建失败后重试、或补发附件；不会重复创建 Release，同名时改为覆盖正文与附件。
 
 ### 3.3 发布文档即 Release 正文
 
@@ -135,17 +136,37 @@ git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
 - 文件名必须与 tag 严格对应，`v` 前缀不能省
 - 空文件会被 `verify` 拒绝
 
-### 3.4 产物
+### 3.4 产物与命名规范
 
-| Artifact | 内容 |
+统一格式 `patnest-<版本>-<平台>-<架构>.<扩展名>`，**架构标识必写**（源码包除外）。v2.0.2 起一次发布共 15 个附件、11 个 job 实例。
+
+| Artifact | 文件 |
 | --- | --- |
-| `patnest-deploy-bundle` | `patnest-docker-<version>.zip`，含 API/migrate 二进制、`web/`、`db/migrations`、compose 与安装脚本 |
-| `patnest-android-apk` | `androidApp-release.apk` |
-| `patnest-desktop-linux` | Linux 四种：`*.deb`、`*.rpm`、`PatNest-*.AppImage`、`patnest-desktop-*-linux-x64.tar.gz` |
-| `patnest-desktop-msi` / `-dmg` | Windows / macOS 安装包 |
-| `patnest-uniapp-project` | `patnest-uniapp-<version>.zip`，小程序 HBuilderX 工程源码包（不含 `unpackage/`） |
+| `patnest-server-linux-amd64` / `-arm64` | `patnest-server-<version>-linux-<arch>.zip` |
+| `patnest-android-apk` | `patnest-<version>-android-arm64.apk` |
+| `patnest-desktop-linux-amd64` / `-arm64` | `patnest-<version>-linux-<arch>.deb` / `.rpm` / `.AppImage` / `.tar.gz` |
+| `patnest-desktop-windows-x64` / `-arm64` | `patnest-<version>-windows-<arch>.msi` |
+| `patnest-desktop-macos-arm64` | `patnest-<version>-macos-arm64.dmg` |
+| `patnest-uniapp-project` | `patnest-uniapp-<version>.zip` |
 
-四类产物同时上传为 Artifact（保留 14 天）与 Release 附件。版本号统一取 tag 去掉 `v`，不再从 `package.json` / `manifest.json` 猜。
+所有产物上传到 Artifact（保留 14 天）并挂到 Release。`release` job 用 `find dist -type f` 递归收集文件，避免把目录当附件传给 `gh`。
+
+### 3.4.1 架构矩阵实现要点
+
+- **jpackage 不支持交叉打包**：Linux / Windows 的 arm64 版本必须在 arm64 runner 上跑。GitHub 从 2026-01 起在私有仓库也开放了 `ubuntu-24.04-arm` / `windows-11-arm` 标准托管 runner，无需自托管。
+- **Compose Desktop 的原生库**：Skiko 提供 `skiko-awt-runtime-linux-arm64` 与 `skiko-awt-runtime-windows-arm64`，`compose.desktop.currentOs` 会按当前 runner 架构自动解析，不需要改依赖。
+- **AppImage 工具也要换架构**：amd64 用 `appimagetool-x86_64.AppImage`（`ARCH=x86_64`），arm64 用 `appimagetool-aarch64.AppImage`（`ARCH=aarch64`）。
+- **服务端只交叉编译二进制**：`build.sh --arch arm64` 设 `GOARCH=arm64`，包内 Dockerfile 用 `alpine:latest` / `nginx:latest` 多架构基础镜像，服务器按自身架构本地 build 镜像。CI 不构建、不推送容器镜像。
+- **Android**：`androidApp/build.gradle.kts` 的 `defaultConfig.ndk.abiFilters` 只保留 `arm64-v8a`；CI 上传前用 `unzip -l` 检查 APK 里没有 `lib/armeabi-v7a/`。
+- **macOS**：按约定只有 `macos-latest`（Apple Silicon），不接 `macos-*-intel`，省掉 10× 计费的 Intel job。
+
+### 3.4.2 命名规范的来源
+
+之前同一 Release 里出现过 4 套产品名（`androidApp` / `PatNest` / `patnest-*` / `team.wd.atnestapp`）和 4 套架构写法（无 / `x64` / `x86_64` / `amd64`）。现在：
+- `desktopApp/build.gradle.kts` 的 `packageName` 改成 `patnest`（不再拿 applicationId 当产品名）；
+- `build.sh` / `build.ps1` 的部署包名改成 `patnest-server-<version>-linux-<arch>`，amd64 也带架构后缀；
+- 各 job 在上传前把 jpackage / AGP / appimagetool 的原始文件名统一复制成规范名；
+- APK、msi、dmg、deb、rpm、tar.gz 全部带版本号与架构标识。
 
 ### 3.5 校验失败对照表
 
@@ -153,12 +174,12 @@ git tag v1.2.0 && git push origin v1.2.0  # 4. 打 tag 触发流水线
 
 | 日志里的报错 | 缺什么 | 怎么补 |
 | --- | --- | --- |
-| `远端不存在 tag v1.2.0` | tag 没推 | `git push origin v1.2.0` |
-| `远端不存在发布分支 release/v1.2.0` | 分支没推或名字不对 | `git switch -c release/v1.2.0 && git push origin release/v1.2.0` |
-| `tag v1.2.0（abc12345）不在分支 release/v1.2.0（def67890）上` | tag 打在分支外的提交上 | 把该提交合入发布分支，删 tag 重打：`git tag -d v1.2.0 && git push origin :refs/tags/v1.2.0` |
-| `缺少发布文档 docs/release/v1.2.0.md` | 没写发布说明 | 复制 `docs/release/TEMPLATE.md` 改名 |
+| `远端不存在 tag v2.0.2` | tag 没推 | `git push origin v2.0.2` |
+| `远端不存在发布分支 release/v2.0.2` | 分支没推或名字不对 | `git switch -c release/v2.0.2 && git push origin release/v2.0.2` |
+| `tag v2.0.2（abc12345）不在分支 release/v2.0.2（def67890）上` | tag 打在分支外的提交上 | 把该提交合入发布分支，删 tag 重打：`git tag -d v2.0.2 && git push origin :refs/tags/v2.0.2` |
+| `缺少发布文档 docs/release/v2.0.2.md` | 没写发布说明 | 复制 `docs/release/TEMPLATE.md` 改名 |
 | `发布文档 … 内容为空` | 文件是空的 | 补内容；Release 正文不能为空 |
-| `标签必须以 v 开头` / `标签格式必须是 vX.Y.Z` | tag 命名不合规 | 用 `v1.2.0` 这种三段式 |
+| `标签必须以 v 开头` / `标签格式必须是 vX.Y.Z` | tag 命名不合规 | 用 `v2.0.2` 这种三段式 |
 | `手动触发请填写要发布的 tag` | 在分支上点 Run workflow 但没填 tag | 填 tag，或改用推 tag 触发 |
 
 ### 两个产物注意事项
@@ -228,7 +249,7 @@ uniapp/patnestUniapp/
 ```bash
 npm ci
 npx uni build -p mp-weixin
-npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appid wx... --uvVersion 1.2.0
+npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appid wx... --uvVersion 2.0.2
 ```
 
 优点：全云端、可复现；缺点：要调整目录结构，HBuilderX 仍能打开 CLI 工程，但需要重新验证一轮。上传密钥同样要放进 Secrets（`WX_PRIVATE_KEY`）。
@@ -241,7 +262,8 @@ npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appi
 
 ## 五、成本与限制
 
-- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。桌面端 Windows / macOS / Linux 三组一次约 30~50 分钟，所以只在打 tag 时跑；日常调试在本地构建，不要为了验证代码去推 tag。
+- 私有仓库的 Actions 分钟数有限额：Linux 按 1 倍计，Windows 2 倍，macOS **10 倍**。双架构矩阵共 11 个 job 实例（9 个构建 + verify + release），累计计费约为早期 8-job 版本的 1.5~2 倍，所以只在打 tag 时跑；日常调试在本地构建，不要为了验证代码去推 tag。
+- `windows-11-arm` 上的 jpackage 依赖 WiX 工具链，若首次运行报 WiX 缺失，需在该镜像上显式安装后再重跑；其余 arm64 runner 的 setup-java / Gradle / Skiko 依赖均已验证可用。
 - 首次构建要下载 Gradle 9.8.2、Android SDK 37、Kotlin/Compose 依赖，单次可能 15~25 分钟；`gradle/actions/setup-gradle` 已开启缓存，后续会快很多。
 - Android 编译需要 SDK Platform 37；工作流只接受 license，缺失的 platform/build-tools 由 AGP 自动下载。若 AGP 版本更新导致包名变化，在 `sdkmanager` 里显式安装即可。
 - 桌面端 macOS runner 是 arm64，打出来的 dmg 只适用于 Apple Silicon；要 Intel 包需要 `macos-13`。
@@ -252,10 +274,11 @@ npx miniprogram-ci upload --pp ./dist/build/mp-weixin --pkp ./private.key --appi
 ## 六、本地对应命令
 
 ```bash
-# 部署包（与 CI 的 bundle job 相同）
-bash build.sh --version 2.0.0
+# 服务端部署包（与 CI 的 bundle job 相同；两种架构各打一份）
+bash build.sh --version 2.0.2 --arch amd64
+bash build.sh --version 2.0.2 --arch arm64
 
-# Android Release
+# Android Release（只含 arm64-v8a）
 cd app/patnestApp && ./gradlew :androidApp:assembleRelease
 
 # 桌面端（当前系统）
@@ -321,3 +344,22 @@ Linux 四种格式由同一个 `linux` job 产出，实际文件名：
 - `team.wd.atnestapp-2.0.1-1.x86_64.rpm`（111 MB）
 - `PatNest-2.0.1-x86_64.AppImage`（121 MB）
 - `patnest-desktop-2.0.1-linux-x64.tar.gz`（120 MB）
+
+---
+
+## 八、架构矩阵改造（v2.0.2 起，尚未发版）
+
+按「Android / macOS 仅 arm64；服务端（含容器）、Linux 桌面、Windows 桌面 x64 + arm64」调整：
+
+| 改动 | 文件 |
+| --- | --- |
+| 部署包名改成 `patnest-server-<版本>-linux-<arch>`，amd64 也带架构后缀；`--skip-go` 复用旧包时仍兼容 `patnest-docker-*` 命名 | `build.sh`、`build.ps1` |
+| `defaultConfig.ndk.abiFilters` 只留 `arm64-v8a`；CI 上传前校验 APK 不含 `lib/armeabi-v7a/` | `androidApp/build.gradle.kts`、工作流 |
+| `packageName` 由 `team.wd.atnestapp` 改为 `patnest` | `desktopApp/build.gradle.kts` |
+| `bundle` 加 amd64/arm64 矩阵；`linux` 加 `ubuntu-latest` / `ubuntu-24.04-arm`；`desktop` 加 `windows-latest` / `windows-11-arm`，macOS 仍只 `macos-latest` | `.github/workflows/build.yml` |
+| AppImage 按架构选 `appimagetool-x86_64` / `appimagetool-aarch64` | 工作流 `linux` job |
+| 所有 job 上传前统一复制成 `patnest-<版本>-<平台>-<架构>.<格式>` | 工作流 |
+
+可行性核对：GitHub 私有仓库已开放 arm64 标准 runner（2026-01 起）；Skiko 提供 `skiko-awt-runtime-linux-arm64` / `skiko-awt-runtime-windows-arm64`；`appimagetool-aarch64.AppImage` 可下载。jpackage 不能交叉打包，所以每个架构各跑一次。`windows-11-arm` 的 WiX 工具链若缺失需在该镜像单独安装，是首个待实跑验证的点。
+
+**这批改动尚未打 tag、未实跑 CI**；需要发布 v2.0.2 时按第三节流程操作。

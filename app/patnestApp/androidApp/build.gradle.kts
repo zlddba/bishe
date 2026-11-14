@@ -97,8 +97,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         // 版本号随发布 tag 走：CI 构建时注入 PATNEST_VERSION / PATNEST_VERSION_CODE
-        versionCode = System.getenv("PATNEST_VERSION_CODE")?.toIntOrNull() ?: 3
-        versionName = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.1"
+        versionCode = System.getenv("PATNEST_VERSION_CODE")?.toIntOrNull() ?: 4
+        versionName = System.getenv("PATNEST_VERSION")?.takeIf { it.isNotBlank() } ?: "2.0.2"
 
         // 接口根地址：构建期从 .env 的 PATNEST_API_BASE 注入，运行时不可修改
         buildConfigField("String", "API_BASE", "\"$patnestApiBase\"")
@@ -107,6 +107,12 @@ android {
         // 没配时填 "unset" 而不是空串：空 android:value 在 manifest 合并时容易被当成资源引用报错，
         // App 读到 unset 就知道要走瓦片兜底。
         manifestPlaceholders["amapKey"] = patnestAmapKey.ifEmpty { "unset" }
+
+        // 发行包只面向 arm64 设备：高德 AAR 自带 arm64-v8a / armeabi-v7a 两套 .so，
+        // 这里只保留 64 位 ARM，产物名与 Release 附件也统一标 -android-arm64。
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
     packaging {
         resources {

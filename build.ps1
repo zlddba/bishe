@@ -47,8 +47,7 @@ try {
 
 $BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
-$PkgName = "patnest-docker-$Version"
-if ($Arch -ne "amd64") { $PkgName = "$PkgName-$Arch" }
+$PkgName = "patnest-server-$Version-linux-$Arch"
 $PkgDir = Join-Path $ReleaseDir $PkgName
 
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) { Fail "go not found in PATH" }
@@ -141,7 +140,8 @@ if (-not $SkipGo) {
     if ($StashDir -and (Test-Path (Join-Path $StashDir "patnest-api"))) {
         Copy-Item (Join-Path $StashDir "*") (Join-Path $PkgDir "artifacts") -Force
     } else {
-        $prev = Get-ChildItem $ReleaseDir -Directory -Filter "patnest-docker-*" -ErrorAction SilentlyContinue |
+        $prev = Get-ChildItem $ReleaseDir -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "patnest-server-*" -or $_.Name -like "patnest-docker-*" } |
             Sort-Object Name -Descending | Select-Object -First 1
         if (-not $prev -or -not (Test-Path (Join-Path $prev.FullName "artifacts\patnest-api"))) {
             Fail "no previous artifacts to reuse"

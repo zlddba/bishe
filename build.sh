@@ -45,10 +45,7 @@ VERSION="${VERSION:-1.0.0}"
 COMMIT="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-PKG_NAME="patnest-docker-$VERSION"
-if [[ "$ARCH" != "amd64" ]]; then
-  PKG_NAME="$PKG_NAME-$ARCH"
-fi
+PKG_NAME="patnest-server-$VERSION-linux-$ARCH"
 PKG_DIR="$RELEASE_DIR/$PKG_NAME"
 
 log() { printf '\033[36m[build]\033[0m %s\n' "$*"; }
@@ -106,7 +103,7 @@ else
   if [[ -n "$STASH_DIR" && -f "$STASH_DIR/patnest-api" ]]; then
     SRC_ART="$STASH_DIR"
   else
-    PREV="$(ls -1d "$RELEASE_DIR"/patnest-docker-* 2>/dev/null | sort -V | tail -n1 || true)"
+    PREV="$(ls -1d "$RELEASE_DIR"/patnest-server-* "$RELEASE_DIR"/patnest-docker-* 2>/dev/null | sort -V | tail -n1 || true)"
     [[ -n "$PREV" && -f "$PREV/artifacts/patnest-api" ]] || die "no previous artifacts to reuse"
     SRC_ART="$PREV/artifacts"
   fi

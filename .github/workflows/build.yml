@@ -6,10 +6,10 @@ name: Release
 #   3. 存在发布文档 docs/release/vX.Y.Z.md，正文即 Release 页的发布说明
 #
 # 触发方式：
-#   - 推送 tag：git push origin v1.2.0  （主路径）
-#   - 手动重跑：Actions → Release → Run workflow，填 tag（例如 v1.2.0）
+#   - 推送 tag：git push origin v2.0.2  （主路径）
+#   - 手动重跑：Actions → Release → Run workflow，填 tag（例如 v2.0.2）
 #
-# 校验通过后并行构建四类产物，全部成功后自动创建 / 更新 GitHub Release。
+# 校验通过后并行构建多架构产物，全部成功后自动创建 / 更新 GitHub Release。
 on:
   push:
     tags:
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要发布的 tag（如 v1.2.0，必填；留空则取当前 ref）"
+        description: "要发布的 tag（如 v2.0.2，必填；留空则取当前 ref）"
         type: string
         required: false
 
@@ -58,7 +58,7 @@ jobs:
           if [[ -z "$TAG" ]]; then
             # 手动触发没填 tag，且当前 ref 不是 tag 时，直接拒绝
             if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-              echo "::error::手动触发请填写要发布的 tag（例如 v1.2.0），或直接用 git push origin v1.2.0 触发"
+              echo "::error::手动触发请填写要发布的 tag（例如 v2.0.2），或直接用 git push origin v2.0.2 触发"
               exit 1
             fi
             TAG="${GITHUB_REF_NAME}"
@@ -67,10 +67,10 @@ jobs:
 
           fail() { echo "::error::$*"; exit 1; }
 
-          [[ "$TAG" == v* ]] || fail "标签必须以 v 开头（例：v1.2.0），当前是 '$TAG'"
+          [[ "$TAG" == v* ]] || fail "标签必须以 v 开头（例：v2.0.2），当前是 '$TAG'"
           VERSION="${TAG#v}"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-            || fail "标签格式必须是 vX.Y.Z（例：v1.2.0），当前是 '$TAG'"
+            || fail "标签格式必须是 vX.Y.Z（例：v2.0.2），当前是 '$TAG'"
 
           BRANCH="release/v${VERSION}"
           DOC="docs/release/v${VERSION}.md"
@@ -107,10 +107,16 @@ jobs:
             echo "doc=${DOC}"
           } >> "$GITHUB_OUTPUT"
 
-  # ------------------------------------------------- 后端 + 管理后台部署包
+  # ------------------------------------------------- 服务端部署包（amd64 / arm64）
+  # 容器镜像不在 CI 里构建：包内只放对应架构的 Go 二进制 + Dockerfile，
+  # 由目标架构的服务器本地 build；alpine / nginx 基础镜像都是多架构的。
   bundle:
-    name: 部署包（API + 管理后台）
+    name: 部署包 linux/${{ matrix.arch }}
     needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -133,23 +139,33 @@ jobs:
         working-directory: webadmin/patnestServerAdminWeb
         run: npm ci --no-audit --no-fund
 
-      # 版本号取 tag，产物 release/patnest-docker-<version>.zip
       - name: Build bundle
         shell: bash
-        run: bash build.sh --version "${{ needs.verify.outputs.version }}"
+        run: bash build.sh --version "${{ needs.verify.outputs.version }}" --arch "${{ matrix.arch }}"
+
+      - name: 规范产物名
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          SRC="release/patnest-server-${VERSION}-linux-${ARCH}.zip"
+          [[ -f "$SRC" ]] || { echo "::error::找不到部署包 ${SRC}"; exit 1; }
+          cp "$SRC" "out/patnest-server-${VERSION}-linux-${ARCH}.zip"
+          ls -lh out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: patnest-deploy-bundle
-          path: |
-            release/*.zip
-            release/*.tar.gz
+          name: patnest-server-linux-${{ matrix.arch }}
+          path: out/*
           if-no-files-found: error
           retention-days: 14
 
   # ------------------------------------------------------- 小程序工程源码包
   # 托管 runner 装不了 HBuilderX，所以不编译：只把工程打成 zip，
-  # 下载解压后用 HBuilderX 导入，再发行到微信开发者工具。
+  # 下载解压后用 HBuilderX 导入，再发行到微信开发者工具。源码包不涉及架构。
   miniapp:
     name: 小程序工程包（uniapp zip）
     needs: verify
@@ -181,9 +197,10 @@ jobs:
           retention-days: 14
 
   # ------------------------------------------------------------ Android APK
-  # 签名、接口地址、高德 Key 全部来自 Secrets，仓库里不存密钥
+  # 只支持 arm64-v8a（androidApp/build.gradle.kts 的 ndk.abiFilters）。
+  # 签名、接口地址、高德 Key 全部来自 Secrets，仓库里不存密钥。
   android:
-    name: Android APK
+    name: Android APK（arm64）
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -209,7 +226,6 @@ jobs:
           set -euo pipefail
           SDKM="$(command -v sdkmanager || echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager")"
           yes | "$SDKM" --licenses > /dev/null || true
-          # 显式装主平台，避免 AGP 在首次编译时边下载边构建导致超时
           "$SDKM" "platforms;android-37" "platform-tools" > /dev/null || true
           echo "Android SDK ready: $SDKM"
 
@@ -252,23 +268,67 @@ jobs:
           PATNEST_RELEASE_KEY_ALIAS: ${{ secrets.PATNEST_KEY_ALIAS }}
         run: sh ./gradlew :androidApp:assembleRelease --no-daemon --stacktrace
 
+      - name: 规范产物名并校验 ABI
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          APKS=(app/patnestApp/androidApp/build/outputs/apk/release/*.apk)
+          [[ ${#APKS[@]} -gt 0 ]] || { echo "::error::没有找到 release APK"; exit 1; }
+          APK="${APKS[0]}"
+          # 先收进变量再 grep，避免 pipefail + SIGPIPE 让校验被误判为通过
+          LIBS="$(unzip -l "$APK")"
+          if grep -q 'lib/armeabi-v7a/' <<< "$LIBS"; then
+            echo "::error::APK 里仍有 32 位 ARM 库，abiFilters 未生效"
+            exit 1
+          fi
+          mkdir -p out
+          cp "$APK" "out/patnest-${VERSION}-android-arm64.apk"
+          ls -lh out
+
       - uses: actions/upload-artifact@v4
         with:
           name: patnest-android-apk
-          path: app/patnestApp/androidApp/build/outputs/apk/release/*.apk
+          path: out/*
           if-no-files-found: error
           retention-days: 14
 
-  # ------------------------------------------- 桌面端 Linux（一次编译出四种格式）
-  # jpackage 的 deb / rpm / app-image 复用同一份编译结果，放一个 job 里只编译一次。
-  # 注意：Compose 的 TargetFormat.AppImage 是「app-image 目录」，不是 AppImage 单文件；
-  # 真正的 .AppImage 要再用 appimagetool 把这个目录封成一体包。
+  # ------------------------------------------- 桌面端 Linux（amd64 / arm64）
+  # jpackage 不支持交叉打包，所以两种架构各在对应架构的 runner 上跑一次。
+  # Compose 的 TargetFormat.AppImage 是「app-image 目录」，不是 AppImage 单文件；
+  # 真正的 .AppImage 要再用 appimagetool（对应架构版本）封成一体包。
   linux:
-    name: 桌面端 Linux（deb / rpm / AppImage / tar.gz）
+    name: 桌面端 Linux ${{ matrix.arch }}（deb / rpm / AppImage / tar.gz）
     needs: verify
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            appimage_tool: appimagetool-x86_64.AppImage
+            appimage_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            appimage_tool: appimagetool-aarch64.AppImage
+            appimage_arch: aarch64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
+      # jpackage 打的是当前架构的包，先确认 runner 没跑错，避免产出名不副实的 arm64 包
+      - name: 校验 runner 架构
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          M="$(uname -m)"
+          if [[ "$ARCH" == "amd64" ]]; then EXPECT="x86_64"; else EXPECT="aarch64"; fi
+          [[ "$M" == "$EXPECT" ]] || { echo "::error::runner 架构不匹配：$M，期望 $EXPECT"; exit 1; }
+          echo "runner=$M / target=$ARCH"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.verify.outputs.tag }}
@@ -294,17 +354,22 @@ jobs:
           PATNEST_API_BASE: ${{ vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE }}
         run: sh ./gradlew :desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable --no-daemon --stacktrace
 
-      - name: 生成 tar.gz 与 .AppImage
+      - name: 生成四种格式并规范命名
         working-directory: app/patnestApp
         shell: bash
         env:
           VERSION: ${{ needs.verify.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          APPIMAGE_TOOL: ${{ matrix.appimage_tool }}
+          APPIMAGE_ARCH: ${{ matrix.appimage_arch }}
         run: |
           set -euo pipefail
           BIN="desktopApp/build/compose/binaries/main"
-          APPDIR="$(find "$BIN/app" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-          [[ -n "$APPDIR" ]] || { echo "::error::找不到 createDistributable 产出的 app-image 目录"; exit 1; }
-          NAME="patnest-desktop-${VERSION}-linux-x64"
+          shopt -s nullglob
+          APPDIRS=("$BIN"/app/*/)
+          [[ ${#APPDIRS[@]} -gt 0 ]] || { echo "::error::找不到 createDistributable 产出的 app-image 目录"; exit 1; }
+          APPDIR="${APPDIRS[0]}"
+          NAME="patnest-${VERSION}-linux-${ARCH}"
           mkdir -p out
 
           # 绿色版：解压后直接运行 bin/ 下的启动器，自带 lib/runtime，无需安装 Java
@@ -318,28 +383,34 @@ jobs:
           cp -a "$APPDIR/." PatNest.AppDir/usr/
           cp desktopApp/src/main/resources/compose-multiplatform.png PatNest.AppDir/patnest.png
           printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=PatNest' 'Exec=patnest' 'Icon=patnest' 'Categories=Utility;' > PatNest.AppDir/patnest.desktop
-          printf '%s\n' '#!/bin/sh' 'HERE="$(dirname "$(readlink -f "$0")")"' 'BIN="$(find "$HERE/usr/bin" -maxdepth 1 -type f -perm -u+x | head -n1)"' 'exec "$BIN" "$@"' > PatNest.AppDir/AppRun
+          printf '%s\n' '#!/bin/sh' 'HERE="$(dirname "$(readlink -f "$0")")"' 'BIN="$(find "$HERE/usr/bin" -maxdepth 1 -type f -perm -u+x -print -quit)"' 'exec "$BIN" "$@"' > PatNest.AppDir/AppRun
           chmod +x PatNest.AppDir/AppRun
-          curl -fsSL -o /tmp/appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          curl -fsSL -o /tmp/appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/${APPIMAGE_TOOL}"
           chmod +x /tmp/appimagetool
           (cd /tmp && ./appimagetool --appimage-extract > /dev/null)
-          ARCH=x86_64 /tmp/squashfs-root/AppRun PatNest.AppDir "out/PatNest-${VERSION}-x86_64.AppImage"
+          ARCH="$APPIMAGE_ARCH" /tmp/squashfs-root/AppRun PatNest.AppDir "out/${NAME}.AppImage"
 
-          # 四种产物统一放到 out/，上传时不会带出嵌套目录
-          cp "$BIN"/deb/*.deb out/
-          cp "$BIN"/rpm/*.rpm out/
+          # deb / rpm 由 jpackage 命名（amd64 / arm64 / aarch64），统一改成发行名
+          DEBS=("$BIN"/deb/*.deb)
+          RPMS=("$BIN"/rpm/*.rpm)
+          [[ ${#DEBS[@]} -gt 0 && ${#RPMS[@]} -gt 0 ]] || { echo "::error::deb 或 rpm 产物缺失"; exit 1; }
+          DEB="${DEBS[0]}"
+          RPM="${RPMS[0]}"
+          cp "$DEB" "out/${NAME}.deb"
+          cp "$RPM" "out/${NAME}.rpm"
           ls -lh out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: patnest-desktop-linux
+          name: patnest-desktop-linux-${{ matrix.arch }}
           path: app/patnestApp/out/*
           if-no-files-found: error
           retention-days: 14
 
-  # ------------------------------------------------ 桌面端 Windows / macOS
+  # --------------------------------- 桌面端 Windows（x64 / arm64）与 macOS（arm64）
+  # macOS 按约定只出 Apple Silicon 版；Windows 两种架构各跑一份。
   desktop:
-    name: 桌面端（${{ matrix.format }}）
+    name: 桌面端 ${{ matrix.platform }}-${{ matrix.arch }}
     needs: verify
     strategy:
       fail-fast: false
@@ -348,11 +419,18 @@ jobs:
           - os: windows-latest
             task: packageMsi
             format: msi
-            glob: "*.msi"
+            platform: windows
+            arch: x64
+          - os: windows-11-arm
+            task: packageMsi
+            format: msi
+            platform: windows
+            arch: arm64
           - os: macos-latest
             task: packageDmg
             format: dmg
-            glob: "*.dmg"
+            platform: macos
+            arch: arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -377,10 +455,27 @@ jobs:
           PATNEST_API_BASE: ${{ vars.PATNEST_API_BASE || secrets.PATNEST_API_BASE }}
         run: sh ./gradlew :desktopApp:${{ matrix.task }} --no-daemon --stacktrace
 
+      - name: 规范产物名
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          FORMAT: ${{ matrix.format }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          FILES=(app/patnestApp/desktopApp/build/compose/binaries/main/${FORMAT}/*.${FORMAT})
+          [[ ${#FILES[@]} -gt 0 ]] || { echo "::error::没有找到 .${FORMAT} 产物"; exit 1; }
+          SRC="${FILES[0]}"
+          mkdir -p out
+          cp "$SRC" "out/patnest-${VERSION}-${PLATFORM}-${ARCH}.${FORMAT}"
+          ls -lh out
+
       - uses: actions/upload-artifact@v4
         with:
-          name: patnest-desktop-${{ matrix.format }}
-          path: app/patnestApp/desktopApp/build/compose/binaries/main/${{ matrix.format }}/${{ matrix.glob }}
+          name: patnest-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: out/*
           if-no-files-found: error
           retention-days: 14
 
