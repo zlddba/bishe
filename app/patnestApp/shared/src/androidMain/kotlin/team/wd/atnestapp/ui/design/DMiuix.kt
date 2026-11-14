@@ -340,7 +340,11 @@ fun DMiuixScrollScaffold(
                     modifier = Modifier.fillMaxSize(),
                     refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
                 ) {
-                    Column(colModifier, content = content)
+                    // PullToRefresh 内部是 TopStart 的 Box：限宽正文必须在这里再居中一次，
+                    // 否则带刷新的页面在平板上靠左、不带刷新的页面居中，口径分裂
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        Column(colModifier, content = content)
+                    }
                 }
             } else {
                 Column(colModifier, content = content)
@@ -396,11 +400,14 @@ fun DMiuixListScaffold(
                     modifier = Modifier.fillMaxSize(),
                     refreshTexts = listOf("下拉刷新", "松手刷新", "正在刷新…", "刷新成功"),
                 ) {
-                    LazyColumn(
-                        scrollModifier,
-                        contentPadding = PaddingValues(bottom = 14.dp),
-                        content = content,
-                    )
+                    // 同 ScrollScaffold：PullToRefresh 是 TopStart 排布，限宽列表要再居中
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        LazyColumn(
+                            scrollModifier,
+                            contentPadding = PaddingValues(bottom = 14.dp),
+                            content = content,
+                        )
+                    }
                 }
             } else {
                 LazyColumn(
