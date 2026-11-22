@@ -21,6 +21,8 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 13+ 本地通知展示验证码（演示模式） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
         「拍照上传」用的是系统相机（ACTION_IMAGE_CAPTURE），不申请 CAMERA 权限，

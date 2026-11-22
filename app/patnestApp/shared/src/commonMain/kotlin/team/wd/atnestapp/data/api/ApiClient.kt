@@ -310,6 +310,13 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun login(username: String, password: String): AuthResponseDto =
         postData("/auth/login", LoginPayload(username.trim(), password))
 
+    /** 演示模式验证码：服务端把 demo_code 返回，客户端用本地通知展示。 */
+    suspend fun sendLoginCode(phone: String): SendLoginCodeDto =
+        postData("/auth/send-code", SendLoginCodePayload(phone.trim()))
+
+    suspend fun loginWithCode(phone: String, code: String): AuthResponseDto =
+        postData("/auth/login/code", CodeLoginPayload(phone.trim(), code.trim()))
+
     /** 退出登录：显式携带令牌，避免本地状态清空后请求头丢失。 */
     suspend fun logout(token: String) {
         val response = http.post("$apiBase/auth/logout") {
@@ -343,11 +350,37 @@ class ApiClient(rawBaseUrl: String) {
 
     suspend fun me(): UserDto = getData("/auth/me")
 
-    suspend fun listSitters(type: String? = null): List<Sitter> {
+    suspend fun listSitters(
+        type: String? = null,
+        priceMin: Double? = null,
+        priceMax: Double? = null,
+        sort: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+    ): List<Sitter> {
         val params = mutableMapOf("page" to "1", "per_page" to "50")
         if (!type.isNullOrBlank()) params["type"] = type
+        if (priceMin != null && priceMin > 0) params["price_min"] = priceMin.toString()
+        if (priceMax != null && priceMax > 0) params["price_max"] = priceMax.toString()
+        if (!sort.isNullOrBlank()) params["sort"] = sort
+        if (latitude != null && longitude != null) {
+            params["latitude"] = latitude.toString()
+            params["longitude"] = longitude.toString()
+        }
         val page: SitterPageDto = getData("/sitters", params)
         return page.items.map { it.toUi() }
+    }
+
+    /** 机构详情：列表只给摘要，详情页需要完整图集/描述时用它刷新。 */
+    suspend fun getSitter(sitterId: Long): SitterDto = getData("/sitters/$sitterId")
+
+    /** pgvector 相似机构：返回机构摘要 + 余弦相似度。 */
+    suspend fun similarSitters(sitterId: Long, limit: Int = 6): List<SimilarSitterDto> {
+        val data: SimilarSitterListDto = getData(
+            "/sitters/$sitterId/similar",
+            mapOf("limit" to limit.coerceIn(1, 20).toString()),
+        )
+        return data.items
     }
 
     /** 关键词搜索（服务端按名称/地址/描述 ILIKE 匹配，见 SearchSitters） */
@@ -363,11 +396,19 @@ class ApiClient(rawBaseUrl: String) {
 
     suspend fun listPets(): List<Pet> = listPetsPage(1, 50).items
 
-    suspend fun listPetsPage(page: Int, perPage: Int = 50): PagedItems<Pet> {
-        val data: PetPageDto = getData(
-            "/pet-owner/pets",
-            mapOf("page" to page.toString(), "per_page" to perPage.toString()),
+    suspend fun listPetsPage(
+        page: Int,
+        perPage: Int = 50,
+        species: String? = null,
+        name: String? = null,
+    ): PagedItems<Pet> {
+        val params = mutableMapOf(
+            "page" to page.toString(),
+            "per_page" to perPage.toString(),
         )
+        if (!species.isNullOrBlank()) params["species"] = species
+        if (!name.isNullOrBlank()) params["name"] = name
+        val data: PetPageDto = getData("/pet-owner/pets", params)
         return PagedItems(data.items.map { it.toUi() }, data.total)
     }
 
@@ -389,13 +430,23 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun listOrders(): List<Order> = listOrdersPage(1, 50).items
 
     /** 订单分页：后端 per_page 上限 50，超过必须翻页，否则第 51 条起永远拿不到 */
-    suspend fun listOrdersPage(page: Int, perPage: Int = 50): PagedItems<Order> {
-        val data: OrderPageDto = getData(
-            "/pet-owner/orders",
-            mapOf("page" to page.toString(), "per_page" to perPage.toString()),
+    suspend fun listOrdersPage(
+        page: Int,
+        perPage: Int = 50,
+        statusFilter: String? = null,
+    ): PagedItems<Order> {
+        val params = mutableMapOf(
+            "page" to page.toString(),
+            "per_page" to perPage.toString(),
         )
+        if (!statusFilter.isNullOrBlank()) params["status_filter"] = statusFilter
+        val data: OrderPageDto = getData("/pet-owner/orders", params)
         return PagedItems(data.items.map { it.toUi() }, data.total)
     }
+
+    /** 主人端订单详情：包含 order + pets，详情页进入时刷新一次。 */
+    suspend fun getOrderDetail(orderId: Long): OrderDetailDto =
+        getData("/pet-owner/orders/$orderId")
 
     suspend fun createOrder(payload: CreateOrderPayload): CreateOrderResult =
         postData("/pet-owner/orders", payload)
@@ -583,6 +634,10 @@ class ApiClient(rawBaseUrl: String) {
         return data.items
     }
 
+    /** 单条动态详情：详情页进入时刷新正文/关联订单。 */
+    suspend fun getDynamic(dynamicId: Long): DynamicDto =
+        getData("/pet-owner/dynamics/$dynamicId")
+
     /** 点赞动态（后端 ON CONFLICT DO NOTHING，重复调用安全） */
     suspend fun likeDynamic(dynamicId: Long): LikeResult =
         postNoBody("/pet-owner/dynamics/$dynamicId/like")
@@ -619,6 +674,10 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun updateMyShop(payload: UpdateShopPayload): SitterDto =
         putData("/sitter/shop/me", payload)
 
+    /** 新机构首次建店；已存在时后端返回 409，由调用方决定提示。 */
+    suspend fun createMyShop(payload: UpdateShopPayload): SitterDto =
+        postData("/sitter/shop", payload)
+
     /** 城市 + 地址 → GCJ-02 坐标（后端调高德地理编码，桌面端没有系统定位时用）。 */
     suspend fun geocodeAddress(payload: GeocodePayload): GeocodeDto =
         postData("/geo/geocode", payload)
@@ -626,27 +685,6 @@ class ApiClient(rawBaseUrl: String) {
     /** GCJ-02 坐标 → 地址文本。 */
     suspend fun reverseGeocode(payload: ReversePayload): GeocodeDto =
         postData("/geo/reverse", payload)
-
-    /**
-     * 取一张以 (latitude, longitude) 为中心的静态地图 PNG 字节。
-     * 成功时响应是图片，失败时后端仍返回统一信封，这里照样翻译成能直接展示的提示。
-     */
-    suspend fun fetchStaticMap(
-        latitude: Double,
-        longitude: Double,
-        zoom: Int,
-        width: Int,
-        height: Int,
-    ): ByteArray {
-        val params = mapOf(
-            "latitude" to latitude.toString(),
-            "longitude" to longitude.toString(),
-            "zoom" to zoom.toString(),
-            "width" to width.toString(),
-            "height" to height.toString(),
-        )
-        return getImage("/geo/static-map", params)
-    }
 
     /** 取一张 256x256 地图瓦片（桌面端弹框连续拖动用）。 */
     suspend fun fetchTile(zoom: Int, x: Int, y: Int): ByteArray = getImage(
@@ -686,14 +724,6 @@ class ApiClient(rawBaseUrl: String) {
         )
     }
 
-    /** 地图选点第一步：创建一次性选点会话，返回浏览器里打开的相对路径。 */
-    suspend fun createGeoPick(payload: GeoPickPayload): GeoPickSessionDto =
-        postData("/geo/pick", payload)
-
-    /** 轮询选点结果；done 之后后端即销毁会话，重复轮询会得到 expired。 */
-    suspend fun pollGeoPick(token: String): GeoPickResultDto =
-        getData("/geo/pick-result/$token")
-
     /** 机构入驻申请：提交资质材料，平台审核通过后账号才升级为机构。 */
     suspend fun applySitter(payload: ApplySitterPayload): ApplySitterResult =
         postData("/pet-owner/apply-sitter", payload)
@@ -720,6 +750,10 @@ class ApiClient(rawBaseUrl: String) {
         )
         return PagedItems(data.items, data.total)
     }
+
+    /** 机构订单详情：和主人端共用 OrderDetailResponse，只取 order 回填列表 DTO。 */
+    suspend fun getReceivedOrder(orderId: Long): OrderDetailDto =
+        getData("/sitter/orders/$orderId")
 
     suspend fun acceptOrder(orderId: Long) {
         putEmpty<StatusResult>("/sitter/orders/$orderId/accept")

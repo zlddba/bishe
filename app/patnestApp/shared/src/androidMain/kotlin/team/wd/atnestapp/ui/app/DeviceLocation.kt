@@ -15,6 +15,7 @@ import kotlin.coroutines.resume
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration
@@ -131,6 +132,35 @@ object DeviceLocation {
         LocationManager.GPS_PROVIDER,
         LocationManager.NETWORK_PROVIDER,
     )
+}
+
+/**
+ * 两点间球面距离（米）。
+ *
+ * 用等距圆柱近似：城市范围内误差很小，但比 Haversine 少几次三角函数，
+ * 首页列表滚动时不会因为每张卡都算距离而掉帧。排序仍由后端 Haversine 完成。
+ */
+fun distanceMeters(
+    fromLat: Double,
+    fromLng: Double,
+    toLat: Double,
+    toLng: Double,
+): Double {
+    if (fromLat !in -90.0..90.0 || toLat !in -90.0..90.0) return Double.POSITIVE_INFINITY
+    val midLat = (fromLat + toLat) / 2.0 * PI / 180.0
+    val x = (toLng - fromLng) * cos(midLat)
+    val y = toLat - fromLat
+    return sqrt(x * x + y * y) * 111_320.0
+}
+
+/** 距离展示：1 公里内报米，超过报公里；无坐标返回空串。 */
+fun formatDistance(meters: Double): String {
+    if (!meters.isFinite() || meters <= 0.0) return ""
+    return if (meters < 1000) {
+        "${meters.roundToInt()} 米"
+    } else {
+        "%.1f 公里".format(meters / 1000.0)
+    }
 }
 
 /** 克拉索夫斯基椭球参数，GCJ-02 偏移算法需要。 */

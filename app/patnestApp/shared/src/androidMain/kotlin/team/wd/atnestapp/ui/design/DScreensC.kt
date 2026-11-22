@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import team.wd.atnestapp.data.api.DynamicCommentDto
@@ -161,7 +162,10 @@ fun D32DynamicDetail(nav: DNav) {
         return
     }
     var draft by remember { mutableStateOf("") }
-    LaunchedEffect(dynamic.id) { store.loadDynamicComments(dynamic.id) }
+    LaunchedEffect(dynamic.id) {
+        store.refreshDynamic(dynamic.id)
+        store.loadDynamicComments(dynamic.id)
+    }
     val sendComment: () -> Unit = {
         scope.launch {
             if (store.sendDynamicComment(dynamic.id, draft)) draft = ""
@@ -206,7 +210,16 @@ fun D32DynamicDetail(nav: DNav) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val liked = store.likedDynamics.contains(dynamic.id)
                     Row(
-                        Modifier.clickable { scope.launch { store.toggleLike(dynamic.id) } },
+                        Modifier
+                            .dGlassSurface(
+                                shape = DShape.Pill,
+                                tint = DColor.Card.copy(alpha = 0.55f),
+                                blurRadius = 10f,
+                                cornerDp = 20.dp,
+                                edgeDp = 4.dp,
+                            )
+                            .clickable { scope.launch { store.toggleLike(dynamic.id) } }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AppIcon(AppIcon.Heart, Modifier.size(15.dp), if (liked) DColor.Brand else DColor.Ink3)
@@ -343,7 +356,7 @@ fun D34RefundProgress(nav: DNav) {
                         Modifier.fillMaxWidth().padding(bottom = 12.dp)
                             .dGlassSurface(
                                 shape = DShape.Lg,
-                                tint = DColor.Card.copy(alpha = 0.58f),
+                                tint = DColor.Card.copy(alpha = 0.75f),
                                 blurRadius = 16f,
                                 cornerDp = 12.dp,
                             )
@@ -711,6 +724,7 @@ fun D37SitterOrderDetail(nav: DNav) {
         }
         return
     }
+    LaunchedEffect(order.id) { store.refreshReceivedOrder(order.id) }
     val finished = order.status == "completed"
     DMiuixScrollScaffold(
         nav = nav,
@@ -771,6 +785,19 @@ fun D37SitterOrderDetail(nav: DNav) {
                         )
                     },
                 )
+            }
+        }
+        if (store.selectedReceivedOrderPets.isNotEmpty()) {
+            DSection("入住宠物")
+            DPad {
+                DCard {
+                    store.selectedReceivedOrderPets.forEach { pet ->
+                        DKeyValue(
+                            pet.petName.ifBlank { "宠物" },
+                            pet.stayDate.ifBlank { pet.status.ifBlank { "—" } },
+                        )
+                    }
+                }
             }
         }
         DPad {
@@ -838,16 +865,28 @@ fun D37SitterOrderDetail(nav: DNav) {
 fun D38SearchResults(nav: DNav) {
     val store = DLocalStore.current
     LaunchedEffect(Unit) { store.loadSitters() }
+    // 关键词走后端 ILIKE 搜索；输入停顿 300ms 再发，避免逐字请求。
+    // 只有当前加载的前 50 家能被本地搜到，超过一页必须靠服务端。
+    LaunchedEffect(store.sitterQuery) {
+        if (store.sitterQuery.isBlank()) {
+            store.sitterSearchResults = null
+        } else {
+            delay(300)
+            store.searchSitters(store.sitterQuery)
+        }
+    }
     var chips by remember { mutableStateOf(setOf<String>()) }
     var sort by remember { mutableStateOf(0) }
     val sorts = listOf("推荐", "评分", "价格低")
     val chipLabels = listOf("家庭寄养", "门店寄养", "上门喂养", "4 分以上", "有封面")
+    val source = store.sitterSearchResults ?: store.sitters
     // 关键词 + 筛选 + 排序三步都缓存，输入框每敲一个字只重算一次。
-    val results = remember(store.sitters, store.sitterQuery, chips, sort) {
-        val filtered = store.sitters.filter { sitter ->
+    val results = remember(source, store.sitterQuery, chips, sort) {
+        val filtered = source.filter { sitter ->
             val queryHit = store.sitterQuery.isBlank() ||
                 sitter.name.contains(store.sitterQuery, ignoreCase = true) ||
                 sitter.type.contains(store.sitterQuery, ignoreCase = true) ||
+                sitter.addr.contains(store.sitterQuery, ignoreCase = true) ||
                 sitter.desc.contains(store.sitterQuery, ignoreCase = true)
             val chipHit = chips.isEmpty() || chips.any { chip ->
                 when (chip) {
@@ -876,7 +915,7 @@ fun D38SearchResults(nav: DNav) {
                         Modifier.size(36.dp)
                             .dGlassSurface(
                                 shape = DShape.Md,
-                                tint = DColor.Card.copy(alpha = 0.58f),
+                                tint = DColor.Card.copy(alpha = 0.75f),
                                 blurRadius = 14f,
                                 cornerDp = 8.dp,
                             )
@@ -888,7 +927,15 @@ fun D38SearchResults(nav: DNav) {
                 },
                 flexible = {
                     Box(
-                        Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Bg)
+                        Modifier.fillMaxWidth()
+                            .dGlassSurface(
+                                shape = DShape.Md,
+                                tint = DColor.Bg.copy(alpha = 0.75f),
+                                blurRadius = 12f,
+                                cornerDp = 8.dp,
+                                edgeDp = 6.dp,
+                                fallbackColor = DColor.Bg,
+                            )
                             .clickable { nav.go(DScreen.SearchHistory) }
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                     ) {
@@ -1178,7 +1225,15 @@ fun D42PetDetail(nav: DNav) {
                     DImageUrl(pet.photos.first(), pet.name, height = 140.dp)
                 } else {
                     Box(
-                        Modifier.size(96.dp).clip(CircleShape).background(DColor.BrandSoft),
+                        Modifier.size(96.dp)
+                            .dGlassSurface(
+                                shape = CircleShape,
+                                tint = DColor.BrandSoft.copy(alpha = 0.72f),
+                                blurRadius = 16f,
+                                cornerDp = 48.dp,
+                                edgeDp = 8.dp,
+                                fallbackColor = DColor.BrandSoft,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -1300,7 +1355,14 @@ fun D44AddressAdd(nav: DNav) {
     }
     DMiuixFormScaffold(nav = nav, title = "新增地址") {
         Box(
-            Modifier.fillMaxWidth().clip(DShape.Lg).background(DColor.MapWash)
+            Modifier.fillMaxWidth()
+                .dGlassBrush(
+                    brush = DColor.MapWash,
+                    alpha = 0.90f,
+                    shape = DShape.Lg,
+                    cornerDp = 12.dp,
+                    edgeDp = 8.dp,
+                )
                 .border(1.dp, DColor.Line, DShape.Lg)
                 .clickable { nav.go(DScreen.MapPicker) }
                 .padding(14.dp),
@@ -1381,7 +1443,15 @@ fun D45Support(nav: DNav) {
             DCard {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
-                        Modifier.size(56.dp).clip(CircleShape).background(DColor.BrandSoft),
+                        Modifier.size(56.dp)
+                            .dGlassSurface(
+                                shape = CircleShape,
+                                tint = DColor.BrandSoft.copy(alpha = 0.72f),
+                                blurRadius = 14f,
+                                cornerDp = 28.dp,
+                                edgeDp = 6.dp,
+                                fallbackColor = DColor.BrandSoft,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(AppIcon.OrdersPlain, Modifier.size(26.dp), DColor.BrandInk)
@@ -1549,7 +1619,16 @@ private fun C_ReviewCard(
         if (reply != null) {
             Spacer(Modifier.height(10.dp))
             Box(
-                Modifier.fillMaxWidth().clip(DShape.Md).background(DColor.Bg).padding(10.dp),
+                Modifier.fillMaxWidth()
+                    .dGlassSurface(
+                        shape = DShape.Md,
+                        tint = DColor.Bg.copy(alpha = 0.75f),
+                        blurRadius = 12f,
+                        cornerDp = 8.dp,
+                        edgeDp = 6.dp,
+                        fallbackColor = DColor.Bg,
+                    )
+                    .padding(10.dp),
             ) {
                 Text(reply, fontSize = 12.5.sp, color = DColor.Ink2)
             }
@@ -1580,7 +1659,8 @@ private fun C_CouponCard(
         Row(Modifier.fillMaxWidth().height(96.dp)) {
             Column(
                 Modifier.width(110.dp).height(96.dp)
-                    .background(if (grayed) DColor.Ink3 else DColor.Brand),
+                    .background(if (grayed) DColor.Ink3 else DColor.Brand)
+                    .dGlassSheen(strength = 0.85f),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {

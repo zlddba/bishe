@@ -84,6 +84,20 @@ fun OrderDto.toUi(): Order = Order(
     paid = paymentStatus == "paid",
 )
 
+/** 机构接单列表的 DTO 和详情接口的 order 字段是同一套字段，统一转一次。 */
+fun OrderDto.toReceivedOrder(): ReceivedOrderDto = ReceivedOrderDto(
+    id = id,
+    orderNo = orderNo,
+    status = status,
+    startDate = startDate,
+    endDate = endDate,
+    totalDays = totalDays,
+    petCount = petCount,
+    totalAmount = totalAmount,
+    ownerName = ownerName,
+    createdAt = createdAt,
+)
+
 fun FavoriteDto.toUi(): Sitter = Sitter(
     name = name.ifBlank { "未命名机构" },
     addr = address.ifBlank { "地址待完善" },

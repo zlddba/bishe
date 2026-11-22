@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -216,7 +217,7 @@ fun DSitterMap(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.size(40.dp).clickable { nav.back() },
                 shape = CircleShape,
-                tint = Color.White.copy(alpha = 0.22f),
+                tint = DColor.Scrim.copy(alpha = 0.45f),
                 blurRadius = 16f,
                 cornerDp = 20.dp,
                 surfaceAlpha = 0.55f,
@@ -234,10 +235,13 @@ fun DSitterMap(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.weight(1f),
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.35f),
-                blurRadius = 16f,
+                // 信息栏要真的透出地图：只留 32% 主题底色 + 45% 玻璃，
+                // 文字靠自适应柔光阴影保证可读
+                tint = DColor.Bg.copy(alpha = 0.26f),
+                blurRadius = 18f,
                 cornerDp = 8.dp,
-                surfaceAlpha = 0.55f,
+                surfaceAlpha = 0.42f,
+                sheen = true,
                 fallbackColor = DColor.Card,
             ) {
                 Column(
@@ -250,14 +254,16 @@ fun DSitterMap(nav: DNav) {
                         color = DColor.Ink,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(shadow = dGlassTextShadow()),
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         addrText,
                         fontSize = 11.sp,
-                        color = DColor.Ink3,
+                        color = DColor.Ink2,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(shadow = dGlassTextShadow()),
                     )
                 }
             }
@@ -271,10 +277,11 @@ fun DSitterMap(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = DShape.Lg,
-                tint = DColor.Card.copy(alpha = 0.35f),
-                blurRadius = 16f,
+                tint = DColor.Bg.copy(alpha = 0.26f),
+                blurRadius = 18f,
                 cornerDp = 12.dp,
-                surfaceAlpha = 0.55f,
+                surfaceAlpha = 0.42f,
+                sheen = true,
                 fallbackColor = DColor.Card,
             ) {
                 Row(
@@ -282,19 +289,26 @@ fun DSitterMap(nav: DNav) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("机构地址", fontSize = 11.sp, color = DColor.Ink3)
+                        Text(
+                            "机构地址",
+                            fontSize = 11.sp,
+                            color = DColor.Ink2,
+                            style = TextStyle(shadow = dGlassTextShadow()),
+                        )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             addrText,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = DColor.Ink,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             "${D_mapCoord(lat)}, ${D_mapCoord(lng)} · GCJ-02",
                             fontSize = 10.5.sp,
-                            color = DColor.Ink3,
+                            color = DColor.Ink2,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                         Spacer(Modifier.height(3.dp))
                         // 有定位就报距离，没有就给一句引导——右侧那个蓝点按钮不写字，
@@ -308,6 +322,7 @@ fun DSitterMap(nav: DNav) {
                             fontSize = 10.5.sp,
                             fontWeight = if (myDistance != null) FontWeight.Bold else FontWeight.Normal,
                             color = if (myDistance != null) DColor.Brand else DColor.Ink3,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                     }
                     Spacer(Modifier.width(10.dp))
@@ -351,7 +366,7 @@ private fun DMyLocationButton(locating: Boolean, onClick: () -> Unit) {
     DGlassSurface(
         modifier = Modifier.size(34.dp).clickable(enabled = !locating, onClick = onClick),
         shape = CircleShape,
-        tint = DColor.Card.copy(alpha = 0.30f),
+        tint = DColor.Card.copy(alpha = 0.72f),
         blurRadius = 14f,
         cornerDp = 17.dp,
         surfaceAlpha = 0.55f,
@@ -380,7 +395,7 @@ private fun DMapLocateButton(enabled: Boolean, onClick: () -> Unit) {
     DGlassSurface(
         modifier = Modifier.size(34.dp).clickable(enabled = enabled, onClick = onClick),
         shape = CircleShape,
-        tint = DColor.Card.copy(alpha = 0.30f),
+        tint = DColor.Card.copy(alpha = 0.72f),
         blurRadius = 14f,
         cornerDp = 17.dp,
         surfaceAlpha = 0.55f,

@@ -28,6 +28,7 @@ import team.wd.atnestapp.data.api.InviteDto
 import team.wd.atnestapp.data.api.GeocodeDto
 import team.wd.atnestapp.data.api.GeocodePayload
 import team.wd.atnestapp.data.api.NotificationDto
+import team.wd.atnestapp.data.api.OrderPetDto
 import team.wd.atnestapp.data.NotificationCenter
 import team.wd.atnestapp.data.api.PetStayDto
 import team.wd.atnestapp.data.api.PointsEntryDto
@@ -37,6 +38,7 @@ import team.wd.atnestapp.data.api.PublicReviewDto
 import team.wd.atnestapp.data.api.ReceivedOrderDto
 import team.wd.atnestapp.data.api.RefundDto
 import team.wd.atnestapp.data.api.ReviewPayload
+import team.wd.atnestapp.data.api.SendLoginCodeDto
 import team.wd.atnestapp.data.api.ReversePayload
 import team.wd.atnestapp.data.api.SettlementDto
 import team.wd.atnestapp.data.api.SettlementWindowDto
@@ -52,6 +54,8 @@ import team.wd.atnestapp.data.api.UpdateProfilePayload
 import team.wd.atnestapp.data.api.UpdateShopPayload
 import team.wd.atnestapp.data.api.UserCouponDto
 import team.wd.atnestapp.data.api.UserDto
+import team.wd.atnestapp.data.api.toReceivedOrder
+import team.wd.atnestapp.data.api.toUi
 import team.wd.atnestapp.data.model.Order
 import team.wd.atnestapp.data.model.Pet
 import team.wd.atnestapp.data.model.Sitter
@@ -150,6 +154,12 @@ class MobileState(private val session: MobileSession) {
     var busy by mutableStateOf(false)
         private set
     var selectedSitter by mutableStateOf<Sitter?>(null)
+    /** 当前机构详情页的 pgvector 相似机构（机构 + 相似度） */
+    var similarSitters by mutableStateOf<List<Pair<Sitter, Double>>>(emptyList())
+        private set
+    var similarSittersLoading by mutableStateOf(false)
+        private set
+    private var similarSitterId = 0L
     var selectedOrder by mutableStateOf<Order?>(null)
     /** 最近一次下单返回的订单 id：收银台据此精确定位订单，避免付错单 */
     var lastCreatedOrderId by mutableStateOf(0L)
@@ -170,18 +180,46 @@ class MobileState(private val session: MobileSession) {
     var selectedOrderIdForDynamic by mutableStateOf(0L)
     /** 机构端订单详情当前查看的订单 */
     var selectedReceivedOrder by mutableStateOf<ReceivedOrderDto?>(null)
+    /** 订单详情接口返回的入住宠物；列表 DTO 只有数量，没有名字 */
+    var selectedOrderPets by mutableStateOf<List<OrderPetDto>>(emptyList())
+    var selectedReceivedOrderPets by mutableStateOf<List<OrderPetDto>>(emptyList())
     /** 最近一次提交的评价 id，追评页据此提交 */
     var lastReviewId by mutableStateOf(0L)
 
     /* ---------- 主人端数据 ---------- */
     var sitters by mutableStateOf(listOf<Sitter>())
         private set
+    /** 服务端搜索结果；null 表示还没搜/搜索失败，页面回退到本地过滤 */
+    var sitterSearchResults by mutableStateOf<List<Sitter>?>(null)
+    private var sitterPriceMin: Double? = null
+    private var sitterPriceMax: Double? = null
+    private var sitterSort: String? = null
+    private var sitterLatitude: Double? = null
+    private var sitterLongitude: Double? = null
+    private var sittersRequestSeq = 0
     var sitterQuery by mutableStateOf("")
     var sitterType by mutableStateOf("全部")
     var sittersLoading by mutableStateOf(false)
         private set
     var sittersError by mutableStateOf<String?>(null)
         private set
+
+    /* ---------- 首页定位推荐 ---------- */
+    var recommendedSitters by mutableStateOf(listOf<Sitter>())
+        private set
+    var recommendedLoading by mutableStateOf(false)
+        private set
+    var recommendedError by mutableStateOf<String?>(null)
+        private set
+    /** 当前设备位置（GCJ-02）；null 表示还没定位/未授权 */
+    var devicePoint by mutableStateOf<DevicePoint?>(null)
+        private set
+    /** 定位后的城市/区县文案，例如「呼和浩特市 · 回民区」 */
+    var locationLabel by mutableStateOf("")
+        private set
+    var locating by mutableStateOf(false)
+        private set
+    private var recommendedRequestSeq = 0
 
     var pets by mutableStateOf(listOf<Pet>())
         private set
@@ -191,6 +229,9 @@ class MobileState(private val session: MobileSession) {
     var petsLoadingMore by mutableStateOf(false)
         private set
     private var petsPage = 0
+    private var petsRequestSeq = 0
+    /** 当前宠物列表的物种筛选；null 表示全部 */
+    private var petsSpecies: String? = null
     var petsLoading by mutableStateOf(false)
         private set
     var petsError by mutableStateOf<String?>(null)
@@ -206,6 +247,9 @@ class MobileState(private val session: MobileSession) {
     var ordersLoadingMore by mutableStateOf(false)
         private set
     private var ordersPage = 0
+    private var ordersRequestSeq = 0
+    /** 当前列表的服务端状态筛选；null 表示全部 */
+    private var ordersStatusFilter: String? = null
     var ordersError by mutableStateOf<String?>(null)
         private set
 
@@ -392,6 +436,23 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
+    /** 请求演示验证码；返回体里带 demo_code 时由登录页弹本地通知。 */
+    suspend fun sendLoginCode(phone: String): SendLoginCodeDto {
+        return api.sendLoginCode(phone)
+    }
+
+    suspend fun loginWithCode(phone: String, code: String) {
+        if (busy) return
+        busy = true
+        try {
+            applyAuth(api.loginWithCode(phone, code))
+        } catch (e: Exception) {
+            toast(e.message ?: "验证码登录失败")
+        } finally {
+            busy = false
+        }
+    }
+
     suspend fun register(
         inputAccount: String,
         password: String,
@@ -483,6 +544,17 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
+    /** 冷静期内撤销注销申请；撤销后账号恢复正常，不会进入清理。 */
+    suspend fun withdrawAccountCancel() {
+        try {
+            api.withdrawAccountCancel()
+            loadProfile()
+            toast("已撤销注销申请")
+        } catch (e: Exception) {
+            toast(e.message ?: "撤销失败")
+        }
+    }
+
     private fun forceLogout(message: String) {
         if (!loggedIn) return
         clearSession()
@@ -526,6 +598,7 @@ class MobileState(private val session: MobileSession) {
         myAddons = emptyList()
         priceRules = emptyList()
         sitterStats = null
+        clearDeviceLocation()
     }
 
     /**
@@ -597,8 +670,12 @@ class MobileState(private val session: MobileSession) {
     /** 换身份后这些「选中对象」指向的都是上一个身份的数据，必须清掉。 */
     private fun clearIdentitySelection() {
         selectedSitter = null
+        similarSitters = emptyList()
+        similarSitterId = 0L
         selectedOrder = null
         selectedReceivedOrder = null
+        selectedOrderPets = emptyList()
+        selectedReceivedOrderPets = emptyList()
         selectedDynamic = null
         selectedReview = null
         selectedCoupon = null
@@ -612,40 +689,188 @@ class MobileState(private val session: MobileSession) {
 
     /* ================= 主人端：加载 ================= */
 
-    suspend fun loadSitters(force: Boolean = false) {
-        if (sittersLoading) return
-        if (!force && sitters.isNotEmpty()) return
+    suspend fun loadSitters(
+        force: Boolean = false,
+        priceMin: Double? = null,
+        priceMax: Double? = null,
+        sort: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+    ) {
+        if (!force && sittersLoading) return
+        if (!force && sitters.isNotEmpty() &&
+            sitterPriceMin == priceMin && sitterPriceMax == priceMax &&
+            sitterSort == sort && sitterLatitude == latitude && sitterLongitude == longitude
+        ) return
+        sitterPriceMin = priceMin
+        sitterPriceMax = priceMax
+        sitterSort = sort
+        sitterLatitude = latitude
+        sitterLongitude = longitude
+        val seq = ++sittersRequestSeq
         sittersLoading = true
         sittersError = null
         try {
-            sitters = api.listSitters(sitterTypeCode())
+            val data = api.listSitters(sitterTypeCode(), priceMin, priceMax, sort, latitude, longitude)
+            if (seq != sittersRequestSeq) return
+            sitters = data
         } catch (e: Exception) {
-            sittersError = e.message ?: "机构列表加载失败"
+            if (seq == sittersRequestSeq) sittersError = e.message ?: "机构列表加载失败"
         } finally {
-            sittersLoading = false
+            if (seq == sittersRequestSeq) sittersLoading = false
+        }
+    }
+
+    /** 离开筛选页时恢复无价格/排序/距离条件的机构列表。 */
+    fun clearSitterFilters() {
+        if (sitterPriceMin == null && sitterPriceMax == null && sitterSort == null &&
+            sitterLatitude == null && sitterLongitude == null
+        ) return
+        scope.launch { loadSitters(force = true) }
+    }
+
+    /** 机构详情页进入时刷新完整资料；列表对象只做首屏骨架。 */
+    suspend fun refreshSitterDetail(sitterId: Long) {
+        try {
+            val updated = api.getSitter(sitterId).toUi()
+            sitters = sitters.map { if (it.id == sitterId) updated else it }
+            if (selectedSitter?.id == sitterId) selectedSitter = updated
+        } catch (_: Exception) {
+            // 详情刷新失败保留列表快照
+        }
+    }
+
+    /** 加载当前机构的 pgvector 相似机构；失败时静默留空，不打断详情页。 */
+    suspend fun loadSimilarSitters(sitterId: Long) {
+        if (sitterId <= 0L) {
+            similarSitters = emptyList()
+            return
+        }
+        if (similarSittersLoading && similarSitterId == sitterId) return
+        if (similarSitterId != sitterId) similarSitters = emptyList()
+        similarSitterId = sitterId
+        similarSittersLoading = true
+        try {
+            val data = api.similarSitters(sitterId)
+            if (similarSitterId != sitterId) return
+            similarSitters = data.map { it.sitter.toUi() to it.similarity }
+        } catch (_: Exception) {
+            if (similarSitterId == sitterId) similarSitters = emptyList()
+        } finally {
+            if (similarSitterId == sitterId) similarSittersLoading = false
         }
     }
 
     fun reloadSittersByType() {
         sitters = emptyList()
+        sitterSearchResults = null
+        sitterPriceMin = null
+        sitterPriceMax = null
+        sitterSort = null
+        sitterLatitude = null
+        sitterLongitude = null
         scope.launch { loadSitters(force = true) }
     }
 
-    suspend fun loadPets(force: Boolean = false) {
-        if (!loggedIn || petsLoading) return
-        if (!force && pets.isNotEmpty()) return
+    /**
+     * 服务端关键词搜索：只覆盖 /sitters/search，不替换首页的 sitters 列表。
+     * 失败时保持 null，让搜索页回退到本地过滤，不把网络错误变成“无结果”。
+     */
+    suspend fun searchSitters(query: String) {
+        val q = query.trim()
+        if (q.isBlank()) {
+            sitterSearchResults = null
+            return
+        }
+        sitterSearchResults = try {
+            api.searchSitters(q)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 首页推荐：有定位时按距离排序，没有定位时按默认综合排序。 */
+    suspend fun loadRecommendedSitters(force: Boolean = false) {
+        if (!force && recommendedLoading) return
+        if (!force && recommendedSitters.isNotEmpty()) return
+        val seq = ++recommendedRequestSeq
+        recommendedLoading = true
+        recommendedError = null
+        try {
+            val point = devicePoint
+            val data = try {
+                api.listSitters(
+                    sort = if (point != null) "distance" else null,
+                    latitude = point?.latitude,
+                    longitude = point?.longitude,
+                )
+            } catch (e: Exception) {
+                // 后端还没发布 sort=distance 时，不要让首页整块空掉：
+                // 退回综合推荐，定位文案仍然保留。
+                if (point == null) throw e
+                api.listSitters()
+            }
+            if (seq != recommendedRequestSeq) return
+            recommendedSitters = data
+        } catch (e: Exception) {
+            if (seq == recommendedRequestSeq) recommendedError = e.message ?: "推荐机构加载失败"
+        } finally {
+            if (seq == recommendedRequestSeq) recommendedLoading = false
+        }
+    }
+
+    /**
+     * 应用一次设备定位：先反查城市/区县，再按距离刷新首页推荐。
+     * 逆地理失败不阻塞推荐，位置文案退回「当前位置」。
+     */
+    suspend fun applyDeviceLocation(point: DevicePoint) {
+        devicePoint = point
+        locating = true
+        try {
+            val geo = reverseAddress(point.latitude, point.longitude)
+            locationLabel = listOfNotNull(
+                geo?.resolvedCity?.takeIf { it.isNotBlank() },
+                geo?.district?.takeIf { it.isNotBlank() },
+            ).joinToString(" · ").ifBlank { "当前位置" }
+        } finally {
+            locating = false
+        }
+        loadRecommendedSitters(force = true)
+    }
+
+    fun clearDeviceLocation() {
+        devicePoint = null
+        locationLabel = ""
+        locating = false
+        recommendedSitters = emptyList()
+    }
+
+    suspend fun loadPets(force: Boolean = false, species: String? = null) {
+        if (!loggedIn) return
+        if (!force && petsLoading) return
+        if (!force && pets.isNotEmpty() && petsSpecies == species) return
+        petsSpecies = species
+        val seq = ++petsRequestSeq
         petsLoading = true
         petsError = null
         try {
-            val data = api.listPetsPage(1, PAGE_SIZE)
+            val data = api.listPetsPage(1, PAGE_SIZE, species = species)
+            // 快速切物种时旧请求可能后到，只让最后一次请求落地。
+            if (seq != petsRequestSeq) return
             pets = data.items
             petsPage = 1
             petsHasMore = data.items.size < data.total
         } catch (e: Exception) {
-            petsError = e.message ?: "宠物档案加载失败"
+            if (seq == petsRequestSeq) petsError = e.message ?: "宠物档案加载失败"
         } finally {
-            petsLoading = false
+            if (seq == petsRequestSeq) petsLoading = false
         }
+    }
+
+    /** 离开宠物筛选页时恢复全部，避免首页「我的宠物」统计只读到筛选结果。 */
+    fun clearPetFilter() {
+        if (petsSpecies == null) return
+        scope.launch { loadPets(force = true, species = null) }
     }
 
     /** 宠物列表触底加载下一页 */
@@ -653,7 +878,7 @@ class MobileState(private val session: MobileSession) {
         if (!loggedIn || petsLoading || petsLoadingMore || !petsHasMore) return
         petsLoadingMore = true
         try {
-            val data = api.listPetsPage(petsPage + 1, PAGE_SIZE)
+            val data = api.listPetsPage(petsPage + 1, PAGE_SIZE, species = petsSpecies)
             petsPage += 1
             pets = (pets + data.items).distinctBy { it.id }
             petsHasMore = pets.size < data.total
@@ -664,20 +889,63 @@ class MobileState(private val session: MobileSession) {
         }
     }
 
-    suspend fun loadOrders(force: Boolean = false) {
-        if (!loggedIn || ordersLoading) return
-        if (!force && orders.isNotEmpty()) return
+    suspend fun loadOrders(force: Boolean = false, statusFilter: String? = null) {
+        if (!loggedIn) return
+        if (!force && ordersLoading) return
+        if (!force && orders.isNotEmpty() && ordersStatusFilter == statusFilter) return
+        ordersStatusFilter = statusFilter
+        val seq = ++ordersRequestSeq
         ordersLoading = true
         ordersError = null
         try {
-            val data = api.listOrdersPage(1, PAGE_SIZE)
+            val data = api.listOrdersPage(1, PAGE_SIZE, statusFilter)
+            // 快速切状态 Tab 时旧请求可能后到，只让最后一次请求落地。
+            if (seq != ordersRequestSeq) return
             orders = data.items
             ordersPage = 1
             ordersHasMore = data.items.size < data.total
         } catch (e: Exception) {
-            ordersError = e.message ?: "订单加载失败"
+            if (seq == ordersRequestSeq) ordersError = e.message ?: "订单加载失败"
         } finally {
-            ordersLoading = false
+            if (seq == ordersRequestSeq) ordersLoading = false
+        }
+    }
+
+    /** 离开订单筛选页时恢复“全部”，避免首页统计读到筛选后的列表。 */
+    fun clearOrderFilter() {
+        if (ordersStatusFilter == null) return
+        scope.launch { loadOrders(force = true, statusFilter = null) }
+    }
+
+    /** 详情页进入时刷新订单，避免只展示列表里的旧快照。 */
+    suspend fun refreshOrderDetail(orderId: Long) {
+        if (selectedOrder?.id == orderId) selectedOrderPets = emptyList()
+        try {
+            val detail = api.getOrderDetail(orderId)
+            val updated = detail.order.toUi()
+            orders = orders.map { if (it.id == orderId) updated else it }
+            if (selectedOrder?.id == orderId) {
+                selectedOrder = updated
+                selectedOrderPets = detail.pets
+            }
+        } catch (_: Exception) {
+            // 详情刷新失败不覆盖已有列表快照
+        }
+    }
+
+    /** 机构订单详情：刷新后同时回填列表和 selectedReceivedOrder。 */
+    suspend fun refreshReceivedOrder(orderId: Long) {
+        if (selectedReceivedOrder?.id == orderId) selectedReceivedOrderPets = emptyList()
+        try {
+            val detail = api.getReceivedOrder(orderId)
+            val updated = detail.order.toReceivedOrder()
+            receivedOrders = receivedOrders.map { if (it.id == orderId) updated else it }
+            if (selectedReceivedOrder?.id == orderId) {
+                selectedReceivedOrder = updated
+                selectedReceivedOrderPets = detail.pets
+            }
+        } catch (_: Exception) {
+            // 保留列表快照
         }
     }
 
@@ -686,7 +954,7 @@ class MobileState(private val session: MobileSession) {
         if (!loggedIn || ordersLoading || ordersLoadingMore || !ordersHasMore) return
         ordersLoadingMore = true
         try {
-            val data = api.listOrdersPage(ordersPage + 1, PAGE_SIZE)
+            val data = api.listOrdersPage(ordersPage + 1, PAGE_SIZE, ordersStatusFilter)
             ordersPage += 1
             orders = (orders + data.items).distinctBy { it.id }
             ordersHasMore = orders.size < data.total
@@ -759,6 +1027,18 @@ class MobileState(private val session: MobileSession) {
             toast(e.message ?: "动态加载失败")
         } finally {
             orderDynamicsLoading = false
+        }
+    }
+
+    /** 动态详情页进入时刷新正文/关联订单，避免只依赖列表快照。 */
+    suspend fun refreshDynamic(dynamicId: Long) {
+        try {
+            val updated = api.getDynamic(dynamicId)
+            if (selectedDynamic?.id == dynamicId) selectedDynamic = updated
+            ownerDynamics = ownerDynamics.map { if (it.id == dynamicId) updated else it }
+            orderDynamics = orderDynamics.map { if (it.id == dynamicId) updated else it }
+        } catch (_: Exception) {
+            // 保留列表快照
         }
     }
 
@@ -1487,23 +1767,28 @@ class MobileState(private val session: MobileSession) {
         }
         busy = true
         try {
-            myShop = api.updateMyShop(
-                UpdateShopPayload(
-                    name = name.trim(),
-                    type = type,
-                    description = description.trim(),
-                    dailyPrice = dailyPrice,
-                    visitPrice = visitPrice,
-                    priceMode = priceMode,
-                    capacity = capacity,
-                    address = address.trim(),
-                    coverPhotoUrl = coverPhotoUrl,
-                    detailPhotos = detailPhotos,
-                    latitude = latitude,
-                    longitude = longitude,
-                ),
+            val payload = UpdateShopPayload(
+                name = name.trim(),
+                type = type,
+                description = description.trim(),
+                dailyPrice = dailyPrice,
+                visitPrice = visitPrice,
+                priceMode = priceMode,
+                capacity = capacity,
+                address = address.trim(),
+                coverPhotoUrl = coverPhotoUrl,
+                detailPhotos = detailPhotos,
+                latitude = latitude,
+                longitude = longitude,
             )
-            toast("机构资料已保存")
+            // getMyShop 404 说明账号还没有机构记录，这时 PUT 也会失败，
+            // 必须先走 POST /sitter/shop 建店。
+            myShop = if (myShop == null) {
+                api.createMyShop(payload)
+            } else {
+                api.updateMyShop(payload)
+            }
+            toast(if (myShop?.status == "pending") "机构资料已提交，等待审核" else "机构资料已保存")
         } catch (e: Exception) {
             toast(e.message ?: "保存失败")
         } finally {

@@ -64,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -133,21 +134,57 @@ fun DBottomTabs(active: DTab, nav: DNav) {
             modifier = Modifier.fillMaxWidth(),
             // 与玻璃面相接的只有上缘：顶部两个圆角，下缘贴屏幕底
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            // 透明导航栏：只留 8% 底色 + 55% 玻璃，45% 的真实内容直接透出来；
+            // 底部再叠一层很淡的渐变压住文字，避免透明后小字号发飘
+            tint = DColor.Bg.copy(alpha = 0.08f),
+            blurRadius = 22f,
             cornerDp = 18.dp,
+            surfaceAlpha = 0.55f,
         ) {
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, DColor.Bg.copy(alpha = 0.30f)),
+                    ),
+                ),
+            )
             Row(
                 Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp).padding(top = 8.dp),
             ) {
         tabs.forEach { tab ->
             val on = tab == active
             val icon = tab.dIcon
+            val cardShape = RoundedCornerShape(14.dp)
             Column(
-                Modifier.weight(1f).clickable { nav.tab(tab) },
+                Modifier.weight(1f)
+                    .padding(horizontal = 3.dp)
+                    // 当前页：浅色圆角透明玻璃卡；未选中保持透明
+                    .then(
+                        if (on) {
+                            Modifier
+                                .dGlassSurface(
+                                    shape = cardShape,
+                                    // 选中卡用主题品牌色，透明浅色：浅色下是淡粉玻璃，
+                                    // 深色下自动变成深酒红玻璃，BrandInk 在两边都可读
+                                    tint = DColor.Brand.copy(alpha = 0.20f),
+                                    blurRadius = 14f,
+                                    cornerDp = 14.dp,
+                                    edgeDp = 6.dp,
+                                    surfaceAlpha = 0.42f,
+                                    fallbackColor = DColor.BrandSoft.copy(alpha = 0.55f),
+                                )
+                                .dGlassSheen(strength = 0.75f)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { nav.tab(tab) }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 // 选中态用颜色 + 轻微放大过渡，切换 Tab 时不会「啪」地跳一下。
                 val tint by animateColorAsState(
-                    targetValue = if (on) DColor.BrandInk else DColor.Ink3,
+                    targetValue = if (on) DColor.BrandInk else DColor.Ink2,
                     animationSpec = tween(180),
                 )
                 val scale by animateFloatAsState(
@@ -168,6 +205,14 @@ fun DBottomTabs(active: DTab, nav: DNav) {
                     fontSize = 10.5.sp,
                     color = tint,
                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    // 选中项已有浅色玻璃卡托底，不再加阴影；未选中仍在透明栏上，保留轻阴影
+                    style = if (on) {
+                        TextStyle()
+                    } else {
+                        TextStyle(
+                            shadow = Shadow(color = Color.Black.copy(alpha = 0.38f), blurRadius = 6f),
+                        )
+                    },
                 )
             }
         }
@@ -208,9 +253,11 @@ fun DNavigationRail(active: DTab?, nav: DNav) {
         Modifier.width(win.railWidth).fillMaxHeight()
             .dGlassSurface(
                 shape = RectangleShape,
-                tint = DColor.Card.copy(alpha = 0.56f),
+                // 透明导航栏：只留一层薄玻璃，露出页面底色
+                tint = DColor.Card.copy(alpha = 0.16f),
                 blurRadius = 20f,
                 cornerDp = 0.dp,
+                surfaceAlpha = 0.60f,
             ),
     ) {
         Column(
@@ -245,10 +292,24 @@ private fun DNavRailItem(tab: DTab, selected: Boolean, onClick: () -> Unit) {
         targetValue = if (selected) DColor.BrandInk else DColor.Ink3,
         animationSpec = tween(180),
     )
+    // 选中项做成品牌色小玻璃片；未选中保持透明，不额外增加层
+    val glass = selected && isGlassSupported && LocalDGlassAmbient.current != null
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 10.dp)
-            .clip(DShape.Lg)
-            .background(if (selected) DColor.BrandSoft else Color.Transparent)
+            .then(
+                if (glass) {
+                    Modifier.dGlassSurface(
+                        shape = DShape.Lg,
+                        tint = DColor.BrandSoft.copy(alpha = 0.78f),
+                        blurRadius = 12f,
+                        cornerDp = 8.dp,
+                        edgeDp = 5.dp,
+                        fallbackColor = DColor.BrandSoft,
+                    )
+                } else {
+                    Modifier.background(if (selected) DColor.BrandSoft else Color.Transparent)
+                },
+            )
             .clickable(onClick = onClick)
             .padding(vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -258,7 +319,8 @@ private fun DNavRailItem(tab: DTab, selected: Boolean, onClick: () -> Unit) {
         Text(
             tab.label,
             fontSize = 11.sp,
-            color = tint,
+            // 选中态图标保留品牌色，文字改用 Ink：BrandInk 压在 BrandSoft 上只有约 3.9:1
+            color = if (selected) DColor.Ink else tint,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
@@ -292,12 +354,14 @@ fun DCard(
                 .fillMaxWidth()
                 .dGlassSurface(
                     shape = DShape.Lg,
-                    // 60% 卡片底色压住环境光，正文仍然清晰；剩下 40% 留给折射与边缘光
-                    tint = DColor.Card.copy(alpha = 0.60f),
+                    // 浅粉底上卡片要显白，但不能回到实心卡：68% 白底 + 反光
+                    tint = DColor.Card.copy(alpha = 0.68f),
                     blurRadius = 16f,
                     cornerDp = 12.dp,
                 )
-                .border(1.dp, DColor.White.copy(alpha = 0.16f), DShape.Lg),
+                // 卡片统一反光：左上 bloom + 斜向光带 + 顶部亮边
+                .dGlassSheen(strength = 0.95f)
+                .border(1.dp, DColor.White.copy(alpha = 0.20f), DShape.Lg),
         ) {
             Column(
                 Modifier.fillMaxWidth().padding(padding),
@@ -393,7 +457,7 @@ enum class DTagTone { Brand, Ok, Warn, Line, Info, Danger }
 
 @Composable
 fun DTag(text: String, tone: DTagTone = DTagTone.Brand) {
-    val (bg, fg) = when (tone) {
+    val (bg, _) = when (tone) {
         DTagTone.Brand -> DColor.BrandSoft to DColor.BrandInk
         DTagTone.Ok -> DColor.OkSoft to DColor.Ok
         DTagTone.Warn -> DColor.WarnSoft to DColor.Warn
@@ -402,9 +466,21 @@ fun DTag(text: String, tone: DTagTone = DTagTone.Brand) {
         DTagTone.Danger -> DColor.DangerSoft to DColor.Danger
     }
     Box(
-        Modifier.clip(DShape.Pill).background(bg).padding(horizontal = 8.dp, vertical = 3.dp),
+        Modifier
+            .dGlassSurface(
+                shape = DShape.Pill,
+                tint = bg.copy(alpha = 0.72f),
+                blurRadius = 8f,
+                // tag 高度约 20dp，SDF 半径取一半，避免半径大于半高
+                cornerDp = 10.dp,
+                edgeDp = 4.dp,
+                fallbackColor = bg,
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
-        Text(text, fontSize = 10.5.sp, color = fg)
+        // 小字号 tag 不再用低对比的 tone 前景色：底色已经表达语义，
+        // 文字统一用 Ink，浅色/深色下都能读清
+        Text(text, fontSize = 10.5.sp, color = DColor.Ink)
     }
 }
 
@@ -421,11 +497,11 @@ fun DButton(
 ) {
     val (bg, fg, border) = when (style) {
         DButtonStyle.Primary -> Triple(DColor.Brand, DColor.White, DColor.Brand)
-        DButtonStyle.Ghost -> Triple(DColor.BrandSoft, DColor.BrandInk, DColor.BrandSoft)
+        DButtonStyle.Ghost -> Triple(DColor.BrandSoft, DColor.Ink, DColor.BrandSoft)
         DButtonStyle.Outline -> Triple(DColor.Card, DColor.Ink2, DColor.Line2)
     }
-    // 描边按钮做玻璃底：主按钮保持品牌实色，不抢主操作
-    val glass = enabled && style == DButtonStyle.Outline &&
+    // Ghost / Outline 做玻璃底；Primary 保持品牌实色，不抢主操作
+    val glass = enabled && style != DButtonStyle.Primary &&
         isGlassSupported && LocalDGlassAmbient.current != null
     Box(
         modifier
@@ -435,9 +511,14 @@ fun DButton(
                 if (glass) {
                     Modifier.dGlassSurface(
                         shape = DShape.Md,
-                        tint = DColor.Card.copy(alpha = 0.56f),
+                        tint = if (style == DButtonStyle.Ghost) {
+                            DColor.BrandSoft.copy(alpha = 0.72f)
+                        } else {
+                            DColor.Card.copy(alpha = 0.72f)
+                        },
                         blurRadius = 14f,
                         cornerDp = 8.dp,
+                        fallbackColor = bg,
                     )
                 } else {
                     Modifier.background(if (enabled) bg else DColor.Line2)
@@ -471,7 +552,7 @@ fun DSmallButton(
                 if (glass) {
                     Modifier.dGlassSurface(
                         shape = DShape.Pill,
-                        tint = DColor.Card.copy(alpha = 0.58f),
+                        tint = DColor.Card.copy(alpha = 0.72f),
                         blurRadius = 12f,
                         cornerDp = 20.dp,
                     )
@@ -513,7 +594,7 @@ fun DChip(text: String, selected: Boolean, onClick: () -> Unit) {
                 if (glass) {
                     Modifier.dGlassSurface(
                         shape = DShape.Pill,
-                        tint = DColor.Card.copy(alpha = 0.55f),
+                        tint = DColor.Card.copy(alpha = 0.72f),
                         blurRadius = 12f,
                         cornerDp = 20.dp,
                     )
@@ -575,7 +656,7 @@ fun DField(label: String, value: String, hint: String = "", onClick: (() -> Unit
             Modifier.fillMaxWidth()
                 .dGlassSurface(
                     shape = DShape.Md,
-                    tint = DColor.Card.copy(alpha = 0.62f),
+                    tint = DColor.Card.copy(alpha = 0.75f),
                     blurRadius = 14f,
                     cornerDp = 8.dp,
                 )
@@ -586,7 +667,7 @@ fun DField(label: String, value: String, hint: String = "", onClick: (() -> Unit
             Text(
                 value.ifBlank { hint },
                 fontSize = 14.sp,
-                color = if (value.isBlank()) DColor.Ink3 else DColor.Ink,
+                color = if (value.isBlank()) DColor.Ink2 else DColor.Ink,
             )
         }
     }
@@ -652,8 +733,14 @@ fun DOptionRow(
 ) {
     Row(
         Modifier.fillMaxWidth()
-            .clip(DShape.Md)
-            .background(if (selected) DColor.BrandSoft else DColor.Card)
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = if (selected) DColor.BrandSoft.copy(alpha = 0.80f) else DColor.Card.copy(alpha = 0.74f),
+                blurRadius = 12f,
+                cornerDp = 8.dp,
+                edgeDp = 6.dp,
+                fallbackColor = if (selected) DColor.BrandSoft else DColor.Card,
+            )
             .border(1.5.dp, if (selected) DColor.Brand else DColor.Line, DShape.Md)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 11.dp),
@@ -799,28 +886,41 @@ fun DTimelineNode(
 
 @Composable
 fun DEmpty(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // 空状态本身也做成一块薄玻璃面板，而不是只留一个图标圆
+    DGlassSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = DShape.Lg,
+        tint = DColor.Card.copy(alpha = 0.55f),
+        blurRadius = 18f,
+        cornerDp = 12.dp,
+        edgeDp = 10.dp,
+        sheen = true,
+        // 空状态在页面内容层里，必须采环境层；默认会采页面记录层而自采样
+        backdrop = LocalDGlassAmbient.current,
     ) {
-        Box(
-            Modifier.size(64.dp)
-                .dGlassSurface(
-                    shape = CircleShape,
-                    tint = DColor.BrandSoft.copy(alpha = 0.55f),
-                    blurRadius = 16f,
-                    cornerDp = 32.dp,
-                    fallbackColor = DColor.BrandSoft,
-                ),
-            contentAlignment = Alignment.Center,
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AppIcon(AppIcon.Paw, Modifier.size(30.dp), DColor.BrandInk)
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(text, fontSize = 13.sp, color = DColor.Ink3)
-        if (action != null) {
+            Box(
+                Modifier.size(64.dp)
+                    .dGlassSurface(
+                        shape = CircleShape,
+                        tint = DColor.BrandSoft.copy(alpha = 0.70f),
+                        blurRadius = 16f,
+                        cornerDp = 32.dp,
+                        fallbackColor = DColor.BrandSoft,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(AppIcon.Paw, Modifier.size(30.dp), DColor.BrandInk)
+            }
             Spacer(Modifier.height(12.dp))
-            DSmallButton(action, { onAction?.invoke() }, filled = true)
+            Text(text, fontSize = 13.sp, color = DColor.Ink3)
+            if (action != null) {
+                Spacer(Modifier.height(12.dp))
+                DSmallButton(action, { onAction?.invoke() }, filled = true)
+            }
         }
     }
 }
@@ -832,7 +932,7 @@ fun DNotice(text: String) {
         Modifier.fillMaxWidth()
             .dGlassSurface(
                 shape = DShape.Md,
-                tint = DColor.BrandSoft.copy(alpha = 0.55f),
+                tint = DColor.BrandSoft.copy(alpha = 0.78f),
                 blurRadius = 14f,
                 cornerDp = 8.dp,
                 fallbackColor = DColor.BrandSoft,
@@ -840,7 +940,7 @@ fun DNotice(text: String) {
             .border(1.dp, if (glass) DColor.White.copy(alpha = 0.16f) else Color.Transparent, DShape.Md)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Text(text, fontSize = 12.sp, color = DColor.BrandInk)
+        Text(text, fontSize = 12.sp, color = DColor.Ink)
     }
 }
 
@@ -852,7 +952,7 @@ fun DSearchBar(hint: String, onClick: () -> Unit = {}) {
             .padding(horizontal = LocalDWindow.current.gutter, vertical = 8.dp)
             .dGlassSurface(
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.58f),
+                tint = DColor.Card.copy(alpha = 0.75f),
                 blurRadius = 14f,
                 cornerDp = 8.dp,
             )
@@ -861,9 +961,9 @@ fun DSearchBar(hint: String, onClick: () -> Unit = {}) {
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(AppIcon.Search, Modifier.size(17.dp), DColor.Ink3)
+        AppIcon(AppIcon.Search, Modifier.size(17.dp), DColor.Ink2)
         Spacer(Modifier.width(8.dp))
-        Text(hint, fontSize = 13.sp, color = DColor.Ink3)
+        Text(hint, fontSize = 13.sp, color = DColor.Ink2)
     }
 }
 
@@ -884,14 +984,29 @@ fun DFixBar(amountLabel: String, amount: String, button: String, onAction: () ->
         DGlassSurface(
             modifier = Modifier.fillMaxWidth(),
             shape = DShape.Lg,
+            // 结算栏也保持通透：30% 主题底 + 45% 玻璃，金额文字靠柔光阴影保读
+            tint = DColor.Bg.copy(alpha = 0.30f),
+            blurRadius = 20f,
+            surfaceAlpha = 0.45f,
         ) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column {
-                    Text(amountLabel, fontSize = 11.5.sp, color = DColor.Ink3)
-                    Text(amount, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = DColor.BrandInk)
+                    Text(
+                        amountLabel,
+                        fontSize = 11.5.sp,
+                        color = DColor.Ink2,
+                        style = TextStyle(shadow = dGlassTextShadow()),
+                    )
+                    Text(
+                        amount,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DColor.BrandInk,
+                        style = TextStyle(shadow = dGlassTextShadow()),
+                    )
                 }
                 Spacer(Modifier.width(14.dp))
                 DButton(button, onAction, modifier = Modifier.weight(1f), height = 42.dp)
@@ -948,13 +1063,13 @@ fun DLoading(text: String = "加载中…") {
             Modifier
                 .dGlassSurface(
                     shape = DShape.Pill,
-                    tint = DColor.Card.copy(alpha = 0.50f),
+                    tint = DColor.Card.copy(alpha = 0.75f),
                     blurRadius = 14f,
                     cornerDp = 20.dp,
                 )
                 .padding(horizontal = 14.dp, vertical = 6.dp),
         ) {
-            Text(text, fontSize = 12.5.sp, color = DColor.Ink3)
+            Text(text, fontSize = 12.5.sp, color = DColor.Ink2)
         }
     }
 }
@@ -962,14 +1077,24 @@ fun DLoading(text: String = "加载中…") {
 /** 统一错误态：带重试按钮，避免接口挂了页面一片空白。 */
 @Composable
 fun DErrorBox(message: String, onRetry: (() -> Unit)? = null) {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 26.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        Modifier.fillMaxWidth()
+            .dGlassSurface(
+                shape = DShape.Lg,
+                tint = DColor.Card.copy(alpha = 0.78f),
+                blurRadius = 16f,
+                cornerDp = 12.dp,
+                edgeDp = 8.dp,
+            )
+            .padding(vertical = 22.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(message, fontSize = 12.5.sp, color = DColor.Ink3)
-        if (onRetry != null) {
-            Spacer(Modifier.height(10.dp))
-            DSmallButton("重试", onRetry)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(message, fontSize = 12.5.sp, color = DColor.Ink2)
+            if (onRetry != null) {
+                Spacer(Modifier.height(10.dp))
+                DSmallButton("重试", onRetry)
+            }
         }
     }
 }

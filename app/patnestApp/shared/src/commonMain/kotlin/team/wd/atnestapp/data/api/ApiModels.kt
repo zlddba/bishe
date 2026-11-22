@@ -19,6 +19,24 @@ data class LoginPayload(
 )
 
 @Serializable
+data class SendLoginCodePayload(val phone: String)
+
+/** 演示模式：服务端返回 demo_code，客户端用本地通知展示。 */
+@Serializable
+data class SendLoginCodeDto(
+    val sent: Boolean = false,
+    @SerialName("expires_in") val expiresIn: Int = 300,
+    @SerialName("demo_code") val demoCode: String? = null,
+)
+
+@Serializable
+data class CodeLoginPayload(
+    val phone: String,
+    val code: String,
+    val client: String = "app",
+)
+
+@Serializable
 data class RegisterPayload(
     val username: String,
     val password: String,
@@ -140,6 +158,17 @@ data class SitterPageDto(
 )
 
 @Serializable
+data class SimilarSitterDto(
+    val sitter: SitterDto = SitterDto(),
+    val similarity: Double = 0.0,
+)
+
+@Serializable
+data class SimilarSitterListDto(
+    val items: List<SimilarSitterDto> = emptyList(),
+)
+
+@Serializable
 data class PetDto(
     val id: Long = 0,
     @SerialName("owner_id") val ownerId: Long = 0,
@@ -179,7 +208,25 @@ data class OrderDto(
     @SerialName("pet_count") val petCount: Int = 0,
     @SerialName("total_amount") val totalAmount: Double = 0.0,
     @SerialName("sitter_name") val sitterName: String = "",
+    @SerialName("owner_name") val ownerName: String = "",
     @SerialName("created_at") val createdAt: String = "",
+)
+
+/** 订单详情接口的外层：主人端和机构端共用同一套 order + pets。 */
+@Serializable
+data class OrderDetailDto(
+    val order: OrderDto = OrderDto(),
+    val pets: List<OrderPetDto> = emptyList(),
+)
+
+@Serializable
+data class OrderPetDto(
+    val id: Long = 0,
+    @SerialName("order_id") val orderId: Long = 0,
+    @SerialName("pet_id") val petId: Long = 0,
+    @SerialName("stay_date") val stayDate: String = "",
+    val status: String = "",
+    @SerialName("pet_name") val petName: String = "",
 )
 
 @Serializable
@@ -525,29 +572,6 @@ data class GeocodeDto(
     val adcode: String = "",
     val level: String = "",
     @SerialName("from_cache") val fromCache: Boolean = false,
-)
-
-/** 桌面端地图选点：先建会话拿到一次性链接，再轮询取回用户浏览器里选中的坐标。 */
-@Serializable
-data class GeoPickPayload(
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    @SerialName("place_name") val placeName: String = "",
-)
-
-@Serializable
-data class GeoPickSessionDto(
-    val token: String = "",
-    val path: String = "",
-    @SerialName("expires_in") val expiresIn: Int = 0,
-)
-
-@Serializable
-data class GeoPickResultDto(
-    val status: String = "pending",
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    @SerialName("formatted_address") val formattedAddress: String = "",
 )
 
 @Serializable

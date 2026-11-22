@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldDecorator
 import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -100,11 +101,20 @@ internal fun DMiuixTopBar(
             DGlassSurface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RectangleShape,
-                // 大标题直接压在玻璃上，40% 底色保可读；内容滚过仍清晰透出
-                tint = DColor.Bg.copy(alpha = 0.40f),
-                blurRadius = 22f,
+                // 透明顶栏：只留 10% 底色 + 55% 玻璃，滚动内容直接透出来；
+                // 标题区叠一层向下淡出的页面底色，保证大标题不糊
+                tint = DColor.Bg.copy(alpha = 0.10f),
+                blurRadius = 24f,
                 cornerDp = 0.dp,
+                surfaceAlpha = 0.55f,
             ) {
+                Box(
+                    Modifier.matchParentSize().background(
+                        Brush.verticalGradient(
+                            listOf(DColor.Bg.copy(alpha = 0.50f), Color.Transparent),
+                        ),
+                    ),
+                )
                 TopAppBar(
                     title = title,
                     color = Color.Transparent,
@@ -300,7 +310,7 @@ private fun DMiuixFieldBox(
             // 输入框也走环境玻璃：文字压在 62% 卡片底上，边框与折射给出玻璃层次
             .dGlassSurface(
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.62f),
+                tint = DColor.Card.copy(alpha = 0.75f),
                 blurRadius = 14f,
                 cornerDp = 8.dp,
             )
@@ -315,7 +325,7 @@ private fun DMiuixFieldBox(
     ) {
         Box(Modifier.weight(1f)) {
             if (isEmpty && placeholder.isNotEmpty()) {
-                Text(placeholder, fontSize = 14.sp, color = DColor.Ink3)
+                Text(placeholder, fontSize = 14.sp, color = DColor.Ink2)
             }
             inner()
         }

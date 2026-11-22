@@ -188,7 +188,7 @@ internal fun DMapGlassCircle(
     DGlassSurface(
         modifier = modifier.size(34.dp),
         shape = CircleShape,
-        tint = DColor.Card.copy(alpha = 0.30f),
+        tint = DColor.Card.copy(alpha = 0.72f),
         blurRadius = 14f,
         cornerDp = 17.dp,
         surfaceAlpha = 0.55f,

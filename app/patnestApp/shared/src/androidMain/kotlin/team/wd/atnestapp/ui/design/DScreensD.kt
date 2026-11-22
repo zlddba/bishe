@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -168,8 +169,19 @@ private fun D_SelectChipRow(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
                 Box(
-                    Modifier.clip(DShape.Pill)
-                        .background(if (option == selected) DColor.BrandSoft else DColor.NeutralSoft)
+                    Modifier
+                        .dGlassSurface(
+                            shape = DShape.Pill,
+                            tint = if (option == selected) {
+                                DColor.BrandSoft.copy(alpha = 0.82f)
+                            } else {
+                                DColor.NeutralSoft.copy(alpha = 0.78f)
+                            },
+                            blurRadius = 12f,
+                            cornerDp = 20.dp,
+                            edgeDp = 6.dp,
+                            fallbackColor = if (option == selected) DColor.BrandSoft else DColor.NeutralSoft,
+                        )
                         .border(1.dp, if (option == selected) DColor.Brand else DColor.Line, DShape.Pill)
                         .clickable { onSelect(option) }
                         .padding(horizontal = 13.dp, vertical = 7.dp),
@@ -177,7 +189,7 @@ private fun D_SelectChipRow(
                     Text(
                         option,
                         fontSize = 12.sp,
-                        color = if (option == selected) DColor.BrandInk else DColor.Ink2,
+                        color = if (option == selected) DColor.Ink else DColor.Ink2,
                     )
                 }
             }
@@ -197,8 +209,15 @@ private fun DUploadRow(
         Text(label, fontSize = 12.sp, color = DColor.Ink2)
         Spacer(Modifier.height(6.dp))
         Box(
-            Modifier.fillMaxWidth().height(96.dp).clip(DShape.Md)
-                .background(DColor.Bg)
+            Modifier.fillMaxWidth().height(96.dp)
+                .dGlassSurface(
+                    shape = DShape.Md,
+                    tint = DColor.Bg.copy(alpha = 0.75f),
+                    blurRadius = 14f,
+                    cornerDp = 8.dp,
+                    edgeDp = 8.dp,
+                    fallbackColor = DColor.Bg,
+                )
                 .border(1.dp, DColor.Line, DShape.Md)
                 .clickable(enabled = !uploading) { onPick() },
             contentAlignment = Alignment.Center,
@@ -413,8 +432,15 @@ fun D50Invite(nav: DNav) {
             }
             Spacer(Modifier.height(18.dp))
             Box(
-                Modifier.fillMaxWidth().clip(DShape.Md)
-                    .background(DColor.White.copy(alpha = 0.18f))
+                Modifier.fillMaxWidth()
+                    .dGlassSurface(
+                        shape = DShape.Md,
+                        tint = DColor.Scrim.copy(alpha = 0.35f),
+                        blurRadius = 14f,
+                        cornerDp = 8.dp,
+                        edgeDp = 8.dp,
+                        fallbackColor = DColor.Scrim,
+                    )
                     .padding(16.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -860,7 +886,7 @@ private fun DDateStep(
             Modifier.fillMaxWidth()
                 .dGlassSurface(
                     shape = DShape.Md,
-                    tint = DColor.Card.copy(alpha = 0.58f),
+                    tint = DColor.Card.copy(alpha = 0.75f),
                     blurRadius = 14f,
                     cornerDp = 8.dp,
                 )
@@ -916,7 +942,7 @@ fun D57OrderExtend(nav: DNav) {
                     Modifier.size(32.dp)
                         .dGlassSurface(
                             shape = CircleShape,
-                            tint = DColor.Card.copy(alpha = 0.55f),
+                            tint = DColor.Card.copy(alpha = 0.72f),
                             blurRadius = 12f,
                             cornerDp = 16.dp,
                         )
@@ -941,7 +967,7 @@ fun D57OrderExtend(nav: DNav) {
                     Modifier.size(32.dp)
                         .dGlassSurface(
                             shape = CircleShape,
-                            tint = DColor.Card.copy(alpha = 0.55f),
+                            tint = DColor.Card.copy(alpha = 0.72f),
                             blurRadius = 12f,
                             cornerDp = 16.dp,
                         )
@@ -1069,8 +1095,16 @@ fun D59ReviewDetail(nav: DNav) {
                 if (review.replyText.isNotBlank()) {
                     Spacer(Modifier.height(10.dp))
                     Column(
-                        Modifier.fillMaxWidth().clip(DShape.Md)
-                            .background(DColor.BrandSoft).padding(10.dp),
+                        Modifier.fillMaxWidth()
+                            .dGlassSurface(
+                                shape = DShape.Md,
+                                tint = DColor.BrandSoft.copy(alpha = 0.75f),
+                                blurRadius = 12f,
+                                cornerDp = 8.dp,
+                                edgeDp = 6.dp,
+                                fallbackColor = DColor.BrandSoft,
+                            )
+                            .padding(10.dp),
                     ) {
                         Text("机构回复", fontSize = 11.sp, color = DColor.BrandInk)
                         Spacer(Modifier.height(4.dp))
@@ -1189,7 +1223,20 @@ fun D60Wallet(nav: DNav) {
         DPad {
             Spacer(Modifier.height(14.dp))
             Column(
-                Modifier.fillMaxWidth().clip(DShape.Lg).background(DWalletGradientFor(nav))
+                Modifier.fillMaxWidth()
+                    .dGlassBrush(
+                        brush = DWalletGradientFor(nav),
+                        alpha = 0.86f,
+                        shape = DShape.Lg,
+                        cornerDp = 12.dp,
+                    )
+                    // 钱包卡是白字压深色渐变：反光高光会提亮左上，
+                    // 再压一层极淡暗 scrim 保住「可用余额」与金额的对比度
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.20f), Color.Transparent),
+                        ),
+                    )
                     .padding(18.dp),
             ) {
                 Text("可用余额", fontSize = 12.sp, color = DColor.White.copy(alpha = 0.85f))
@@ -1447,27 +1494,53 @@ fun D61SettingsDetail(nav: DNav) {
                 nav.tab(DTab.Home)
             }
             Spacer(Modifier.height(10.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val cancelPending = !store.profile?.cancelMode.isNullOrBlank() ||
+                !store.profile?.cancelDeadline.isNullOrBlank()
+            if (cancelPending) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "撤销注销申请",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DColor.BrandInk,
+                        modifier = Modifier.clickable {
+                            scope.launch { store.withdrawAccountCancel() }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "注销账号",
-                    fontSize = 12.5.sp,
+                    "账号处于注销冷静期，截止 " +
+                        (store.profile?.cancelDeadline?.take(10) ?: "—") +
+                        "；撤销后恢复正常。",
+                    fontSize = 11.sp,
                     color = DColor.Ink3,
-                    modifier = Modifier.clickable {
-                        scope.launch {
-                            store.requestAccountCancel("delay")
-                            nav.tab(DTab.Home)
-                        }
-                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "注销账号",
+                        fontSize = 12.5.sp,
+                        color = DColor.Ink3,
+                        modifier = Modifier.clickable {
+                            scope.launch {
+                                store.requestAccountCancel("delay")
+                                nav.tab(DTab.Home)
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "注销后进入冷静期，期间重新登录可撤销；账号数据将在冷静期结束后清理。",
+                    fontSize = 11.sp,
+                    color = DColor.Ink3,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "注销后进入冷静期，期间重新登录可撤销；账号数据将在冷静期结束后清理。",
-                fontSize = 11.sp,
-                color = DColor.Ink3,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }
@@ -1483,13 +1556,23 @@ private fun D_HeroBlock(
     background: Brush = DColor.HeroGradient,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val base = if (roundedBottom) {
-        Modifier.fillMaxWidth().clip(D_HeroBottomShape)
-    } else {
-        Modifier.fillMaxWidth()
-    }
+    val shape = if (roundedBottom) D_HeroBottomShape else RectangleShape
     Column(
-        base.background(background).padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
+        Modifier.fillMaxWidth()
+            .dGlassBrush(
+                brush = background,
+                alpha = 0.86f,
+                shape = shape,
+                // 底部大圆角 hero 的上缘是直边，SDF 不能按 26dp 全角磨圆
+                cornerDp = 0.dp,
+                edgeDp = 12.dp,
+            )
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Black.copy(alpha = 0.26f), Color.Transparent),
+                ),
+            )
+            .padding(horizontal = LocalDWindow.current.gutter, vertical = 22.dp),
         content = content,
     )
 }
@@ -1512,7 +1595,11 @@ private fun D_Equal2(
 /** 加粗标题 + 若干浅色说明行的软底信息卡（审核说明 / 退款说明 / 寄养中）。 */
 @Composable
 private fun D_InfoCard(title: String, lines: List<String>, background: Brush) {
-    Column(Modifier.fillMaxWidth().clip(DShape.Lg).background(background).padding(14.dp)) {
+    Column(
+        Modifier.fillMaxWidth()
+            .dGlassBrush(background, alpha = 0.90f, shape = DShape.Lg, cornerDp = 12.dp)
+            .padding(14.dp),
+    ) {
         Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
         lines.forEach { line ->
             Spacer(Modifier.height(6.dp))
@@ -1542,7 +1629,7 @@ private fun D_DangerOutlineButton(text: String, onClick: () -> Unit) {
         Modifier.fillMaxWidth().height(44.dp)
             .dGlassSurface(
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.58f),
+                tint = DColor.Card.copy(alpha = 0.75f),
                 blurRadius = 14f,
                 cornerDp = 8.dp,
             )
@@ -1621,7 +1708,7 @@ private fun D_SearchChip(text: String, onClick: () -> Unit) {
         Modifier
             .dGlassSurface(
                 shape = DShape.Pill,
-                tint = DColor.Card.copy(alpha = 0.55f),
+                tint = DColor.Card.copy(alpha = 0.75f),
                 blurRadius = 12f,
                 cornerDp = 20.dp,
             )

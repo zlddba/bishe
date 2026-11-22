@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
  * 颜色由 tint 控制，形状随组件尺寸等比缩放。
  */
 enum class AppIcon {
-    Home, Shop, Paw, Calendar, Orders, OrdersPlain, Image, User,
+    Home, Location, Shop, Paw, Calendar, Orders, OrdersPlain, Image, User,
     Heart, Ticket, Bell, Search, Plus, Back, Check, CheckCircle,
     Star, Close, Card, Bank, Logout, Eye, EyeOff, Camera,
 }
@@ -63,6 +63,19 @@ private fun Path.polyline(vararg points: Float): Path {
 private fun DrawScope.drawAppIcon(icon: AppIcon, tint: Color) {
     val sub = tint.copy(alpha = tint.alpha * SECONDARY_ALPHA)
     when (icon) {
+        AppIcon.Location -> {
+            val pin = Path().apply {
+                moveTo(8f, 2.6f)
+                cubicTo(5.4f, 2.6f, 3.6f, 4.5f, 3.6f, 6.9f)
+                cubicTo(3.6f, 9.8f, 8f, 13.4f, 8f, 13.4f)
+                cubicTo(8f, 13.4f, 12.4f, 9.8f, 12.4f, 6.9f)
+                cubicTo(12.4f, 4.5f, 10.6f, 2.6f, 8f, 2.6f)
+                close()
+            }
+            drawPath(pin, tint, style = hairline())
+            drawCircle(tint, radius = 1.45f, center = Offset(8f, 6.9f))
+        }
+
         AppIcon.Home -> {
             drawPath(Path().polyline(2.2f, 7.8f, 8f, 2.7f, 13.8f, 7.8f), tint, style = hairline())
             drawPath(

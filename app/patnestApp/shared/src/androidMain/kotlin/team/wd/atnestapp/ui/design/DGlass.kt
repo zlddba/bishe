@@ -11,11 +11,19 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.max
 import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.BlurDefaults
@@ -100,6 +108,7 @@ private const val LIQUID_REFRACTION_AGSL = """
     uniform float in_radius;      // 圆角半径（降采样 px）
     uniform float4 in_glass;      // alpha, 折射带宽, 玻璃厚度, 折射率
     uniform float2 in_satBri;     // 饱和度倍数, 亮度增量
+    uniform float in_dispersion;  // 每通道折射偏移（降采样 px），0 = 关闭
 
     const float3 kLumaW = float3(0.2126, 0.7152, 0.0722);
 
@@ -186,7 +195,19 @@ private const val LIQUID_REFRACTION_AGSL = """
             float3 bent = refract(float3(0.0, 0.0, -1.0), normal, 1.0 / max(in_glass.w, 1.0));
             refractUv += bent.xy * mix((in_glass.z - edge) * 2.0, in_glass.z * 2.0, shaped);
         }
-        float4 col = sampleBackdrop(refractUv);
+        // 边缘色散：红/蓝通道沿法线反向偏移，绿通道居中。
+        // 这是「液态玻璃」和普通磨砂最直观的区别；只在边缘带内、强度很低，
+        // 避免整圈出现彩虹边。
+        float4 col;
+        if (shaped < 1.0 && in_dispersion > 0.01) {
+            float2 dispersionOffset = gradient * (in_dispersion * (1.0 - shaped));
+            float4 cr = sampleBackdrop(refractUv + dispersionOffset);
+            float4 cg = sampleBackdrop(refractUv);
+            float4 cb = sampleBackdrop(refractUv - dispersionOffset);
+            col = float4(cr.r, cg.g, cb.b, cg.a);
+        } else {
+            col = sampleBackdrop(refractUv);
+        }
         float l = lumaOf(col.rgb);
         col.rgb = mix(float3(l), col.rgb, in_satBri.x) + float3(in_satBri.y * col.a);
         // 固定方向的高光：法线在边缘立起来时才会点亮，中心平面几乎为零。
@@ -227,7 +248,7 @@ private const val LIQUID_REFRACTION_AGSL = """
     }
 """
 
-private const val LIQUID_SHADER_KEY = "patnest_liquid_refraction_v3"
+private const val LIQUID_SHADER_KEY = "patnest_liquid_refraction_v4"
 
 /**
  * 液态玻璃效果链（官方 textureBlurEffect 顺序 + 折射）：
@@ -242,6 +263,8 @@ private fun Modifier.liquidGlassDraw(
     refraction: Boolean,
     highlight: Highlight?,
     surfaceAlpha: Float = 1f,
+    edgeDp: Dp = 10.dp,
+    dispersionDp: Dp = 0.8.dp,
 ): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
@@ -279,11 +302,12 @@ private fun Modifier.liquidGlassDraw(
                 setFloatUniform(
                     "in_glass",
                     surfaceAlpha,
-                    with(density) { 10.dp.toPx() } / ds,
+                    with(density) { edgeDp.toPx() } / ds,
                     with(density) { 12.dp.toPx() } / ds,
                     1.45f,
                 )
                 setFloatUniform("in_satBri", 1.45f, 0.04f)
+                setFloatUniform("in_dispersion", with(density) { dispersionDp.toPx() } / ds)
             }
         }
     },
@@ -304,6 +328,8 @@ internal fun Modifier.dLiquidGlass(
     cornerDp: Dp = 12.dp,
     surfaceAlpha: Float = 1f,
     refraction: Boolean = true,
+    edgeDp: Dp = 10.dp,
+    dispersionDp: Dp = 0.8.dp,
 ): Modifier = liquidGlassDraw(
     backdrop = backdrop,
     shape = shape,
@@ -312,7 +338,89 @@ internal fun Modifier.dLiquidGlass(
     refraction = refraction,
     highlight = null,
     surfaceAlpha = surfaceAlpha,
+    edgeDp = edgeDp,
+    dispersionDp = dispersionDp,
 )
+
+/**
+ * 卡片表面的反光（镜面高光）。
+ *
+ * 画在玻璃底色之上、内容之下：
+ * - 左上角一团很柔的白色 bloom，模拟光源在玻璃左上；
+ * - 一条 -16° 的斜向反光带，模拟整块玻璃的镜面反射；
+ * - 顶部一条 1px 亮边，圆角处由外层 clip 收掉。
+ *
+ * [strength] 控制强度；深色模式下也保留，玻璃在暗底上的反光本来就更明显。
+ */
+internal fun Modifier.dGlassSheen(
+    strength: Float = 1f,
+    topEdge: Boolean = true,
+): Modifier = drawBehind {
+    val w = size.width
+    val h = size.height
+    if (w <= 0f || h <= 0f) return@drawBehind
+
+    // 左上柔光：半径取长边，边缘用同色 0 alpha，避免灰圈
+    val bloomCenter = Offset(w * 0.16f, h * 0.02f)
+    val bloomRadius = max(w, h) * 0.86f
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                // 近白卡上纯白高光几乎不可见，bloom 用极淡的品牌粉
+                Color(0xFFFFF2F7).copy(alpha = 0.22f * strength),
+                Color(0xFFFFF2F7).copy(alpha = 0.07f * strength),
+                Color(0xFFFFF2F7).copy(alpha = 0f),
+            ),
+            center = bloomCenter,
+            radius = bloomRadius,
+        ),
+        radius = bloomRadius,
+        center = bloomCenter,
+    )
+
+    // 斜向反光带：只在卡片上半部扫过，不压暗文字区域
+    rotate(degrees = -16f, pivot = Offset(w * 0.5f, h * 0.5f)) {
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    // 白卡上的反光必须有极淡的品牌粉，否则纯白高光在近白卡上
+                    // 几乎不可见；中间保留一段白色作为镜面核心
+                    Color(0xFFFFDCE8).copy(alpha = 0f),
+                    Color(0xFFFFDCE8).copy(alpha = 0.26f * strength),
+                    Color.White.copy(alpha = 0.10f * strength),
+                    Color(0xFFFFDCE8).copy(alpha = 0f),
+                ),
+                start = Offset(0f, h * 0.08f),
+                end = Offset(w, h * 0.30f),
+            ),
+            topLeft = Offset(-w * 0.10f, h * 0.04f),
+            size = Size(w * 1.20f, h * 0.22f),
+        )
+    }
+
+    if (topEdge) {
+        drawLine(
+            color = Color(0xFFFFE8F0).copy(alpha = 0.68f * strength),
+            start = Offset(w * 0.08f, 0.5f),
+            end = Offset(w * 0.92f, 0.5f),
+            strokeWidth = 1.dp.toPx(),
+        )
+    }
+}
+
+/**
+ * 透明浮层上的文字阴影：浅色主题用白色光晕把深色文字从地图/图片上「托」起来，
+ * 深色主题用黑色阴影托浅色文字。透明导航栏、地图信息栏共用。
+ */
+@Composable
+fun dGlassTextShadow(): Shadow {
+    val dark = DColor.Bg.luminance() < 0.5f
+    return if (dark) {
+        Shadow(color = Color.Black.copy(alpha = 0.70f), blurRadius = 8f)
+    } else {
+        Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 8f)
+    }
+}
 
 /**
  * 内容流玻璃的标准入口：卡片、输入框、搜索条、chip 这类嵌在页面里的表面。
@@ -328,15 +436,21 @@ internal fun Modifier.dLiquidGlass(
 fun Modifier.dGlassSurface(
     backdrop: LayerBackdrop? = LocalDGlassAmbient.current,
     shape: Shape = DShape.Lg,
-    tint: Color = DColor.Card.copy(alpha = 0.60f),
+    tint: Color = DColor.Card.copy(alpha = 0.70f),
     blurRadius: Float = 16f,
     cornerDp: Dp = 12.dp,
     surfaceAlpha: Float = 1f,
     refraction: Boolean = true,
+    // 小控件（chip / 小按钮 / 28dp 圆钮）必须收窄折射带，否则上下两条
+    // 边缘折射会互相覆盖，整块看起来像糊了一层白雾
+    edgeDp: Dp = 10.dp,
+    // 卡片类表面可开反光；小控件默认关，避免高光压过内容
+    sheen: Boolean = false,
     fallbackColor: Color = DColor.Card,
 ): Modifier {
+    val sheenModifier = if (sheen) Modifier.dGlassSheen(strength = 0.85f) else Modifier
     if (!isGlassSupported || backdrop == null) {
-        return this.clip(shape).background(fallbackColor)
+        return this.clip(shape).background(fallbackColor).then(sheenModifier)
     }
     return this
         .clip(shape)
@@ -347,8 +461,10 @@ fun Modifier.dGlassSurface(
             cornerDp = cornerDp,
             surfaceAlpha = surfaceAlpha,
             refraction = refraction,
+            edgeDp = edgeDp,
         )
         .background(tint)
+        .then(sheenModifier)
 }
 
 /**
@@ -367,11 +483,21 @@ fun Modifier.dGlassSurface(
 fun Modifier.dGlassHero(
     shape: Shape = RectangleShape,
     cornerDp: Dp = 0.dp,
-    gradientAlpha: Float = 0.68f,
+    // 76% 品牌渐变：低于这个值时，玻璃把环境光提亮后白字对比度会不够
+    gradientAlpha: Float = 0.76f,
+    edgeDp: Dp = 12.dp,
 ): Modifier {
     val ambient = LocalDGlassAmbient.current
+    // hero 顶部压一层极淡的暗色渐变：白字直接落在品牌亮粉上时对比度不够，
+    // 这层 scrim 只影响标题区，不改变玻璃的折射与边缘
+    val textScrim = Brush.verticalGradient(
+        listOf(Color.Black.copy(alpha = 0.26f), Color.Transparent),
+    )
     if (!isGlassSupported || ambient == null) {
-        return this.clip(shape).background(DColor.HeroGradient)
+        return this.clip(shape)
+            .background(DColor.HeroGradient)
+            .dGlassSheen(strength = 0.65f)
+            .background(textScrim)
     }
     return this
         .clip(shape)
@@ -380,8 +506,46 @@ fun Modifier.dGlassHero(
             shape = shape,
             blurRadius = 20f,
             cornerDp = cornerDp,
+            edgeDp = edgeDp,
         )
         .background(DColor.HeroGradient, alpha = gradientAlpha)
+        .dGlassSheen(strength = 0.65f)
+        .background(textScrim)
+}
+
+/**
+ * 任意渐变面板的玻璃版本：钱包卡、订单机构头、审核说明这类「已经有品牌渐变、
+ * 但还想要玻璃折射」的表面。
+ *
+ * 与 [dGlassHero] 的区别是渐变由调用方传入（颜色可能按身份 / 状态变化），
+ * 玻璃仍然只采环境层，因此一样可以安全地放在滚动内容里。
+ */
+@Composable
+fun Modifier.dGlassBrush(
+    brush: Brush,
+    alpha: Float = 0.86f,
+    shape: Shape = DShape.Lg,
+    cornerDp: Dp = 12.dp,
+    blurRadius: Float = 18f,
+    edgeDp: Dp = 12.dp,
+    sheen: Boolean = true,
+): Modifier {
+    val ambient = LocalDGlassAmbient.current
+    val sheenModifier = if (sheen) Modifier.dGlassSheen(strength = 0.8f) else Modifier
+    if (!isGlassSupported || ambient == null) {
+        return this.clip(shape).background(brush).then(sheenModifier)
+    }
+    return this
+        .clip(shape)
+        .dLiquidGlass(
+            backdrop = ambient,
+            shape = shape,
+            blurRadius = blurRadius,
+            cornerDp = cornerDp,
+            edgeDp = edgeDp,
+        )
+        .background(brush, alpha = alpha)
+        .then(sheenModifier)
 }
 
 /**
@@ -398,10 +562,13 @@ fun DGlassPanel(
     backdrop: LayerBackdrop,
     modifier: Modifier = Modifier,
     shape: Shape = DShape.Lg,
-    tint: Color = Color.White.copy(alpha = 0.10f),
+    // 登录表单卡上有 label / 输入框 / 按钮，tint 不能再按「纯装饰玻璃」的 10%；
+    // 48% 主题卡底色保证浅色/深色下正文都清楚，同时保留玻璃边缘
+    tint: Color = DColor.Card.copy(alpha = 0.68f),
     blurRadius: Float = 12f,
     cornerDp: Dp = 12.dp,
     refraction: Boolean = true,
+    edgeDp: Dp = 10.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (isGlassSupported) {
@@ -415,8 +582,10 @@ fun DGlassPanel(
                     cornerDp = cornerDp,
                     refraction = refraction,
                     highlight = null,
+                    edgeDp = edgeDp,
                 )
-                .background(tint),
+                .background(tint)
+                .dGlassSheen(strength = 0.85f),
         ) {
             androidx.compose.foundation.layout.Column(content = content)
         }
@@ -425,6 +594,7 @@ fun DGlassPanel(
             modifier
                 .clip(shape)
                 .background(DColor.Card)
+                .dGlassSheen(strength = 0.55f)
                 .border(1.dp, DColor.Line, shape),
         ) {
             androidx.compose.foundation.layout.Column(content = content)
@@ -447,7 +617,9 @@ fun DGlassPanel(
 fun DGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = DShape.Lg,
-    tint: Color = DColor.Card.copy(alpha = 0.03f),
+    // 默认值按「有文字」处理：3% 的极限通透只适合纯装饰面，
+    // 任何忘记传 tint 的文本表面都会变得不可读
+    tint: Color = DColor.Card.copy(alpha = 0.70f),
     blurRadius: Float = 12f,
     cornerDp: Dp = 12.dp,
     refraction: Boolean = true,
@@ -455,6 +627,9 @@ fun DGlassSurface(
     // <1 时让真实背景直接透出一部分——用于采样内容贫瘠的表面（如地图 SDK 模式），
     // 模糊层给质感、透出的真实内容给细节，两种信息源互补
     surfaceAlpha: Float = 1f,
+    edgeDp: Dp = 10.dp,
+    // 卡片类表面传 true：左上 bloom + 斜向反光；浮层/小圆钮保持 false
+    sheen: Boolean = false,
     fallbackColor: Color = DColor.Card,
     fallbackBorderColor: Color = DColor.Line,
     // 默认采样页面级记录（浮层：顶栏 / 底栏 / 结算栏 / Toast）；
@@ -475,8 +650,10 @@ fun DGlassSurface(
                     refraction = refraction,
                     highlight = null,
                     surfaceAlpha = surfaceAlpha,
+                    edgeDp = edgeDp,
                 )
-                .background(tint),
+                .background(tint)
+                .then(if (sheen) Modifier.dGlassSheen(strength = 0.85f) else Modifier),
             content = content,
         )
     } else {
@@ -484,6 +661,7 @@ fun DGlassSurface(
             modifier
                 .clip(shape)
                 .background(fallbackColor)
+                .then(if (sheen) Modifier.dGlassSheen(strength = 0.55f) else Modifier)
                 .border(1.dp, fallbackBorderColor, shape),
             content = content,
         )

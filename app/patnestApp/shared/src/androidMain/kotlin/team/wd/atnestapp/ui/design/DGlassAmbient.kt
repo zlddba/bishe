@@ -52,7 +52,9 @@ fun DGlassAmbientLayer(modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxSize()) {
         // 首帧/零尺寸容器下半径会是 0，radialGradient 不接受零半径
         if (size.width <= 0f || size.height <= 0f) return@Canvas
-        drawRect(bg)
+        // 浅色下环境层用「近白」而不是页面粉：卡片叠 80% 白后才会比粉底更亮，
+        // 页面底色负责粉，环境层只负责给玻璃提供可折射的微光
+        drawRect(if (dark) bg else Color(0xFFFFFAFC))
 
         fun blob(color: Color, x: Float, y: Float, radiusRatio: Float, alpha: Float) {
             val center = Offset(size.width * x, size.height * y)
@@ -70,16 +72,18 @@ fun DGlassAmbientLayer(modifier: Modifier = Modifier) {
             )
         }
 
+        // 浅色下环境光只做很薄的一层：底色已经足够粉，卡片再叠太多品牌色
+        // 会变成「粉卡压粉底」，反而看不出白卡与反光
         // 左上品牌主光：首页 / 我的页 hero 正下方，最容易被玻璃采样到
-        blob(brand, 0.10f, 0.08f, 1.05f, if (dark) 0.34f else 0.52f)
+        blob(brand, 0.10f, 0.08f, 1.05f, if (dark) 0.34f else 0.28f)
         // 右上粉白柔光：给顶栏和卡片右缘一点冷暖过渡
-        blob(brandSoft, 0.92f, 0.04f, 0.72f, if (dark) 0.26f else 0.46f)
+        blob(brandSoft, 0.92f, 0.04f, 0.72f, if (dark) 0.26f else 0.24f)
         // 屏幕中段偏右的白色高光：卡片的折射边缘主要靠它提亮
-        blob(white, 0.88f, 0.48f, 0.78f, if (dark) 0.08f else 0.24f)
+        blob(white, 0.88f, 0.48f, 0.78f, if (dark) 0.08f else 0.14f)
         // 左下深品牌色：和左上形成斜向明暗，玻璃厚度感更明显
-        blob(brandStrong, 0.08f, 0.92f, 1.00f, if (dark) 0.30f else 0.34f)
+        blob(brandStrong, 0.08f, 0.92f, 1.00f, if (dark) 0.30f else 0.18f)
         // 底部中间的冷色，避免整屏只有粉色
-        blob(info, 0.55f, 1.05f, 0.82f, if (dark) 0.14f else 0.18f)
+        blob(info, 0.55f, 1.05f, 0.82f, if (dark) 0.14f else 0.10f)
 
         // 两条低对比斜光带：给折射提供可读的线状细节
         rotate(degrees = -16f, pivot = center) {

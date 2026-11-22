@@ -40,6 +40,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -196,7 +197,15 @@ fun D18SitterWorkspace(nav: DNav) {
                 Spacer(Modifier.width(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.clip(DShape.Pill).background(DColor.White.copy(alpha = 0.2f))
+                        Modifier
+                            .dGlassSurface(
+                                shape = DShape.Pill,
+                                tint = DColor.Scrim.copy(alpha = 0.40f),
+                                blurRadius = 10f,
+                                cornerDp = 20.dp,
+                                edgeDp = 4.dp,
+                                fallbackColor = DColor.Scrim,
+                            )
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
                         Text(
@@ -209,7 +218,15 @@ fun D18SitterWorkspace(nav: DNav) {
                     // 机构端是独立工作台，没有底部导航；不给入口就出不去了（真实产品也是
                     // 在商家版头像 / 店名旁边放「切换身份」）
                     Box(
-                        Modifier.clip(DShape.Pill).background(DColor.White.copy(alpha = 0.2f))
+                        Modifier
+                            .dGlassSurface(
+                                shape = DShape.Pill,
+                                tint = DColor.Scrim.copy(alpha = 0.40f),
+                                blurRadius = 10f,
+                                cornerDp = 20.dp,
+                                edgeDp = 4.dp,
+                                fallbackColor = DColor.Scrim,
+                            )
                             .clickable { nav.go(DScreen.RoleSwitch) }
                             .padding(horizontal = 8.dp, vertical = 3.dp),
                     ) {
@@ -499,7 +516,15 @@ fun DSitterProfile(nav: DNav) {
                     )
                 }
                 Box(
-                    Modifier.clip(DShape.Md).background(DColor.White.copy(alpha = 0.2f))
+                    Modifier
+                        .dGlassSurface(
+                            shape = DShape.Md,
+                            tint = DColor.Scrim.copy(alpha = 0.40f),
+                            blurRadius = 10f,
+                            cornerDp = 8.dp,
+                            edgeDp = 5.dp,
+                            fallbackColor = DColor.Scrim,
+                        )
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Text(
@@ -644,6 +669,7 @@ fun D19OrderDetail(nav: DNav) {
         }
         return
     }
+    LaunchedEffect(order.id) { store.refreshOrderDetail(order.id) }
     val finished = order.rawStatus in setOf("completed", "evaluated", "cancelled", "rejected")
     DMiuixScrollScaffold(
         nav = nav,
@@ -653,14 +679,28 @@ fun D19OrderDetail(nav: DNav) {
         DPad {
             Spacer(Modifier.height(14.dp))
             Column(
-                Modifier.fillMaxWidth().clip(DShape.Lg)
-                    .background(Brush.linearGradient(listOf(DColor.BrandSoft, DColor.White)))
+                Modifier.fillMaxWidth()
+                    .dGlassBrush(
+                        // 深色模式下 DColor.Card 是暗卡色，DColor.White 会让右半段变白、
+                        // 与浅色 Ink 文字撞成一片；渐变两端都必须跟主题走
+                        brush = Brush.linearGradient(listOf(DColor.BrandSoft, DColor.Card)),
+                        alpha = 0.84f,
+                        shape = DShape.Lg,
+                        cornerDp = 12.dp,
+                    )
                     .border(1.dp, DColor.Line, DShape.Lg)
                     .padding(14.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(54.dp).clip(DShape.Md).background(DColor.CoverGradient),
+                        Modifier.size(54.dp)
+                            .dGlassBrush(
+                                brush = DColor.CoverGradient,
+                                alpha = 0.90f,
+                                shape = DShape.Md,
+                                cornerDp = 8.dp,
+                                edgeDp = 5.dp,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(AppIcon.Shop, Modifier.size(24.dp), DColor.White)
@@ -671,6 +711,19 @@ fun D19OrderDetail(nav: DNav) {
                         Text("${order.pet} · ${order.range}", fontSize = 11.5.sp, color = DColor.Ink3)
                         Spacer(Modifier.height(2.dp))
                         Text("订单号 ${order.no}", fontSize = 11.5.sp, color = DColor.Ink3)
+                    }
+                }
+            }
+        }
+        if (store.selectedOrderPets.isNotEmpty()) {
+            DSection("入住宠物")
+            DPad {
+                DCard {
+                    store.selectedOrderPets.forEach { pet ->
+                        DKeyValue(
+                            pet.petName.ifBlank { "宠物" },
+                            pet.stayDate.ifBlank { pet.status.ifBlank { "—" } },
+                        )
                     }
                 }
             }
@@ -861,6 +914,9 @@ fun DTicketChat(nav: DNav) {
                 DGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = DShape.Lg,
+                    tint = DColor.Bg.copy(alpha = 0.30f),
+                    blurRadius = 20f,
+                    surfaceAlpha = 0.45f,
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp),
@@ -1024,6 +1080,9 @@ fun D22PaySuccess(nav: DNav) {
                 DGlassSurface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = DShape.Lg,
+                    tint = DColor.Bg.copy(alpha = 0.30f),
+                    blurRadius = 20f,
+                    surfaceAlpha = 0.45f,
                 ) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -1045,7 +1104,15 @@ fun D22PaySuccess(nav: DNav) {
             verticalArrangement = Arrangement.Center,
         ) {
             Box(
-                Modifier.size(80.dp).clip(CircleShape).background(DColor.OkSoft),
+                Modifier.size(80.dp)
+                    .dGlassSurface(
+                        shape = CircleShape,
+                        tint = DColor.OkSoft.copy(alpha = 0.75f),
+                        blurRadius = 16f,
+                        cornerDp = 40.dp,
+                        edgeDp = 8.dp,
+                        fallbackColor = DColor.OkSoft,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 AppIcon(AppIcon.Check, Modifier.size(42.dp), DColor.Ok)
@@ -1265,7 +1332,7 @@ fun D24MapPicker(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.size(40.dp).clickable { nav.back() },
                 shape = CircleShape,
-                tint = Color.White.copy(alpha = 0.22f),
+                tint = DColor.Scrim.copy(alpha = 0.45f),
                 blurRadius = 16f,
                 cornerDp = 20.dp,
                 surfaceAlpha = 0.55f,
@@ -1283,10 +1350,12 @@ fun D24MapPicker(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.weight(1f),
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.35f),
-                blurRadius = 16f,
+                // 与机构地图页一致：信息栏透出地图，只留 32% 主题底 + 45% 玻璃
+                tint = DColor.Bg.copy(alpha = 0.26f),
+                blurRadius = 18f,
                 cornerDp = 8.dp,
-                surfaceAlpha = 0.55f,
+                surfaceAlpha = 0.42f,
+                sheen = true,
                 fallbackColor = DColor.Card,
             ) {
                 Column(
@@ -1294,20 +1363,22 @@ fun D24MapPicker(nav: DNav) {
                 ) {
                     Text(
                         "选择地址位置",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DColor.Ink,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    picked?.district?.takeIf { it.isNotBlank() }
-                        ?: picked?.resolvedCity?.takeIf { it.isNotBlank() }
-                        ?: "拖动地图把准心对准位置",
-                    fontSize = 11.sp,
-                    color = DColor.Ink3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DColor.Ink,
+                        style = TextStyle(shadow = dGlassTextShadow()),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        picked?.district?.takeIf { it.isNotBlank() }
+                            ?: picked?.resolvedCity?.takeIf { it.isNotBlank() }
+                            ?: "拖动地图把准心对准位置",
+                        fontSize = 11.sp,
+                        color = DColor.Ink2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(shadow = dGlassTextShadow()),
+                    )
                 }
             }
         }
@@ -1321,10 +1392,11 @@ fun D24MapPicker(nav: DNav) {
             DGlassSurface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = DShape.Lg,
-                tint = DColor.Card.copy(alpha = 0.35f),
-                blurRadius = 16f,
+                tint = DColor.Bg.copy(alpha = 0.26f),
+                blurRadius = 18f,
                 cornerDp = 12.dp,
-                surfaceAlpha = 0.55f,
+                surfaceAlpha = 0.42f,
+                sheen = true,
                 fallbackColor = DColor.Card,
             ) {
                 // 玻璃面是 BoxScope：内部套一层 Column 承载纵向排布
@@ -1335,7 +1407,8 @@ fun D24MapPicker(nav: DNav) {
                         Text(
                             if (resolving) "正在解析地址…" else "选中的位置",
                             fontSize = 10.5.sp,
-                            color = DColor.Ink3,
+                            color = DColor.Ink2,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
@@ -1345,6 +1418,7 @@ fun D24MapPicker(nav: DNav) {
                             color = DColor.Ink,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
@@ -1355,7 +1429,8 @@ fun D24MapPicker(nav: DNav) {
                                     else -> "逆地理编码"
                                 },
                             fontSize = 10.5.sp,
-                            color = DColor.Ink3,
+                            color = DColor.Ink2,
+                            style = TextStyle(shadow = dGlassTextShadow()),
                         )
                     }
                     Spacer(Modifier.width(10.dp))
@@ -1476,7 +1551,7 @@ fun D25RoleSwitch(nav: DNav) {
                 Modifier.fillMaxWidth()
                     .dGlassSurface(
                         shape = DShape.Lg,
-                        tint = DColor.Card.copy(alpha = 0.58f),
+                        tint = DColor.Card.copy(alpha = 0.75f),
                         blurRadius = 16f,
                         cornerDp = 12.dp,
                     )
@@ -1540,7 +1615,7 @@ fun D25RoleSwitch(nav: DNav) {
                     Modifier.fillMaxWidth()
                         .dGlassSurface(
                             shape = DShape.Lg,
-                            tint = DColor.Card.copy(alpha = 0.58f),
+                            tint = DColor.Card.copy(alpha = 0.75f),
                             blurRadius = 16f,
                             cornerDp = 12.dp,
                         )
@@ -1549,9 +1624,16 @@ fun D25RoleSwitch(nav: DNav) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        Modifier.size(40.dp).clip(DShape.Md)
-                            // 用主题语义色，别写死浅绿：深色模式下浅底 + 白图标几乎看不清
-                            .background(if (sitterMode) DColor.Ok else DColor.BrandSoft),
+                        Modifier.size(40.dp)
+                            .dGlassSurface(
+                                shape = DShape.Md,
+                                // 用主题语义色，别写死浅绿：深色模式下浅底 + 白图标几乎看不清
+                                tint = (if (sitterMode) DColor.Ok else DColor.BrandSoft).copy(alpha = 0.75f),
+                                blurRadius = 12f,
+                                cornerDp = 8.dp,
+                                edgeDp = 5.dp,
+                                fallbackColor = if (sitterMode) DColor.Ok else DColor.BrandSoft,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
@@ -1614,6 +1696,8 @@ fun D25RoleSwitch(nav: DNav) {
 fun D26ShopProfile(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
+    // 封面单独记录：更换封面玻璃钮只采这层图片，不采页面记录层
+    val coverBackdrop = rememberDGlassBackdrop()
     LaunchedEffect(Unit) { store.loadMyShop() }
     val shop = store.myShop
     var name by remember(shop) { mutableStateOf(shop?.name.orEmpty()) }
@@ -1655,29 +1739,61 @@ fun D26ShopProfile(nav: DNav) {
     ) {
         DPad {
             Spacer(Modifier.height(14.dp))
+            if (shop == null && !store.shopLoading) {
+                DCard {
+                    Text(
+                        "还没有机构店铺",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DColor.Ink,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "填写下面的资料并保存，会创建店铺并提交平台审核。",
+                        fontSize = 12.sp,
+                        color = DColor.Ink3,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+            }
             Box(
                 Modifier.fillMaxWidth().height(110.dp).clip(DShape.Lg)
-                    .background(DColor.CoverGradient)
                     .clickable(enabled = !uploading) { pickCover() },
                 contentAlignment = Alignment.BottomEnd,
             ) {
-                if (cover.isNotBlank()) {
-                    MobileImage(
-                        url = cover,
-                        modifier = Modifier.fillMaxWidth().height(110.dp),
-                        shape = DShape.Lg,
-                        placeholderSize = 26.dp,
-                    )
-                }
+                // 封面是被记录层；按钮作为兄弟浮层，玻璃模糊的就是封面本身
                 Box(
-                    Modifier.padding(14.dp).clip(DShape.Pill)
-                        .background(DColor.White.copy(alpha = 0.25f))
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    Modifier.matchParentSize()
+                        .dGlassBackdropSource(coverBackdrop)
+                        .background(DColor.CoverGradient),
+                ) {
+                    if (cover.isNotBlank()) {
+                        MobileImage(
+                            url = cover,
+                            modifier = Modifier.matchParentSize(),
+                            shape = DShape.Lg,
+                            placeholderSize = 26.dp,
+                        )
+                    }
+                }
+                DGlassSurface(
+                    modifier = Modifier.padding(14.dp),
+                    shape = DShape.Pill,
+                    // 封面亮暗不可控，暗 Scrim 保证白字可读
+                    tint = DColor.Scrim.copy(alpha = 0.55f),
+                    blurRadius = 14f,
+                    cornerDp = 20.dp,
+                    edgeDp = 5.dp,
+                    surfaceAlpha = 0.90f,
+                    fallbackColor = DColor.Scrim,
+                    fallbackBorderColor = Color.Transparent,
+                    backdrop = coverBackdrop,
                 ) {
                     Text(
                         if (uploading) "上传中…" else "更换封面",
                         fontSize = 12.sp,
                         color = DColor.White,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
             }
@@ -2385,8 +2501,20 @@ private fun B_MessageBubble(text: String, time: String, fromMe: Boolean) {
     ) {
         Column(
             Modifier.widthIn(max = 280.dp)
-                .clip(DShape.Lg)
-                .background(if (fromMe) DColor.Brand else DColor.Card)
+                // 对方气泡走环境玻璃；自己的气泡保持品牌实色，保证白字对比度
+                .then(
+                    if (fromMe) {
+                        Modifier.background(DColor.Brand)
+                    } else {
+                        Modifier.dGlassSurface(
+                            shape = DShape.Lg,
+                            tint = DColor.Card.copy(alpha = 0.75f),
+                            blurRadius = 14f,
+                            cornerDp = 12.dp,
+                            edgeDp = 8.dp,
+                        )
+                    },
+                )
                 .border(1.dp, if (fromMe) DColor.Brand else DColor.Line, DShape.Lg)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
@@ -2403,7 +2531,22 @@ private fun B_MessageBubble(text: String, time: String, fromMe: Boolean) {
 
 @Composable
 private fun B_HeroStat(value: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = DColor.Brand800.copy(alpha = 0.82f),
+                blurRadius = 12f,
+                cornerDp = 8.dp,
+                edgeDp = 5.dp,
+                surfaceAlpha = 0.40f,
+                sheen = true,
+                fallbackColor = DColor.Brand800,
+            )
+            .border(1.dp, DColor.White.copy(alpha = 0.18f), DShape.Md)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DColor.White)
         Spacer(Modifier.height(2.dp))
         Text(label, fontSize = 11.sp, color = DColor.White.copy(alpha = 0.9f))
@@ -2413,7 +2556,15 @@ private fun B_HeroStat(value: String, label: String) {
 @Composable
 private fun B_HeroAction(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier.clip(DShape.Pill).background(DColor.White.copy(alpha = 0.2f))
+        modifier
+            .dGlassSurface(
+                shape = DShape.Pill,
+                tint = DColor.Scrim.copy(alpha = 0.40f),
+                blurRadius = 10f,
+                cornerDp = 20.dp,
+                edgeDp = 4.dp,
+                fallbackColor = DColor.Scrim,
+            )
             .clickable(onClick = onClick).padding(vertical = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -2493,7 +2644,7 @@ private fun B_SelectField(
                 Modifier.fillMaxWidth()
                     .dGlassSurface(
                         shape = DShape.Md,
-                        tint = DColor.Card.copy(alpha = 0.58f),
+                        tint = DColor.Card.copy(alpha = 0.75f),
                         blurRadius = 14f,
                         cornerDp = 8.dp,
                     )
@@ -2513,13 +2664,20 @@ private fun B_SelectField(
 @Composable
 private fun B_ToggleTag(text: String, selected: Boolean, onClick: () -> Unit) {
     Box(
-        Modifier.clip(DShape.Pill)
-            .background(if (selected) DColor.BrandSoft else DColor.NeutralSoft)
+        Modifier
+            .dGlassSurface(
+                shape = DShape.Pill,
+                tint = if (selected) DColor.BrandSoft.copy(alpha = 0.82f) else DColor.NeutralSoft.copy(alpha = 0.75f),
+                blurRadius = 12f,
+                cornerDp = 20.dp,
+                edgeDp = 6.dp,
+                fallbackColor = if (selected) DColor.BrandSoft else DColor.NeutralSoft,
+            )
             .border(1.dp, if (selected) DColor.Brand else DColor.Line, DShape.Pill)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        Text(text, fontSize = 11.5.sp, color = if (selected) DColor.BrandInk else DColor.Ink2)
+        Text(text, fontSize = 11.5.sp, color = if (selected) DColor.Ink else DColor.Ink2)
     }
 }
 
@@ -2557,7 +2715,15 @@ private fun B_Legend(text: String, color: Color) {
 private fun B_Stepper(value: Int, onMinus: () -> Unit, onPlus: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(28.dp).clip(DShape.Sm).background(DColor.NeutralSoft)
+            Modifier.size(28.dp)
+                .dGlassSurface(
+                    shape = DShape.Sm,
+                    tint = DColor.NeutralSoft.copy(alpha = 0.75f),
+                    blurRadius = 10f,
+                    cornerDp = 6.dp,
+                    edgeDp = 4.dp,
+                    fallbackColor = DColor.NeutralSoft,
+                )
                 .clickable(onClick = onMinus),
             contentAlignment = Alignment.Center,
         ) {
@@ -2567,7 +2733,15 @@ private fun B_Stepper(value: Int, onMinus: () -> Unit, onPlus: () -> Unit) {
         Text("$value 只", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
         Spacer(Modifier.width(12.dp))
         Box(
-            Modifier.size(28.dp).clip(DShape.Sm).background(DColor.BrandSoft)
+            Modifier.size(28.dp)
+                .dGlassSurface(
+                    shape = DShape.Sm,
+                    tint = DColor.BrandSoft.copy(alpha = 0.75f),
+                    blurRadius = 10f,
+                    cornerDp = 6.dp,
+                    edgeDp = 4.dp,
+                    fallbackColor = DColor.BrandSoft,
+                )
                 .clickable(onClick = onPlus),
             contentAlignment = Alignment.Center,
         ) {
@@ -2580,7 +2754,14 @@ private fun B_Stepper(value: Int, onMinus: () -> Unit, onPlus: () -> Unit) {
 @Composable
 private fun B_AddPhoto(onClick: () -> Unit) {
     Box(
-        Modifier.size(72.dp).clip(DShape.Md)
+        Modifier.size(72.dp)
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = DColor.Card.copy(alpha = 0.55f),
+                blurRadius = 14f,
+                cornerDp = 8.dp,
+                edgeDp = 6.dp,
+            )
             .border(1.5.dp, DColor.Line2, DShape.Md)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

@@ -72,18 +72,22 @@ val DLightPalette = DPalette(
     brand = Color(0xFFE0708A),
     brandStrong = Color(0xFFAF4A62),
     brandSoft = Color(0xFFFBE0E6),
-    brandInk = Color(0xFFAF4A62),
+    // 比 BrandStrong 更深一档：BrandInk 会直接压在 BrandSoft / 玻璃上，
+    // 旧值 #AF4A62 对 BrandSoft 只有 4.25:1，浅色模式下小字号不够
+    brandInk = Color(0xFF9C3F56),
     brand900 = Color(0xFF6F2A3B),
     brand800 = Color(0xFF8E3B4E),
 
-    bg = Color(0xFFFAF5F6),
+    // 非常浅的品牌粉：白卡压在上面能看出边界与反光，又不会抢内容
+    bg = Color(0xFFFBEAF1),
     card = Color(0xFFFFFFFF),
     line = Color(0xFFF1EEEF),
     line2 = Color(0xFFECE7E9),
 
     ink = Color(0xFF2B2628),
-    ink2 = Color(0xFF6E6568),
-    ink3 = Color(0xFF9C9296),
+    // 玻璃卡片的实际底色不是纯白，次级/三级文字需要比旧值更深才能满足 4.5:1
+    ink2 = Color(0xFF5F575A),
+    ink3 = Color(0xFF6F6669),
 
     ok = Color(0xFF2F9E63),
     okSoft = Color(0xFFE4F4EC),
@@ -119,8 +123,8 @@ val DDarkPalette = DPalette(
     line2 = Color(0xFF372F31),
 
     ink = Color(0xFFF4EFF0),
-    ink2 = Color(0xFFB7ADB0),
-    ink3 = Color(0xFF8B8185),
+    ink2 = Color(0xFFC9BFC2),
+    ink3 = Color(0xFFA99FA3),
 
     ok = Color(0xFF4CBF87),
     okSoft = Color(0xFF17301F),

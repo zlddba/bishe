@@ -2,7 +2,12 @@ package team.wd.atnestapp.ui.design
 
 import team.wd.atnestapp.utils.formatScore
 import team.wd.atnestapp.utils.formatMoney
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,9 +54,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import team.wd.atnestapp.data.model.Sitter
+import team.wd.atnestapp.ui.app.DeviceLocation
+import team.wd.atnestapp.ui.app.LoginCodeNotification
 import team.wd.atnestapp.ui.app.MapNavigation
+import team.wd.atnestapp.ui.app.distanceMeters
+import team.wd.atnestapp.ui.app.formatDistance
 import team.wd.atnestapp.ui.components.AppIcon
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,10 +84,54 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 fun D01Home(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.any { it }) {
+            scope.launch {
+                val point = DeviceLocation.current(context)
+                if (point != null) {
+                    store.applyDeviceLocation(point)
+                } else {
+                    nav.toast("暂时定位不到，请到室外或开启系统定位")
+                }
+            }
+        } else {
+            nav.toast("未授权定位，继续按综合推荐")
+        }
+    }
+
+    fun locate() {
+        if (DeviceLocation.hasPermission(context)) {
+            scope.launch {
+                val point = DeviceLocation.current(context)
+                if (point != null) {
+                    store.applyDeviceLocation(point)
+                } else {
+                    nav.toast("暂时定位不到，请到室外或开启系统定位")
+                }
+            }
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
-        store.loadSitters()
+        // 先出综合推荐，定位是增强项；定位慢时首页不会空白。
+        store.loadRecommendedSitters()
         store.loadPets()
         store.loadNotifications()
+        // 已授权就静默定位；未授权等用户点定位按钮再要权限。
+        if (DeviceLocation.hasPermission(context)) {
+            val point = DeviceLocation.current(context)
+            if (point != null) store.applyDeviceLocation(point)
+        }
     }
     DMiuixScrollScaffold(
         nav = nav,
@@ -93,8 +148,15 @@ fun D01Home(nav: DNav) {
             insetTop = true,
             trailing = {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape)
-                        .background(DColor.White.copy(alpha = 0.25f))
+                    Modifier.size(36.dp)
+                        .dGlassSurface(
+                            shape = CircleShape,
+                            tint = DColor.Scrim.copy(alpha = 0.42f),
+                            blurRadius = 12f,
+                            cornerDp = 18.dp,
+                            edgeDp = 5.dp,
+                            fallbackColor = DColor.Scrim,
+                        )
                         .clickable { nav.go(DScreen.Messages) },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -108,6 +170,37 @@ fun D01Home(nav: DNav) {
                 }
             },
         )
+        // 定位入口：和 uniapp 首页左上角的城市定位对应，点一下授权后按距离推荐。
+        val locationText = when {
+            store.locating -> "定位中…"
+            store.locationLabel.isNotBlank() -> "${store.locationLabel} · 附近"
+            else -> "点击定位，按距离推荐"
+        }
+        Row(
+            Modifier.padding(horizontal = LocalDWindow.current.gutter, vertical = 6.dp)
+                .dGlassSurface(
+                    shape = DShape.Pill,
+                    tint = DColor.Card.copy(alpha = 0.55f),
+                    blurRadius = 12f,
+                    cornerDp = 20.dp,
+                    edgeDp = 5.dp,
+                    surfaceAlpha = 0.45f,
+                )
+                .clickable { locate() }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppIcon(AppIcon.Location, Modifier.size(15.dp), DColor.BrandInk)
+            Spacer(Modifier.width(6.dp))
+            Text(locationText, fontSize = 12.sp, color = DColor.Ink)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (store.devicePoint == null) "定位" else "重新定位",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DColor.BrandInk,
+            )
+        }
         DSearchBar("搜索机构 / 宠物 / 服务", onClick = { nav.go(DScreen.SearchResults) })
         DPad {
             Spacer(Modifier.height(14.dp))
@@ -166,19 +259,40 @@ fun D01Home(nav: DNav) {
                 }
             }
         }
-        DSection("推荐寄养机构", more = "更多 ›", onMore = { nav.tab(DTab.Sitters) })
+        val point = store.devicePoint
+        DSection(
+            if (point != null) "附近推荐" else "推荐寄养机构",
+            more = "更多 ›",
+            onMore = { nav.tab(DTab.Sitters) },
+        )
         DPad {
             when {
-                store.sittersLoading && store.sitters.isEmpty() -> DLoading("正在加载机构…")
-                store.sitters.isEmpty() && store.sittersError != null ->
-                    DErrorBox(store.sittersError ?: "机构加载失败") {
-                        scope.launch { store.loadSitters(force = true) }
+                store.recommendedLoading && store.recommendedSitters.isEmpty() ->
+                    DLoading("正在加载机构…")
+
+                store.recommendedSitters.isEmpty() && store.recommendedError != null ->
+                    DErrorBox(store.recommendedError ?: "机构加载失败") {
+                        scope.launch { store.loadRecommendedSitters(force = true) }
                     }
-                store.sitters.isEmpty() -> DEmpty("附近还没有入驻机构", "刷新") {
-                    scope.launch { store.loadSitters(force = true) }
+
+                store.recommendedSitters.isEmpty() -> DEmpty(
+                    if (point != null) "附近还没有入驻机构" else "还没有入驻机构",
+                    "刷新",
+                ) {
+                    scope.launch { store.loadRecommendedSitters(force = true) }
                 }
-                else -> store.sitters.take(3).forEach { sitter ->
-                    A_SitterCard(sitter.toACard()) { nav.openSitter(sitter) }
+
+                else -> store.recommendedSitters.take(3).forEach { sitter ->
+                    val lat = sitter.latitude
+                    val lng = sitter.longitude
+                    val distance = if (point != null && lat != null && lng != null) {
+                        formatDistance(
+                            distanceMeters(point.latitude, point.longitude, lat, lng),
+                        ).takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+                    A_SitterCard(sitter.toACard(distance)) { nav.openSitter(sitter) }
                 }
             }
         }
@@ -190,11 +304,55 @@ fun D02FindSitters(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
     var chip by remember { mutableStateOf(0) }
-    val chips = listOf("全部", "家庭寄养", "门店", "上门喂养", "评分优先", "有地图坐标")
+    val chips = listOf("全部", "家庭寄养", "门店", "上门喂养", "评分优先", "有地图坐标", "离我最近")
+    // 价格区间走服务端，避免只筛选已加载的前 50 家。
+    val priceLabels = listOf("不限价", "¥100 以下", "¥100-200", "¥200 以上")
+    var priceIndex by remember { mutableStateOf(0) }
+    val priceMin = when (priceIndex) {
+        1 -> 0.0
+        2 -> 100.0
+        3 -> 200.0
+        else -> null
+    }
+    val priceMax = when (priceIndex) {
+        1 -> 100.0
+        2 -> 200.0
+        else -> null
+    }
+    val sortLabels = listOf("推荐排序", "价格低到高", "价格高到低")
+    var sortIndex by remember { mutableStateOf(0) }
+    val sortCode = when (sortIndex) {
+        1 -> "price_asc"
+        2 -> "price_desc"
+        else -> null
+    }
     // 列数在组合上下文里先算好：DLazyFrame 的 content 是普通 DSL lambda，
     // 里面读不了 CompositionLocal。
     val columns = dWindow().columns(320.dp)
-    LaunchedEffect(Unit) { store.loadSitters() }
+
+    fun reloadSitters(force: Boolean) {
+        val point = store.devicePoint
+        if (chip == 6 && point == null) {
+            nav.toast("请先在首页点击定位，再按距离找机构")
+            chip = 0
+            return
+        }
+        scope.launch {
+            store.loadSitters(
+                force = force,
+                priceMin = priceMin,
+                priceMax = priceMax,
+                sort = if (chip == 6) "distance" else sortCode,
+                latitude = if (chip == 6) point?.latitude else null,
+                longitude = if (chip == 6) point?.longitude else null,
+            )
+        }
+    }
+
+    LaunchedEffect(chip, priceIndex, sortIndex, store.devicePoint) {
+        reloadSitters(force = true)
+    }
+    DisposableEffect(Unit) { onDispose { store.clearSitterFilters() } }
     // 筛选 / 排序结果按（数据, 选中项）缓存：否则每次重组都会重新过滤一遍列表，
     // 列表滚动、输入框联动时这些重复计算会直接反映成掉帧。
     val shown = remember(store.sitters, chip) {
@@ -214,16 +372,22 @@ fun D02FindSitters(nav: DNav) {
         activeTab = DTab.Sitters,
         backable = false,
         refreshing = store.sittersLoading,
-        onRefresh = { scope.launch { store.loadSitters(force = true) } },
+        onRefresh = { reloadSitters(force = true) },
     ) {
         item { DSearchBar("搜索机构", onClick = { nav.go(DScreen.SearchResults) }) }
         item { A_ChipRow(chips, chip) { chip = it } }
+        item { A_ChipRow(priceLabels, priceIndex) { priceIndex = it } }
         item {
             DPad {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 ) {
+                    DSmallButton(sortLabels[sortIndex], {
+                        sortIndex = (sortIndex + 1) % sortLabels.size
+                        // 价格排序时清掉“评分优先/有地图坐标”，避免本地排序覆盖服务端顺序
+                        chip = 0
+                    })
                     DSmallButton("对比前 3 家", { nav.go(DScreen.SitterCompare) })
                 }
             }
@@ -236,7 +400,7 @@ fun D02FindSitters(nav: DNav) {
                 item {
                     DPad {
                         DErrorBox(store.sittersError ?: "机构加载失败") {
-                            scope.launch { store.loadSitters(force = true) }
+                            reloadSitters(force = true)
                         }
                     }
                 }
@@ -254,7 +418,17 @@ fun D02FindSitters(nav: DNav) {
                     ) {
                         row.forEach { sitter ->
                             Box(Modifier.weight(1f)) {
-                                A_SitterCard(sitter.toACard()) { nav.openSitter(sitter) }
+                                val point = store.devicePoint
+                                val lat = sitter.latitude
+                                val lng = sitter.longitude
+                                val distance = if (point != null && lat != null && lng != null) {
+                                    formatDistance(
+                                        distanceMeters(point.latitude, point.longitude, lat, lng),
+                                    ).takeIf { it.isNotBlank() }
+                                } else {
+                                    null
+                                }
+                                A_SitterCard(sitter.toACard(distance)) { nav.openSitter(sitter) }
                             }
                         }
                         repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
@@ -271,7 +445,20 @@ fun D03SitterDetail(nav: DNav) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val sitter = store.selectedSitter
-    LaunchedEffect(sitter?.id) { sitter?.let { store.loadSitterExtras(it.id) } }
+    // 封面单独记录：返回 / 收藏钮浮在图片上，只能采这层图片 backdrop，
+    // 采页面层会自采样，采环境层又会变成与图片无关的粉色玻璃
+    val coverBackdrop = rememberDGlassBackdrop()
+    // 详情页的小地图：瓦片模式是 Compose Canvas，可被 layerBackdrop 采样；
+    // 高德 SDK 模式是 AndroidView，采不到，玻璃按钮自动退回 Scrim
+    val hasAmap = remember(context) { AmapBridge.hasKey(context) }
+    val mapPreviewBackdrop = rememberDGlassBackdrop()
+    LaunchedEffect(sitter?.id) {
+        sitter?.let {
+            store.loadSitterExtras(it.id)
+            store.refreshSitterDetail(it.id)
+            store.loadSimilarSitters(it.id)
+        }
+    }
 
     if (sitter == null) {
         DMiuixScrollScaffold(nav = nav, title = "机构详情") {
@@ -293,24 +480,52 @@ fun D03SitterDetail(nav: DNav) {
         },
     ) {
         Box(Modifier.fillMaxWidth().height(180.dp)) {
-            DImageUrl(sitter.coverPhoto, sitter.name, height = 180.dp)
+            // 只把封面图记进 coverBackdrop，按钮是它的兄弟节点，不会自采样
+            Box(Modifier.matchParentSize().dGlassBackdropSource(coverBackdrop)) {
+                DImageUrl(
+                    sitter.coverPhoto,
+                    sitter.name,
+                    height = 180.dp,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = LocalDWindow.current.gutter, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(DColor.Scrim)
-                        .clickable { nav.back() },
-                    contentAlignment = Alignment.Center,
+                DGlassSurface(
+                    modifier = Modifier.size(36.dp).clickable { nav.back() },
+                    shape = CircleShape,
+                    // 图片亮暗不可控，用暗 Scrim 做 tint 才能保证白色图标可读
+                    tint = DColor.Scrim.copy(alpha = 0.55f),
+                    blurRadius = 16f,
+                    cornerDp = 18.dp,
+                    edgeDp = 5.dp,
+                    surfaceAlpha = 0.90f,
+                    fallbackColor = DColor.Scrim,
+                    fallbackBorderColor = Color.Transparent,
+                    backdrop = coverBackdrop,
                 ) {
-                    AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        AppIcon(AppIcon.Back, Modifier.size(18.dp), DColor.White)
+                    }
                 }
-                Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(DColor.Scrim)
-                        .clickable { scope.launch { store.toggleFavorite(sitter) } },
-                    contentAlignment = Alignment.Center,
+                DGlassSurface(
+                    modifier = Modifier.size(36.dp).clickable { scope.launch { store.toggleFavorite(sitter) } },
+                    shape = CircleShape,
+                    // 图片亮暗不可控，用暗 Scrim 做 tint 才能保证白色图标可读
+                    tint = DColor.Scrim.copy(alpha = 0.55f),
+                    blurRadius = 16f,
+                    cornerDp = 18.dp,
+                    edgeDp = 5.dp,
+                    surfaceAlpha = 0.90f,
+                    fallbackColor = DColor.Scrim,
+                    fallbackBorderColor = Color.Transparent,
+                    backdrop = coverBackdrop,
                 ) {
-                    AppIcon(AppIcon.Heart, Modifier.size(18.dp), if (fav) DColor.Brand else DColor.White)
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        AppIcon(AppIcon.Heart, Modifier.size(18.dp), if (fav) DColor.Brand else DColor.White)
+                    }
                 }
             }
         }
@@ -364,12 +579,18 @@ fun D03SitterDetail(nav: DNav) {
                 DPad {
                     // 170dp 只够看个大概：点一下进全屏地图页（能拖、能缩放）
                     Box(Modifier.fillMaxWidth().height(170.dp).clip(DShape.Lg)) {
-                        DMapView(
-                            latitude = lat,
-                            longitude = lng,
-                            modifier = Modifier.fillMaxSize(),
-                            zoom = 15,
-                        )
+                        Box(
+                            Modifier.matchParentSize().then(
+                                if (hasAmap) Modifier else Modifier.dGlassBackdropSource(mapPreviewBackdrop),
+                            ),
+                        ) {
+                            DMapView(
+                                latitude = lat,
+                                longitude = lng,
+                                modifier = Modifier.fillMaxSize(),
+                                zoom = 15,
+                            )
+                        }
                         // 透明点击层：高德 SDK 版地图是原生 View，触摸会被它自己消费掉，
                         // 挂在外层 Modifier 上的 clickable 根本收不到事件（瓦片版是 Compose Canvas，
                         // 不消费事件，所以只有配了 Key 的机器上"点不动"）。
@@ -380,13 +601,25 @@ fun D03SitterDetail(nav: DNav) {
                                 indication = null,
                             ) { nav.go(DScreen.SitterMap) },
                         )
-                        Box(
-                            Modifier.align(Alignment.BottomEnd).padding(8.dp)
-                                .clip(DShape.Pill).background(DColor.Scrim)
-                                .clickable { nav.go(DScreen.SitterMap) }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        DGlassSurface(
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                                .clickable { nav.go(DScreen.SitterMap) },
+                            shape = DShape.Pill,
+                            tint = DColor.Scrim.copy(alpha = 0.55f),
+                            blurRadius = 14f,
+                            cornerDp = 20.dp,
+                            edgeDp = 5.dp,
+                            surfaceAlpha = 0.90f,
+                            fallbackColor = DColor.Scrim,
+                            fallbackBorderColor = Color.Transparent,
+                            backdrop = if (hasAmap) null else mapPreviewBackdrop,
                         ) {
-                            Text("查看大图", fontSize = 10.5.sp, color = DColor.White)
+                            Text(
+                                "查看大图",
+                                fontSize = 10.5.sp,
+                                color = DColor.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            )
                         }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -525,6 +758,20 @@ fun D03SitterDetail(nav: DNav) {
                             color = DColor.Ink2,
                         )
                     }
+                }
+            }
+        }
+        if (store.similarSitters.isNotEmpty()) {
+            DSection("相似机构")
+            DPad {
+                store.similarSitters.take(3).forEach { (similar, similarity) ->
+                    val base = similar.toACard()
+                    val info = base.copy(
+                        tags = base.tags + (
+                            "相似度 ${(similarity * 100).toInt()}%" to DTagTone.Brand
+                            ),
+                    )
+                    A_SitterCard(info) { nav.openSitter(similar) }
                 }
             }
         }
@@ -739,7 +986,17 @@ fun D05Orders(nav: DNav) {
     val labels = listOf("全部", "待支付", "寄养中", "已完成", "已评价")
     // 订单卡右侧有金额和按钮，比机构卡更吃宽度，最小列宽取 360dp
     val columns = dWindow().columns(360.dp)
-    LaunchedEffect(Unit) { store.loadOrders() }
+    val statusFilter = when (tab) {
+        1 -> "pending_pay"
+        2 -> "accepted,staying"
+        3 -> "completed"
+        4 -> "evaluated"
+        else -> null
+    }
+    // 状态筛选走服务端，避免只过滤已加载的前 50 条；离开页面恢复全部，
+    // 否则首页「累计订单/寄养中」统计会读到筛选后的列表。
+    LaunchedEffect(tab) { store.loadOrders(force = true, statusFilter = statusFilter) }
+    DisposableEffect(Unit) { onDispose { store.clearOrderFilter() } }
     val statuses = remember(tab) {
         when (tab) {
             1 -> setOf("pending_pay")
@@ -753,7 +1010,7 @@ fun D05Orders(nav: DNav) {
         if (statuses.isEmpty()) store.orders else store.orders.filter { it.rawStatus in statuses }
     }
     // 订单也可能一次返回几十条，同样用惰性骨架。
-    DMiuixListScaffold(nav = nav, title = "我的订单", backable = false, refreshing = store.ordersLoading, onRefresh = { scope.launch { store.loadOrders(force = true) } }) {
+    DMiuixListScaffold(nav = nav, title = "我的订单", backable = false, refreshing = store.ordersLoading, onRefresh = { scope.launch { store.loadOrders(force = true, statusFilter = statusFilter) } }) {
         item { DTabLine(labels, tab) { tab = it } }
         item { Spacer(Modifier.height(10.dp)) }
         when {
@@ -764,7 +1021,7 @@ fun D05Orders(nav: DNav) {
                 item {
                     DPad {
                         DErrorBox(store.ordersError ?: "订单加载失败") {
-                            scope.launch { store.loadOrders(force = true) }
+                            scope.launch { store.loadOrders(force = true, statusFilter = statusFilter) }
                         }
                     }
                 }
@@ -922,7 +1179,15 @@ fun D07Profile(nav: DNav) {
                     )
                 }
                 Box(
-                    Modifier.clip(DShape.Md).background(DColor.White.copy(alpha = 0.2f))
+                    Modifier
+                        .dGlassSurface(
+                            shape = DShape.Md,
+                            tint = DColor.Scrim.copy(alpha = 0.42f),
+                            blurRadius = 10f,
+                            cornerDp = 8.dp,
+                            edgeDp = 5.dp,
+                            fallbackColor = DColor.Scrim,
+                        )
                         .clickable { nav.go(DScreen.Settings) }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
@@ -942,8 +1207,15 @@ fun D07Profile(nav: DNav) {
             DPad {
                 Spacer(Modifier.height(14.dp))
                 Box(
-                    Modifier.fillMaxWidth().clip(DShape.Md)
-                        .background(DColor.WarnSoft)
+                    Modifier.fillMaxWidth()
+                        .dGlassSurface(
+                            shape = DShape.Md,
+                            tint = DColor.WarnSoft.copy(alpha = 0.72f),
+                            blurRadius = 14f,
+                            cornerDp = 8.dp,
+                            edgeDp = 6.dp,
+                            fallbackColor = DColor.WarnSoft,
+                        )
                         .border(1.dp, DColor.Warn, DShape.Md)
                         .clickable { nav.go(DScreen.ProfileEdit) }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -1044,20 +1316,36 @@ fun D07Profile(nav: DNav) {
 fun D08Pets(nav: DNav) {
     val store = DLocalStore.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { store.loadPets() }
+    val speciesLabels = listOf("全部", "猫", "狗", "其他")
+    var speciesIndex by remember { mutableStateOf(0) }
+    val species = when (speciesIndex) {
+        1 -> "cat"
+        2 -> "dog"
+        3 -> "other"
+        else -> null
+    }
+    // 物种筛选走服务端，超过一页也能筛全；离开页面恢复全部，首页统计才不会被筛选影响。
+    LaunchedEffect(speciesIndex) { store.loadPets(force = true, species = species) }
+    DisposableEffect(Unit) { onDispose { store.clearPetFilter() } }
     DMiuixScrollScaffold(
         nav = nav,
         title = "我的宠物",
         actions = { DSmallButton("+ 添加", { nav.go(DScreen.PetAdd) }) },
         refreshing = store.petsLoading,
-        onRefresh = { scope.launch { store.loadPets(force = true) } },
+        onRefresh = { scope.launch { store.loadPets(force = true, species = species) } },
     ) {
+        A_ChipRow(speciesLabels, speciesIndex) { speciesIndex = it }
         DPad {
             Spacer(Modifier.height(14.dp))
             when {
                 store.petsLoading && store.pets.isEmpty() -> DLoading("正在加载宠物档案…")
                 store.pets.isEmpty() -> {
-                    DEmpty("还没有宠物档案", "添加宠物") { nav.go(DScreen.PetAdd) }
+                    DEmpty(
+                        if (speciesIndex == 0) "还没有宠物档案" else "没有该类型的宠物",
+                        if (speciesIndex == 0) "添加宠物" else "查看全部",
+                    ) {
+                        if (speciesIndex == 0) nav.go(DScreen.PetAdd) else speciesIndex = 0
+                    }
                 }
                 else -> {
                     DGrid(store.pets, minItemWidth = 340.dp) { pet ->
@@ -1129,6 +1417,95 @@ fun D09Login(nav: DNav) {
         }
     }
 
+    var codeMode by remember { mutableStateOf(false) }
+    var phone by remember { mutableStateOf(store.profile?.phone.orEmpty()) }
+    var code by remember { mutableStateOf("") }
+    var codeSending by remember { mutableStateOf(false) }
+    var countdown by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    // 通知权限弹窗是异步的：先把验证码暂存，授权结果回来后再展示，避免第一次点发送只看到 toast。
+    var pendingCode by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val pending = pendingCode
+        pendingCode = null
+        if (pending != null) {
+            val shown = if (granted) {
+                runCatching {
+                    LoginCodeNotification.show(context, pending.first, pending.second)
+                }.getOrDefault(false)
+            } else {
+                false
+            }
+            if (shown) {
+                nav.toast("验证码已发送，请查看通知栏")
+            } else {
+                nav.toast("验证码：${pending.second}")
+            }
+        }
+    }
+
+    LaunchedEffect(countdown) {
+        if (countdown > 0) {
+            delay(1000)
+            countdown--
+        }
+    }
+
+    val doSendCode: () -> Unit = {
+        val inputPhone = phone.trim()
+        when {
+            inputPhone.length != 11 -> nav.toast("请输入正确的 11 位手机号")
+            codeSending || countdown > 0 -> Unit
+            else -> scope.launch {
+                codeSending = true
+                try {
+                    val result = store.sendLoginCode(inputPhone)
+                    val demoCode = result.demoCode
+                    if (demoCode.isNullOrBlank()) {
+                        nav.toast("如果手机号已注册，验证码会发送；请确认账号已绑定手机号")
+                    } else {
+                        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                            PackageManager.PERMISSION_GRANTED
+                        if (needsPermission) {
+                            pendingCode = inputPhone to demoCode
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            val shown = runCatching {
+                                LoginCodeNotification.show(context, inputPhone, demoCode)
+                            }.getOrDefault(false)
+                            if (shown) {
+                                nav.toast("验证码已发送，请查看通知栏")
+                            } else {
+                                // 没有通知权限时兜底直接展示，避免演示流程卡死
+                                nav.toast("验证码：$demoCode")
+                            }
+                        }
+                        countdown = 60
+                    }
+                } catch (e: Exception) {
+                    nav.toast(e.message ?: "验证码发送失败")
+                } finally {
+                    codeSending = false
+                }
+            }
+        }
+    }
+
+    val doCodeLogin: () -> Unit = {
+        when {
+            phone.trim().length != 11 -> nav.toast("请输入正确的 11 位手机号")
+            code.trim().length != 6 -> nav.toast("请输入 6 位验证码")
+            store.busy -> Unit
+            else -> scope.launch {
+                store.loginWithCode(phone.trim(), code.trim())
+                if (store.loggedIn) nav.afterLogin()
+            }
+        }
+    }
+
     // 玻璃质感（miuix-blur）：两层模型——
     // ① 背景层（页面底色 + 品牌渐变 hero + 装饰圆）记录进 backdrop；
     // ② 前景滚动列里，登录表单卡是 DGlassPanel，真实模糊它身后骑跨的渐变。
@@ -1179,7 +1556,7 @@ fun D09Login(nav: DNav) {
                     DGlassSurface(
                         modifier = Modifier.size(34.dp).clickable { nav.back() },
                         shape = CircleShape,
-                        tint = Color.White.copy(alpha = 0.10f),
+                        tint = DColor.Scrim.copy(alpha = 0.40f),
                         blurRadius = 18f,
                         cornerDp = 17.dp,
                         fallbackColor = DColor.Scrim,
@@ -1219,30 +1596,75 @@ fun D09Login(nav: DNav) {
                 modifier = Modifier.padding(horizontal = gutter).fillMaxWidth(),
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
-                    DMiuixField(
-                        label = "账号",
-                        value = account,
-                        onValueChange = { account = it },
-                        placeholder = "用户名或手机号",
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    DMiuixField(
-                        label = "密码",
-                        value = password,
-                        onValueChange = { password = it },
-                        placeholder = "至少 8 位",
-                        secret = true,
-                        onSubmit = doLogin,
-                    )
-                    Spacer(Modifier.height(6.dp))
+                    if (codeMode) {
+                        DMiuixField(
+                            label = "手机号",
+                            value = phone,
+                            onValueChange = { phone = it.filter(Char::isDigit).take(11) },
+                            placeholder = "11 位手机号",
+                            numeric = true,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        DMiuixField(
+                            label = "验证码",
+                            value = code,
+                            onValueChange = { code = it.filter(Char::isDigit).take(6) },
+                            placeholder = "6 位验证码",
+                            numeric = true,
+                            onSubmit = doCodeLogin,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        DSmallButton(
+                            when {
+                                codeSending -> "发送中…"
+                                countdown > 0 -> "${countdown}s 后重发"
+                                else -> "发送验证码"
+                            },
+                            { doSendCode() },
+                            filled = countdown == 0 && !codeSending,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "演示模式：验证码会显示在系统通知栏",
+                            fontSize = 10.5.sp,
+                            color = DColor.Ink3,
+                        )
+                    } else {
+                        DMiuixField(
+                            label = "账号",
+                            value = account,
+                            onValueChange = { account = it },
+                            placeholder = "用户名或手机号",
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        DMiuixField(
+                            label = "密码",
+                            value = password,
+                            onValueChange = { password = it },
+                            placeholder = "至少 8 位",
+                            secret = true,
+                            onSubmit = doLogin,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
                     Button(
-                        onClick = doLogin,
+                        onClick = if (codeMode) doCodeLogin else doLogin,
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !store.busy,
                         colors = ButtonDefaults.buttonColorsPrimary(),
                     ) {
-                        Text(if (store.busy) "登录中…" else "登录")
+                        Text(if (store.busy) "登录中…" else if (codeMode) "验证码登录" else "登录")
                     }
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        if (codeMode) "使用密码登录" else "使用验证码登录",
+                        fontSize = 12.5.sp,
+                        color = DColor.BrandInk,
+                        modifier = Modifier.clickable {
+                            codeMode = !codeMode
+                            code = ""
+                        },
+                    )
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -1458,7 +1880,15 @@ fun D12PetAdd(nav: DNav) {
     DMiuixFormScaffold(nav = nav, title = if (editing == null) "新增宠物" else "编辑宠物") {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                Modifier.size(80.dp).clip(CircleShape).background(DColor.BrandSoft)
+                Modifier.size(80.dp)
+                    .dGlassSurface(
+                        shape = CircleShape,
+                        tint = DColor.BrandSoft.copy(alpha = 0.72f),
+                        blurRadius = 16f,
+                        cornerDp = 40.dp,
+                        edgeDp = 8.dp,
+                        fallbackColor = DColor.BrandSoft,
+                    )
                     .clickable { nav.toast("照片请在宠物详情页上传") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1643,6 +2073,8 @@ private data class A_SitterInfo(
     val price: String? = null,
     val unit: String? = null,
     val type: String = "",
+    /** 首页定位推荐时的距离文案；普通列表不传 */
+    val distance: String? = null,
 )
 
 /** 真实机构 → 设计稿卡片模型（封面 URL 之外的字段都在这里对齐）。 */
@@ -1653,7 +2085,7 @@ internal fun dAddonUnit(unit: String): String = when (unit) {
     else -> "每单"
 }
 
-private fun Sitter.toACard(): A_SitterInfo {
+private fun Sitter.toACard(distance: String? = null): A_SitterInfo {
     val area = addr.substringBefore("区").takeIf { it.length in 2..8 }?.plus("区")
     return A_SitterInfo(
         name = name,
@@ -1669,6 +2101,7 @@ private fun Sitter.toACard(): A_SitterInfo {
         price = if (price > 0) "¥${formatMoney(price)}" else null,
         unit = if (price > 0) "/$unit" else null,
         type = type,
+        distance = distance,
     )
 }
 
@@ -1720,7 +2153,7 @@ private fun A_QuickEntry(icon: AppIcon, label: String, modifier: Modifier = Modi
             .padding(horizontal = 4.dp)
             .dGlassSurface(
                 shape = DShape.Md,
-                tint = DColor.Card.copy(alpha = 0.58f),
+                tint = DColor.Card.copy(alpha = 0.75f),
                 blurRadius = 14f,
                 cornerDp = 8.dp,
             )
@@ -1746,8 +2179,17 @@ private fun A_IconBox(
     iconSize: Dp = 20.dp,
     rounded: Boolean = true,
 ) {
+    val shape = if (rounded) DShape.Md else CircleShape
     Box(
-        Modifier.size(boxSize).clip(if (rounded) DShape.Md else CircleShape).background(bg),
+        Modifier.size(boxSize)
+            .dGlassSurface(
+                shape = shape,
+                tint = bg.copy(alpha = 0.72f),
+                blurRadius = 12f,
+                cornerDp = if (rounded) 8.dp else boxSize / 2f,
+                edgeDp = 5.dp,
+                fallbackColor = bg,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         AppIcon(icon, Modifier.size(iconSize), tint)
@@ -1774,7 +2216,23 @@ private fun A_SitterCard(info: A_SitterInfo, onClick: () -> Unit) {
             DCover(info.cover, width = 86.dp, height = 86.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(info.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = DColor.Ink)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        info.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DColor.Ink,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (info.distance != null) {
+                        Text(
+                            info.distance,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = DColor.BrandInk,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     DStars(info.rating)
@@ -1822,8 +2280,15 @@ private fun A_PetOption(
     onClick: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clip(DShape.Md)
-            .background(if (selected) DColor.BrandSoft else DColor.Card)
+        Modifier.fillMaxWidth()
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = if (selected) DColor.BrandSoft.copy(alpha = 0.80f) else DColor.Card.copy(alpha = 0.75f),
+                blurRadius = 12f,
+                cornerDp = 8.dp,
+                edgeDp = 6.dp,
+                fallbackColor = if (selected) DColor.BrandSoft else DColor.Card,
+            )
             .border(1.5.dp, if (selected) DColor.Brand else DColor.Line, DShape.Md)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 11.dp),
@@ -1933,7 +2398,23 @@ private fun A_DynamicCard(
 
 @Composable
 private fun A_Stat(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier
+            .dGlassSurface(
+                shape = DShape.Md,
+                // 主题色玻璃：品牌酒红，白字在浅色/深色 hero 上都清楚
+                tint = DColor.Brand800.copy(alpha = 0.82f),
+                blurRadius = 12f,
+                cornerDp = 8.dp,
+                edgeDp = 5.dp,
+                surfaceAlpha = 0.40f,
+                sheen = true,
+                fallbackColor = DColor.Brand800,
+            )
+            .border(1.dp, DColor.White.copy(alpha = 0.18f), DShape.Md)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(value, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = DColor.White)
         Text(label, fontSize = 11.sp, color = DColor.White.copy(alpha = 0.9f))
     }
@@ -2005,8 +2486,14 @@ private fun A_PayOption(
 ) {
     Row(
         Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            .clip(DShape.Md)
-            .background(if (selected) DColor.BrandSoft else DColor.Card)
+            .dGlassSurface(
+                shape = DShape.Md,
+                tint = if (selected) DColor.BrandSoft.copy(alpha = 0.80f) else DColor.Card.copy(alpha = 0.75f),
+                blurRadius = 12f,
+                cornerDp = 8.dp,
+                edgeDp = 6.dp,
+                fallbackColor = if (selected) DColor.BrandSoft else DColor.Card,
+            )
             .border(1.5.dp, if (selected) DColor.Brand else DColor.Line, DShape.Md)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 11.dp),
@@ -2070,7 +2557,7 @@ private fun A_SelectField(
                 Modifier.fillMaxWidth()
                     .dGlassSurface(
                         shape = DShape.Md,
-                        tint = DColor.Card.copy(alpha = 0.58f),
+                        tint = DColor.Card.copy(alpha = 0.75f),
                         blurRadius = 14f,
                         cornerDp = 8.dp,
                     )
@@ -2164,7 +2651,7 @@ private fun A_DateStepper(
             Modifier.fillMaxWidth()
                 .dGlassSurface(
                     shape = DShape.Md,
-                    tint = DColor.Card.copy(alpha = 0.58f),
+                    tint = DColor.Card.copy(alpha = 0.75f),
                     blurRadius = 14f,
                     cornerDp = 8.dp,
                 )

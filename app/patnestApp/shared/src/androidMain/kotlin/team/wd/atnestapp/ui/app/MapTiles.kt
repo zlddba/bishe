@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import team.wd.atnestapp.data.api.ApiClient
 import java.util.Collections
 import java.util.LinkedHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 /** 一张瓦片的唯一标识，与后端 `/geo/tile?z=&x=&y=` 的三个参数一一对应。 */
 data class MapTileKey(val zoom: Int, val x: Int, val y: Int)
@@ -60,7 +61,7 @@ object MapTiles {
         if (!inFlight.add(key)) {
             repeat(30) {
                 cache[key]?.let { return it }
-                kotlinx.coroutines.delay(60)
+                kotlinx.coroutines.delay(60.milliseconds)
             }
             return cache[key]
         }
