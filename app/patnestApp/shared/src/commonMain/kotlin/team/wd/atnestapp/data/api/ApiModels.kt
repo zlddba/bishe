@@ -574,6 +574,29 @@ data class GeocodeDto(
     @SerialName("from_cache") val fromCache: Boolean = false,
 )
 
+/** 桌面端地图选点：先建会话拿到一次性链接，再轮询取回用户浏览器里选中的坐标。 */
+@Serializable
+data class GeoPickPayload(
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @SerialName("place_name") val placeName: String = "",
+)
+
+@Serializable
+data class GeoPickSessionDto(
+    val token: String = "",
+    val path: String = "",
+    @SerialName("expires_in") val expiresIn: Int = 0,
+)
+
+@Serializable
+data class GeoPickResultDto(
+    val status: String = "pending",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    @SerialName("formatted_address") val formattedAddress: String = "",
+)
+
 @Serializable
 data class ReceivedOrderDto(
     val id: Long = 0,

@@ -686,11 +686,40 @@ class ApiClient(rawBaseUrl: String) {
     suspend fun reverseGeocode(payload: ReversePayload): GeocodeDto =
         postData("/geo/reverse", payload)
 
+    /**
+     * 取一张以 (latitude, longitude) 为中心的静态地图 PNG 字节。
+     * 成功时响应是图片，失败时后端仍返回统一信封，这里照样翻译成能直接展示的提示。
+     */
+    suspend fun fetchStaticMap(
+        latitude: Double,
+        longitude: Double,
+        zoom: Int,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val params = mapOf(
+            "latitude" to latitude.toString(),
+            "longitude" to longitude.toString(),
+            "zoom" to zoom.toString(),
+            "width" to width.toString(),
+            "height" to height.toString(),
+        )
+        return getImage("/geo/static-map", params)
+    }
+
     /** 取一张 256x256 地图瓦片（桌面端弹框连续拖动用）。 */
     suspend fun fetchTile(zoom: Int, x: Int, y: Int): ByteArray = getImage(
         "/geo/tile",
         mapOf("z" to zoom.toString(), "x" to x.toString(), "y" to y.toString()),
     )
+
+    /** 地图选点第一步：创建一次性选点会话，返回浏览器里打开的相对路径。 */
+    suspend fun createGeoPick(payload: GeoPickPayload): GeoPickSessionDto =
+        postData("/geo/pick", payload)
+
+    /** 轮询选点结果；done 之后后端即销毁会话，重复轮询会得到 expired。 */
+    suspend fun pollGeoPick(token: String): GeoPickResultDto =
+        getData("/geo/pick-result/$token")
 
     /**
      * 图片类接口的统一读取：body 只能读一次，所以先取字节再判断。
