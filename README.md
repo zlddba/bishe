@@ -14,7 +14,7 @@
 
 | 端 | 技术 |
 | --- | --- |
-| 后端 | Go 1.25 + Gin + pgx + PostgreSQL + Redis + MinIO，JWT 鉴权，手写 RESP 客户端；170 条路由 / 212 个接口操作 |
+| 后端 | Go 1.25 + Gin + pgx + PostgreSQL + Redis + MinIO，JWT 鉴权，手写 RESP 客户端；217 条路由 / 173 个路径 |
 | 管理后台 | Vue 3 + Vite + Element Plus（Node `^22.18.0 \|\| >=24.12.0`） |
 | 客户端 | Kotlin Multiplatform + Compose（Gradle 9.8.2 / JVM 21）：Android 与 Desktop 共用网络层、模型与状态，各自实现 UI |
 | 小程序 | uni-app（Vue 3）+ 微信小程序，HBuilderX 工程，28 个页面 |
