@@ -19,7 +19,7 @@
    - ⏳ `GET /geo/pick-result/:token`
    - ⏳ `GET /geo/pick/:token`
    - ⏳ `POST /geo/pick/:token`
-   - 说明：这 5 条是浏览器选点/静态地图，管理端已用高德 JS，Android 已用高德 SDK；属于后端预留，不是主流程缺口。KMP 侧死包装已删除。
+   - 说明：这 5 条是浏览器选点/静态地图，管理端已用高德 JS，Android 已用高德 SDK；**桌面端仍在用其中 3 条**（`desktopApp` 的 `AppRoot.kt` 调 `fetchStaticMap` / `createGeoPick` / `pollGeoPick`），属桌面端自身功能，不需要补齐到 Android。
 3. **Android 单独没接的 8 项，已全部补齐**：
    - ✅ 订单详情 `GET /pet-owner/orders/:id`
    - ✅ 动态详情 `GET /pet-owner/dynamics/:id`
@@ -138,25 +138,24 @@
 | --- | --- |
 | 后端 handler | `GeoStaticMap` |
 | 鉴权 | 登录用户 |
-| Android | 没有页面调用；KMP 侧死包装已删除 |
+| Android | 没有页面调用 |
 | 小程序 | 没有调用 |
 | 管理后台 | 没有调用，后台用高德 JS API |
-| 证据 | 全仓库搜索 `static-map` 已没有客户端调用；后端路由保留为预留 |
+| 桌面端 | 地址页地图预览会调 `api.fetchStaticMap()` |
+| 证据 | `desktopApp/.../AppRoot.kt` 的 `staticMap()` 包装；Android / 小程序 / 管理后台均无调用 |
 
 现状：
 
 - 后端可以按经纬度/缩放/尺寸返回一张静态地图图片。
-- 三个前端都没有使用。
+- Android、小程序与管理后台都没有使用，桌面端用于地址页的地图预览。
 
 影响：
 
-- 后端静态地图能力闲置。
-- 如果本意是给桌面端/分享卡片用，目前没有落地页面。
+- 静态地图能力只服务桌面端一个入口。
 
 建议：
 
-- 明确用途：分享海报、桌面端地图预览、无 WebView 环境兜底。
-- 如果没有明确场景，删除路由和 `fetchStaticMap()`，减少维护面。
+- 若要收敛，只能连同桌面端预览一起改；Android 侧不需要补。
 
 优先级：**低**，除非产品明确要做分享图/桌面地图。
 
@@ -171,19 +170,21 @@
 | 项 | 内容 |
 | --- | --- |
 | 后端 handler | `CreateGeoPick` |
-| Android | 无页面调用；KMP 侧 `createGeoPick()` 死包装已删除 |
+| Android | 无页面调用 |
 | 小程序 | 无 |
 | 管理后台 | 无 |
-| 证据 | 全仓库搜索 `createGeoPick` 已没有客户端调用 |
+| 桌面端 | `AppRoot.kt` 的 `pickOnMap()` 调 `api.createGeoPick()` 打开浏览器选点 |
+| 证据 | `desktopApp/.../AppRoot.kt` |
 
 #### `GET /geo/pick-result/:token` —— 轮询选点结果
 
 | 项 | 内容 |
 | --- | --- |
 | 后端 handler | `PollGeoPick` |
-| Android | 无页面调用；KMP 侧 `pollGeoPick()` 死包装已删除 |
+| Android | 无页面调用 |
 | 小程序 | 无 |
 | 管理后台 | 无 |
+| 桌面端 | `AppRoot.kt` 轮询 `api.pollGeoPick(token)` 取回选点结果 |
 
 #### `GET /geo/pick/:token` —— 浏览器选点页
 
@@ -204,12 +205,12 @@
 现状：
 
 - Android 实际使用的是 App 内高德地图选点（`D24MapPicker`），不是这套浏览器选点。
-- 后端这套流程可能是为桌面端/无地图 SDK 客户端准备的，但目前没有客户端使用。
+- 桌面端没有内置地图 SDK，走的就是这套浏览器选点：建会话 → 打开浏览器 → 轮询结果。
 
 影响：
 
-- 后端多维护一套带 token 的浏览器选点链路。
-- KMP 侧两个死包装已删除；后端路由保留为预留。
+- 后端多维护一套带 token 的浏览器选点链路，目前只服务桌面端。
+- KMP 侧的 `createGeoPick()` / `pollGeoPick()` 保留给桌面端；Android 不调用。
 
 建议：
 
@@ -396,7 +397,7 @@
 | 主人端 `/pet-owner` | 52 | 大部分覆盖；缺口见第 3 节 |
 | 机构端 `/sitter` | 34 | 已覆盖：订单详情、建店已补；加购删除实际是下架，由 toggle 覆盖 |
 | 公开机构 `/sitters` | 6 | 覆盖 |
-| 地理 `/geo` | 9 | 静态地图 + 浏览器选点 5 条未接 |
+| 地理 `/geo` | 9 | 静态地图 + 浏览器选点 5 条 Android 未接（桌面端在用其中 3 条） |
 | 认证 `/auth` | 8 | 覆盖 |
 | 工单 `/support` | 4 | 覆盖 |
 | 其他（健康检查、版本、支付回调、上传、旧通知） | 7 | 健康检查/回调为基础设施；旧通知仍用于未读角标 |
