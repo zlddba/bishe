@@ -132,6 +132,10 @@ export const sitterApi = {
 	reviews(id, params = {}) {
 		return http.get('/sitters/' + id + '/reviews', params, { noAuth: true })
 	},
+	// 相似机构（pgvector 余弦）：返回 { items:[{sitter, similarity}] }
+	similar(id, limit = 4) {
+		return http.get('/sitters/' + toId(id) + '/similar', { limit }, { noAuth: true, silent: true })
+	},
 	// 下单前费用预估（与下单同一套核算口径，含节假日上浮/加购/券/积分）
 	// 返回 { sitter_id, sitter_name, total_days, pet_count, estimated_amount,
 	//        addon_amount, subtotal, discount_amount, points_used, points_discount,

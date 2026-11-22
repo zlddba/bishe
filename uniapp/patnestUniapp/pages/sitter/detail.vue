@@ -131,6 +131,17 @@
 					<text v-if="r.reply_text" class="r-reply">店家回复：{{ r.reply_text }}</text>
 				</view>
 			</view>
+
+			<!-- pgvector 相似机构 -->
+			<view v-if="similar.length" class="section patnest-card">
+				<view class="sec-title">相似机构</view>
+				<sitter-card
+					v-for="item in similar"
+					:key="item.sitter.id"
+					:sitter="item.sitter"
+				/>
+				<text class="muted sim-hint">按类型、价格、评分和位置推荐</text>
+			</view>
 		</view>
 
 		<!-- 底部操作栏 -->
@@ -178,6 +189,7 @@
 				reviews: [],
 				addons: [],
 				capacity: [],
+				similar: [],
 				favorited: false,
 				favBusy: false,
 				loading: false,
@@ -332,6 +344,11 @@
 				try {
 					this.reviews = (await sitterApi.reviews(this.id)).items || []
 				} catch (e) {}
+				try {
+					this.similar = (await sitterApi.similar(this.id, 4)).items || []
+				} catch (e) {
+					this.similar = []
+				}
 				if (isLoggedIn()) this.checkFav()
 				this.loading = false
 			},
@@ -598,6 +615,11 @@
 		color: #9AA3AF;
 		font-size: 24rpx;
 		margin-right: 20rpx;
+	}
+	.sim-hint {
+		display: block;
+		margin-top: 10rpx;
+		font-size: 22rpx;
 	}
 	.addr {
 		margin-top: 8rpx;

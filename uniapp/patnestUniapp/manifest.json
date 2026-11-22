@@ -2,8 +2,8 @@
     "name" : "宠栖PatNest",
     "appid" : "__UNI__24E4D49",
     "description" : "宠栖 PatNest 微信小程序 · 宠物寄养服务预约（主人端）",
-    "versionName" : "2.0.5",
-    "versionCode" : "120",
+    "versionName" : "2.3.0",
+    "versionCode" : "230",
     "transformPx" : false,
     /* 本项目小程序端只覆盖微信小程序（mp-weixin）内容，
        其余平台（H5 / App / 各家小程序）不在本仓库实现范围内。 */
@@ -41,5 +41,10 @@
         },
         "requiredPrivateInfos" : [ "getLocation", "chooseLocation" ]
     },
-    "vueVersion" : "3"
+    "vueVersion" : "3",
+    "app-harmony" : {
+        "distribute" : {
+            "deviceTypes" : [ "phone", "tablet", "tv", "car" ]
+        }
+    }
 }

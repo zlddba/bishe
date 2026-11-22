@@ -208,8 +208,18 @@
 				try {
 					const p = Object.assign({}, this.params)
 					if (!p.type) delete p.type
-					// distance 由前端本地排序，后端不认这个 sort 值
-					if (!p.sort || p.sort === 'distance') delete p.sort
+					// 距离排序现在由后端 Haversine 完成；没有参考点时才退回本地排序。
+					if (p.sort === 'distance') {
+						const base = this.refPoint
+						if (base) {
+							p.latitude = base.latitude
+							p.longitude = base.longitude
+						} else {
+							delete p.sort
+						}
+					} else if (!p.sort) {
+						delete p.sort
+					}
 					const min = parseFloat(this.priceMin)
 					const max = parseFloat(this.priceMax)
 					if (!isNaN(min) && min > 0) p.price_min = min
