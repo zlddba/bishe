@@ -95,6 +95,29 @@
     </div>
 
     <div class="panel">
+      <div class="panel-h">
+        <div>
+          <h3>接口文档（Swagger）</h3>
+          <p>关闭后 /swagger/index.html 和 /swagger.json 都返回 404，业务接口不受影响</p>
+        </div>
+        <el-switch
+          v-model="swagger.enabled"
+          class="ml-auto"
+          :loading="swagger.saving"
+          active-text="开启"
+          inactive-text="关闭"
+          @change="saveSwagger"
+        />
+      </div>
+      <div class="panel-b">
+        <p class="sec-desc" style="margin-bottom:8px">
+          运行期开关立即生效，不需要重启后端。开关值会写入 platform_settings，重启后仍以数据库值为准。
+        </p>
+        <code class="swagger-url">{{ swaggerUrl }}</code>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-h"><h3>登录保护说明</h3></div>
       <div class="panel-b">
         <ul class="sec-notes">
@@ -187,6 +210,9 @@ const disableDialog = ref(false)
 const disableForm = reactive({ password: '', code: '' })
 const disableLoading = ref(false)
 
+const swagger = reactive({ enabled: true, saving: false })
+const swaggerUrl = `${window.location.origin}/swagger/index.html`
+
 function formatTime(t) {
   if (!t) return '—'
   const d = new Date(t)
@@ -201,6 +227,30 @@ async function loadStatus() {
     Object.assign(status, res.data || {})
   } catch (e) {
     ElMessage.error(e.message || '读取两步验证状态失败')
+  }
+}
+
+async function loadSwagger() {
+  try {
+    const res = await adminApi.getSwaggerSetting()
+    swagger.enabled = Boolean(res.data?.enabled)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '读取 Swagger 开关失败')
+  }
+}
+
+async function saveSwagger(value) {
+  swagger.saving = true
+  try {
+    const res = await adminApi.updateSwaggerSetting({ enabled: Boolean(value) })
+    swagger.enabled = Boolean(res.data?.enabled)
+    ElMessage.success(swagger.enabled ? 'Swagger 已开启' : 'Swagger 已关闭')
+  } catch (e) {
+    // 请求失败时把开关拨回原状态，避免页面显示与实际不一致
+    swagger.enabled = !value
+    ElMessage.error(e.response?.data?.message || e.message || '保存 Swagger 开关失败')
+  } finally {
+    swagger.saving = false
   }
 }
 
@@ -322,7 +372,10 @@ async function copyText(text) {
   }
 }
 
-onMounted(loadStatus)
+onMounted(() => {
+  loadStatus()
+  loadSwagger()
+})
 </script>
 
 <style scoped>
@@ -336,6 +389,15 @@ onMounted(loadStatus)
   color: var(--ink2);
   line-height: 1.8;
   margin-bottom: 16px;
+}
+.swagger-url {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  padding: 6px 10px;
+  border-radius: 6px;
 }
 .sec-hint {
   font-size: 12.5px;

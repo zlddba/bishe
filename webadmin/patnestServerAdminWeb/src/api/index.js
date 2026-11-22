@@ -227,6 +227,10 @@ export const adminApi = {
   getCommissionSetting: () => request.get('/admin/settings/commission'),
   updateCommissionSetting: (data) => request.put('/admin/settings/commission', data),
 
+  // 平台参数：Swagger 运行期开关
+  getSwaggerSetting: () => request.get('/admin/settings/swagger'),
+  updateSwaggerSetting: (data) => request.put('/admin/settings/swagger', data),
+
   // 钱包管理
   getWallets: (params) => request.get('/admin/wallets', { params }),
   getWalletDetail: (userId) => request.get(`/admin/wallets/${userId}`),
