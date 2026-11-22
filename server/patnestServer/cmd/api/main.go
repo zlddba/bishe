@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -102,11 +103,26 @@ func main() {
 	}
 	defer cache.Close()
 
+	// --- Swagger 运行期开关 ---
+	// 默认值来自 SWAGGER_ENABLED；如果后台保存过 swagger_enabled，则以数据库为准。
+	swagger.SetEnabled(cfg.SwaggerEnabled)
+	var swaggerSetting string
+	if err := db.Pool.QueryRow(context.Background(),
+		`SELECT value FROM platform_settings WHERE key = 'swagger_enabled'`,
+	).Scan(&swaggerSetting); err == nil {
+		if v, parseErr := strconv.ParseBool(swaggerSetting); parseErr == nil {
+			swagger.SetEnabled(v)
+		}
+	}
+
 	// --- Setup Router ---
 	r := router.Setup()
-	if cfg.SwaggerEnabled {
-		swagger.Register(r)
+	// 路由始终注册，guard 负责 404；这样后台开关可以即时生效。
+	swagger.Register(r)
+	if swagger.Enabled() {
 		log.Printf("[Swagger] UI: %s (doc: %s)", swagger.IndexURL, swagger.DocPath)
+	} else {
+		log.Println("[Swagger] Disabled (set SWAGGER_ENABLED=true or enable it in admin settings)")
 	}
 	log.Println("[Router] All routes registered.")
 
@@ -168,7 +184,7 @@ func main() {
 		log.Printf("  Protocol: http（%s 时同时接受 https）", onOff(tlsMgr.Enabled()))
 		log.Printf("  Health: http://localhost%s/health", addr)
 		log.Printf("  Version: http://localhost%s/api/v1/version", addr)
-		if cfg.SwaggerEnabled {
+		if swagger.Enabled() {
 			log.Printf("  Swagger: http://localhost%s%s", addr, swagger.IndexURL)
 		}
 		log.Println("=========================================")

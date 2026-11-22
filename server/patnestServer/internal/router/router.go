@@ -31,6 +31,8 @@ func Setup() *gin.Engine {
 	v1.GET("/sitters/:id/capacity", handler.SitterCapacityPublic)
 	v1.GET("/sitters/:id/addons", handler.ListAddons)
 	v1.GET("/sitters/:id/reviews", handler.SitterReviewsPublic)
+	// 基于机构特征向量的相似机构（pgvector 余弦距离）
+	v1.GET("/sitters/:id/similar", handler.SimilarSitters)
 
 	// 逆地理编码：首页顶部地名要把坐标换成区县/街道，游客（未登录）浏览机构时
 	// 同样需要显示，因此放在公开组；按 IP 限流兜住高德配额（handler.reverseWithinQuota）。
@@ -47,6 +49,9 @@ func Setup() *gin.Engine {
 	{
 		auth.POST("/register", handler.Register)
 		auth.POST("/login", handler.Login)
+		// 验证码登录（演示模式：验证码由接口返回，App 本地通知展示）
+		auth.POST("/send-code", handler.SendLoginCode)
+		auth.POST("/login/code", handler.LoginByCode)
 		// 两步验证第二步：密码通过后拿一次性票据换令牌（0023）
 		auth.POST("/login/totp", handler.LoginTOTP)
 		auth.POST("/refresh", handler.Refresh)
@@ -301,6 +306,9 @@ func Setup() *gin.Engine {
 			// --- 平台参数（全局佣金比例；单机构覆盖走 /admin/sitters/:id）---
 			admin.GET("/settings/commission", handler.AdminGetCommissionSetting)
 			admin.PUT("/settings/commission", handler.AdminUpdateCommissionSetting)
+			// --- 平台参数：Swagger 运行期开关 ---
+			admin.GET("/settings/swagger", handler.AdminGetSwaggerSetting)
+			admin.PUT("/settings/swagger", handler.AdminUpdateSwaggerSetting)
 
 			// --- 钱包管理 ---
 			admin.GET("/wallets", handler.AdminListWallets)

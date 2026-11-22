@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"patnestServer/internal/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 // ListSitters handles GET /api/v1/pet-owner/sitters
@@ -65,19 +67,48 @@ func ListSitters(c *gin.Context) {
 		idx++
 	}
 
+	// 计数只依赖 where 里的筛选参数，必须放在距离参数追加之前，
+	// 否则 count 查询会多收到 latitude/longitude 两个参数。
+	var total int
+	countQ := "SELECT COUNT(*) FROM sitters s " + where
+	_ = db.Pool.QueryRow(context.Background(), countQ, args...).Scan(&total)
+
 	orderBy := "s.avg_score DESC, s.review_count DESC"
-	switch c.Query("sort") {
+	switch sort := c.Query("sort"); sort {
 	case "price_asc":
 		orderBy = "s.daily_price ASC"
 	case "price_desc":
 		orderBy = "s.daily_price DESC"
 	case "newest":
 		orderBy = "s.created_at DESC"
+	case "distance":
+		latRaw := strings.TrimSpace(c.Query("latitude"))
+		lngRaw := strings.TrimSpace(c.Query("longitude"))
+		lat, errLat := strconv.ParseFloat(latRaw, 64)
+		lng, errLng := strconv.ParseFloat(lngRaw, 64)
+		if errLat != nil || errLng != nil || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+			BadRequest(c, "sort=distance 需要有效的 latitude/longitude")
+			return
+		}
+		latIdx := idx
+		args = append(args, lat)
+		idx++
+		lngIdx := idx
+		args = append(args, lng)
+		idx++
+		// Haversine 排序；没有坐标的机构排最后。
+		// LEAST/GREATEST 防止浮点误差让 acos 超出 [-1,1] 报错。
+		orderBy = fmt.Sprintf(`CASE
+			WHEN s.latitude IS NULL OR s.longitude IS NULL THEN NULL
+			ELSE (
+				6371 * acos(LEAST(1.0, GREATEST(-1.0,
+					cos(radians($%d)) * cos(radians(s.latitude)) *
+					cos(radians(s.longitude) - radians($%d)) +
+					sin(radians($%d)) * sin(radians(s.latitude))
+				)))
+			)
+		END NULLS LAST, s.avg_score DESC`, latIdx, lngIdx, latIdx)
 	}
-
-	var total int
-	countQ := "SELECT COUNT(*) FROM sitters s " + where
-	_ = db.Pool.QueryRow(context.Background(), countQ, args...).Scan(&total)
 
 	// 公开列表带联系方式：小程序端「一键拨号」需要，机构没填时返回空串由前端降级成站内留言。
 	// 只取 contact_phone / contact_name（users）与 contact_person（sitters），不碰 email 等其它个人信息。
@@ -164,6 +195,12 @@ func SearchSitters(c *gin.Context) {
 	}
 	offset := (page - 1) * perPage
 
+	// 优先走 PGroonga 中文全文检索；扩展/索引不可用时退回 pg_trgm，
+	// 老部署不会因为没装 pgroonga 直接 500。
+	if searchSittersWithPgronoga(c, q, page, perPage, offset) {
+		return
+	}
+
 	var total int
 	_ = db.Pool.QueryRow(context.Background(),
 		"SELECT COUNT(*) FROM sitters WHERE status = 'active' AND deleted_at IS NULL AND (name ILIKE $1 OR address ILIKE $1 OR description ILIKE $1)",
@@ -185,16 +222,10 @@ func SearchSitters(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	sitters := make([]model.Sitter, 0)
-	for rows.Next() {
-		var s model.Sitter
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
-			&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
-			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
-			&s.ContactPhone, &s.ContactName, &s.ContactPerson); err != nil {
-			continue
-		}
-		sitters = append(sitters, s)
+	sitters, err := scanSitterRows(rows)
+	if err != nil {
+		InternalError(c, "search failed")
+		return
 	}
 
 	OK(c, gin.H{
@@ -203,6 +234,149 @@ func SearchSitters(c *gin.Context) {
 		"page":     page,
 		"per_page": perPage,
 	})
+}
+
+// searchSittersWithPgronoga 用 PGroonga 做中文全文检索。
+// 返回 true 表示已经写出响应；false 表示调用方应退回 pg_trgm。
+func searchSittersWithPgronoga(c *gin.Context, q string, page, perPage, offset int) bool {
+	ctx := context.Background()
+	var available bool
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'pgroonga')`,
+	).Scan(&available); err != nil || !available {
+		return false
+	}
+
+	where := `s.status = 'active' AND s.deleted_at IS NULL
+		AND ((s.name)::text &@~ pgroonga_query_escape($1::text)
+			OR (s.address)::text &@~ pgroonga_query_escape($1::text)
+			OR s.description &@~ pgroonga_query_escape($1::text))`
+
+	var total int
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM sitters s WHERE `+where, q,
+	).Scan(&total); err != nil {
+		log.Printf("[SearchSitters] pgroonga count failed, fallback to pg_trgm: %v", err)
+		return false
+	}
+
+	rows, err := db.Pool.Query(ctx,
+		`SELECT s.id, s.user_id, s.name, s.type, s.description, s.daily_price, s.visit_price, s.price_mode, s.capacity,
+		 s.address, s.latitude, s.longitude, s.avg_score, s.review_count, s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at,
+		 COALESCE(u.contact_phone, ''), COALESCE(u.contact_name, ''), s.contact_person
+		 FROM sitters s LEFT JOIN users u ON u.id = s.user_id
+		 WHERE `+where+`
+		 ORDER BY s.avg_score DESC, s.review_count DESC
+		 LIMIT $2 OFFSET $3`,
+		q, perPage, offset)
+	if err != nil {
+		log.Printf("[SearchSitters] pgroonga query failed, fallback to pg_trgm: %v", err)
+		return false
+	}
+	defer rows.Close()
+
+	sitters, err := scanSitterRows(rows)
+	if err != nil {
+		log.Printf("[SearchSitters] pgroonga scan failed, fallback to pg_trgm: %v", err)
+		return false
+	}
+
+	OK(c, gin.H{
+		"items":    sitters,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+	})
+	return true
+}
+
+func scanSitterRows(rows pgx.Rows) ([]model.Sitter, error) {
+	sitters := make([]model.Sitter, 0)
+	for rows.Next() {
+		var s model.Sitter
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
+			&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
+			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+			&s.ContactPhone, &s.ContactName, &s.ContactPerson); err != nil {
+			return nil, err
+		}
+		sitters = append(sitters, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return sitters, nil
+}
+
+// SimilarSitters handles GET /api/v1/sitters/:id/similar
+// 机构特征向量由数据库触发器维护，这里只做余弦最近邻查询。
+func SimilarSitters(c *gin.Context) {
+	sitterID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || sitterID == 0 {
+		BadRequest(c, "invalid sitter id")
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "6"))
+	if limit < 1 {
+		limit = 6
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	ctx := context.Background()
+	var seedVector string
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(embedding::text, '')
+		 FROM sitters
+		 WHERE id = $1 AND status = 'active' AND deleted_at IS NULL`, sitterID,
+	).Scan(&seedVector); err != nil {
+		NotFound(c, "机构不存在或已下架")
+		return
+	}
+	if strings.TrimSpace(seedVector) == "" {
+		OK(c, gin.H{"items": []gin.H{}})
+		return
+	}
+
+	rows, err := db.Pool.Query(ctx,
+		`SELECT s.id, s.user_id, s.name, s.type, s.description, s.daily_price, s.visit_price, s.price_mode, s.capacity,
+		 s.address, s.latitude, s.longitude, s.avg_score, s.review_count, s.cover_photo_url, s.detail_photos, s.status, s.created_at, s.updated_at,
+		 COALESCE(u.contact_phone, ''), COALESCE(u.contact_name, ''), s.contact_person,
+		 1 - (s.embedding <=> $2::vector) AS similarity
+		 FROM sitters s
+		 LEFT JOIN users u ON u.id = s.user_id
+		 WHERE s.id <> $1
+		   AND s.status = 'active' AND s.deleted_at IS NULL
+		   AND s.embedding IS NOT NULL
+		 ORDER BY s.embedding <=> $2::vector
+		 LIMIT $3`, sitterID, seedVector, limit)
+	if err != nil {
+		InternalError(c, "相似机构查询失败")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]gin.H, 0, limit)
+	for rows.Next() {
+		var s model.Sitter
+		var similarity float64
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.Type, &s.Description, &s.DailyPrice, &s.VisitPrice,
+			&s.PriceMode, &s.Capacity, &s.Address, &s.Latitude, &s.Longitude, &s.AvgScore, &s.ReviewCount,
+			&s.CoverPhotoURL, &s.DetailPhotos, &s.Status, &s.CreatedAt, &s.UpdatedAt,
+			&s.ContactPhone, &s.ContactName, &s.ContactPerson, &similarity); err != nil {
+			InternalError(c, "相似机构读取失败")
+			return
+		}
+		items = append(items, gin.H{"sitter": s, "similarity": similarity})
+	}
+	if err := rows.Err(); err != nil {
+		InternalError(c, "相似机构读取失败")
+		return
+	}
+
+	OK(c, gin.H{"items": items})
 }
 
 // GetMyShop handles GET /api/v1/sitter/shop/me

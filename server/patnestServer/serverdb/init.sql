@@ -44,6 +44,16 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'pg_trgm 不可用（%），跳过模糊搜索索引', SQLERRM;
 END $$;
 
+-- 中文全文检索：pgroonga 是可选增强，缺失时搜索接口会退回 pg_trgm。
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS pgroonga;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgroonga 不可用（%），搜索将使用 pg_trgm 兜底', SQLERRM;
+END $$;
+
+-- 机构相似推荐：pgvector。当前镜像已包含该扩展。
+CREATE EXTENSION IF NOT EXISTS vector;
+
 DO $$ BEGIN
     CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 EXCEPTION WHEN OTHERS THEN
@@ -164,6 +174,25 @@ CREATE INDEX IF NOT EXISTS idx_users_invited_by
 COMMENT ON COLUMN users.invite_code IS '我的邀请码，PET+用户ID补零至6位，由触发器生成（0022）';
 COMMENT ON COLUMN users.invited_by IS '邀请人 user_id，NULL 表示自然注册（0022）';
 
+-- 3.1.1 验证码登录（0027）：只存 bcrypt 哈希，不存明文。
+CREATE TABLE IF NOT EXISTS auth_phone_codes (
+    id          BIGSERIAL       PRIMARY KEY,
+    phone       VARCHAR(20)     NOT NULL,
+    code_hash   VARCHAR(100)    NOT NULL,
+    expires_at  TIMESTAMPTZ     NOT NULL,
+    attempts    INT             NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    consumed_at TIMESTAMPTZ,
+    request_ip  VARCHAR(64),
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_auth_phone_codes_phone
+    ON auth_phone_codes (phone, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_phone_codes_active
+    ON auth_phone_codes (phone, id DESC)
+    WHERE consumed_at IS NULL;
+COMMENT ON TABLE auth_phone_codes IS '短信/演示验证码登录的一次性验证码（哈希存储）';
+COMMENT ON COLUMN auth_phone_codes.code_hash IS 'bcrypt 哈希，不保存明文验证码';
+
 -- 3.2 pets
 CREATE TABLE IF NOT EXISTS pets (
     id              BIGSERIAL       PRIMARY KEY,
@@ -215,6 +244,9 @@ CREATE TABLE IF NOT EXISTS sitters (
     license_photo_url TEXT,
     id_card_photo_url TEXT,
     review_note     VARCHAR(255),
+    -- 16 维特征向量：类型、价格、容量、评分、评价数、经纬度、封面/简介完整度。
+    -- 由 fn_sitters_embedding_sync 触发器维护，用于相似机构推荐。
+    embedding       vector(16),
     status          sitter_status   NOT NULL DEFAULT 'pending',
     banned_at       TIMESTAMPTZ,
     banned_reason   VARCHAR(255),
@@ -224,9 +256,13 @@ CREATE TABLE IF NOT EXISTS sitters (
     deleted_at      TIMESTAMPTZ
 );
 
+-- 老库重跑 init.sql 时表已存在，CREATE TABLE IF NOT EXISTS 不会补列；这里显式补。
+ALTER TABLE sitters ADD COLUMN IF NOT EXISTS embedding vector(16);
+
 COMMENT ON TABLE sitters IS 'Boarding facilities / individual sitters';
 COMMENT ON COLUMN sitters.avg_score IS 'Denormalized average, updated by trigger on review insert';
 COMMENT ON COLUMN sitters.commission_rate IS '机构单独佣金比例 0-1，NULL 表示跟随 platform_settings.commission_rate';
+COMMENT ON COLUMN sitters.embedding IS '16 维机构特征向量，由 trg_sitters_embedding 维护，用于 pgvector 相似推荐';
 
 -- 3.4 sitter_daily_capacity
 CREATE TABLE IF NOT EXISTS sitter_daily_capacity (
@@ -744,6 +780,21 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- PGroonga 中文全文索引：名称/地址/描述各一个，查询用 OR 时走 BitmapOr。
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgroonga') THEN
+        -- name/address 是 VARCHAR，查询会隐式转成 text；必须建表达式索引，
+        -- 否则 `name &@~` 的 cast 会让普通列索引用不上。
+        CREATE INDEX IF NOT EXISTS idx_sitters_name_groonga ON sitters USING pgroonga ((name::text));
+        CREATE INDEX IF NOT EXISTS idx_sitters_addr_groonga ON sitters USING pgroonga ((address::text));
+        CREATE INDEX IF NOT EXISTS idx_sitters_desc_groonga ON sitters USING pgroonga (description);
+    END IF;
+END $$;
+
+-- pgvector 相似机构：余弦距离 HNSW。embedding 由触发器维护。
+CREATE INDEX IF NOT EXISTS idx_sitters_embedding
+    ON sitters USING hnsw (embedding vector_cosine_ops);
+
 -- sitter_daily_capacity
 CREATE INDEX IF NOT EXISTS idx_capacity_sitter_date ON sitter_daily_capacity (sitter_id, cap_date);
 
@@ -1041,6 +1092,70 @@ BEGIN
 END;
 $fn$;
 
+-- 6.0.1 机构 16 维特征向量（pgvector 相似推荐）
+-- 用固定规则而不是外部 embedding 模型：类型 one-hot、价格/容量/评分归一化、
+-- 经纬度归一化、封面/简介完整度。维度固定 16，写入时由触发器同步维护。
+CREATE OR REPLACE FUNCTION fn_sitter_embedding(
+    p_type TEXT,
+    p_daily_price NUMERIC,
+    p_visit_price NUMERIC,
+    p_capacity INT,
+    p_avg_score NUMERIC,
+    p_review_count INT,
+    p_price_mode TEXT,
+    p_latitude NUMERIC,
+    p_longitude NUMERIC,
+    p_has_cover BOOLEAN,
+    p_has_desc BOOLEAN
+) RETURNS vector(16)
+LANGUAGE sql
+IMMUTABLE
+AS $fn$
+SELECT ('[' || array_to_string(ARRAY[
+    CASE WHEN p_type = 'home'  THEN 1::float8 ELSE 0::float8 END,
+    CASE WHEN p_type = 'shop'  THEN 1::float8 ELSE 0::float8 END,
+    CASE WHEN p_type = 'visit' THEN 1::float8 ELSE 0::float8 END,
+    CASE WHEN p_type = 'other' THEN 1::float8 ELSE 0::float8 END,
+    LEAST(GREATEST(COALESCE(p_daily_price, 0)::float8 / 500.0, 0), 1),
+    LEAST(GREATEST(COALESCE(p_visit_price, 0)::float8 / 200.0, 0), 1),
+    LEAST(GREATEST(COALESCE(p_capacity, 1)::float8 / 50.0, 0), 1),
+    LEAST(GREATEST(COALESCE(p_avg_score, 0)::float8 / 5.0, 0), 1),
+    LEAST(GREATEST(COALESCE(p_review_count, 0)::float8 / 100.0, 0), 1),
+    CASE WHEN p_price_mode = 'per_visit' THEN 1::float8 ELSE 0::float8 END,
+    LEAST(GREATEST((COALESCE(p_latitude, 0) - 18.0) / 36.0, 0), 1),
+    LEAST(GREATEST((COALESCE(p_longitude, 0) - 73.0) / 62.0, 0), 1),
+    CASE WHEN COALESCE(p_has_cover, FALSE) THEN 1::float8 ELSE 0::float8 END,
+    CASE WHEN COALESCE(p_has_desc, FALSE)  THEN 1::float8 ELSE 0::float8 END,
+    CASE WHEN p_latitude IS NOT NULL AND p_longitude IS NOT NULL THEN 1::float8 ELSE 0::float8 END,
+    LEAST(GREATEST(
+        (COALESCE(p_avg_score, 0)::float8 / 5.0) * 0.7
+        + LEAST(COALESCE(p_review_count, 0)::float8 / 100.0, 1) * 0.3,
+        0), 1)
+], ',') || ']')::vector(16)
+$fn$;
+
+CREATE OR REPLACE FUNCTION fn_sitters_embedding_sync()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+    NEW.embedding := fn_sitter_embedding(
+        NEW.type::text,
+        NEW.daily_price,
+        NEW.visit_price,
+        NEW.capacity,
+        NEW.avg_score,
+        NEW.review_count,
+        NEW.price_mode::text,
+        NEW.latitude,
+        NEW.longitude,
+        NEW.cover_photo_url IS NOT NULL AND NEW.cover_photo_url <> '',
+        NEW.description IS NOT NULL AND NEW.description <> ''
+    );
+    RETURN NEW;
+END;
+$fn$;
+
 -- 6.1 updated_at triggers (auto-maintain timestamp on UPDATE)
 -- PostgreSQL 没有 CREATE TRIGGER IF NOT EXISTS，只能先删后建，否则重跑直接报错。
 DROP TRIGGER IF EXISTS trg_users_updated ON users;
@@ -1049,6 +1164,23 @@ DROP TRIGGER IF EXISTS trg_pets_updated ON pets;
 CREATE TRIGGER trg_pets_updated      BEFORE UPDATE ON pets      FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 DROP TRIGGER IF EXISTS trg_sitters_updated ON sitters;
 CREATE TRIGGER trg_sitters_updated   BEFORE UPDATE ON sitters   FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_sitters_embedding ON sitters;
+CREATE TRIGGER trg_sitters_embedding
+    BEFORE INSERT OR UPDATE OF type, daily_price, visit_price, capacity, avg_score, review_count,
+        price_mode, latitude, longitude, cover_photo_url, description
+    ON sitters
+    FOR EACH ROW
+    EXECUTE FUNCTION fn_sitters_embedding_sync();
+
+-- 重跑 init.sql 时补齐存量机构的向量。
+UPDATE sitters
+SET embedding = fn_sitter_embedding(
+    type::text, daily_price, visit_price, capacity, avg_score, review_count,
+    price_mode::text, latitude, longitude,
+    cover_photo_url IS NOT NULL AND cover_photo_url <> '',
+    description IS NOT NULL AND description <> ''
+)
+WHERE embedding IS NULL;
 DROP TRIGGER IF EXISTS trg_orders_updated ON orders;
 CREATE TRIGGER trg_orders_updated    BEFORE UPDATE ON orders    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 DROP TRIGGER IF EXISTS trg_order_pet_updated ON order_pet;

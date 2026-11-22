@@ -37,6 +37,18 @@ type RegisterRequest struct {
 	InviteCode string `json:"invite_code" binding:"omitempty,max=16"`
 }
 
+// SendLoginCodeRequest 请求发送登录验证码（演示模式：验证码由接口返回，App 本地通知展示）。
+type SendLoginCodeRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+// CodeLoginRequest 使用手机号 + 验证码登录。
+type CodeLoginRequest struct {
+	Phone  string `json:"phone" binding:"required"`
+	Code   string `json:"code" binding:"required"`
+	Client string `json:"client"`
+}
+
 type LoginRequest struct {
 	// Username 支持「用户名 或 手机号」两种登录标识。
 	Username string `json:"username" binding:"required"`

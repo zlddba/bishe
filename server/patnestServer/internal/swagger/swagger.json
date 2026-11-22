@@ -331,6 +331,61 @@
         }
       }
     },
+    "/api/v1/sitters/{id}/similar": {
+      "get": {
+        "tags": [
+          "机构浏览"
+        ],
+        "summary": "Similar Sitters",
+        "description": "后端 handler: `SimilarSitters`（router.go:34）。公开接口，无需登录。基于 sitters.embedding vector(16) 的 pgvector 余弦距离；返回 sitter 与 similarity。",
+        "operationId": "SimilarSitters_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "路径参数 id"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "description": "返回数量，默认 6，最大 20"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "404": {
+            "description": "机构不存在",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "500": {
+            "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sitters/{id}/capacity": {
       "get": {
         "tags": [
@@ -869,6 +924,115 @@
           },
           "500": {
             "description": "服务端错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/send-code": {
+      "post": {
+        "tags": [
+          "认证与账号"
+        ],
+        "summary": "Send Login Code",
+        "description": "演示模式验证码登录：生成 6 位验证码并返回 demo_code，由 KMP 本地通知展示。需要 AUTH_CODE_DEMO=true。",
+        "operationId": "SendLoginCode_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "phone": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "phone"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "429": {
+            "description": "发送过于频繁",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/code": {
+      "post": {
+        "tags": [
+          "认证与账号"
+        ],
+        "summary": "Login By Code",
+        "description": "手机号 + 6 位验证码登录。验证码一次性使用，5 分钟有效。",
+        "operationId": "LoginByCode_1",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "phone": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "client": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "phone",
+                "code"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "401": {
+            "description": "验证码错误或过期",
             "schema": {
               "$ref": "#/definitions/ApiResponse"
             }
