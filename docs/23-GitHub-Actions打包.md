@@ -387,3 +387,22 @@ Linux 四种格式由同一个 `linux` job 产出，实际文件名：
 ### v2.0.5 发布结果
 
 运行 `43579255203` 全绿（11 个 job，墙钟约 5.5 分钟），<https://github.com/zlddba/bishe/releases/tag/v2.0.5>，15 个附件，命名全部符合规范。正文与 `docs/release/v2.0.5.md` 逐字一致。本版内容：下拉刷新指示条收回修复（snapshotFlow 持续观察刷新态 + 触发时先钉住 + 150ms 兜底），转圈图标改为三态纯文字提示。服务端无变更。
+
+### v2.3.0（测试版）发布结果
+
+运行 `45025624310` 全绿（11 个 job，墙钟约 9 分钟），<https://github.com/zlddba/bishe/releases/tag/v2.3.0>，15 个附件，命名全部符合规范。正文与 `docs/release/v2.3.0.md` 逐字一致（3027 字）。本版内容：液态玻璃 UI 全量铺开、验证码登录（演示模式）、PGroonga 全文检索 + pgvector 相似机构、Swagger 运行期开关；性质为**测试用途的正式 Release**，不是 GitHub prerelease。
+
+**第一次运行 `45025015290` 失败**：`verify`、小程序、Android、两个服务端部署包全过，4 个桌面端 job 全部挂在 `:desktopApp:compileKotlin`——
+
+```text
+e: AppRoot.kt:60:35 Unresolved reference 'GeoPickPayload'.
+e: AppRoot.kt:1644:21 Unresolved reference 'createGeoPick' on receiver of type 'ApiClient'.
+e: AppRoot.kt:1659:48 Unresolved reference 'pollGeoPick' on receiver of type 'ApiClient'.
+e: AppRoot.kt:1691:13 Unresolved reference 'fetchStaticMap' on receiver of type 'ApiClient'.
+```
+
+根因：这一版按 `docs/25` 的审计结论把 `/geo/static-map`、`/geo/pick`、`/geo/pick-result` 三个「Android 死包装」从 `ApiClient` 删了，但桌面端地址页的地图预览与浏览器选点一直在用它们。Android 不调用这三个方法，所以 APK 能过，问题只在桌面端 lib 编译暴露。
+
+修法：恢复 `fetchStaticMap()` / `createGeoPick()` / `pollGeoPick()` 与 `GeoPickPayload`、`GeoPickSessionDto`、`GeoPickResultDto` 三个模型，`docs/25` 里「KMP 死包装已删除」的表述同步改成「桌面端在用，Android 不调用」。之后按既有节奏：提交 → 快进 `release/v2.3.0` → 删除并重建同名 tag → 推送触发第二轮。
+
+教训：**KMP 的「死包装」要按 target 分别确认**。`shared` 的公共网络层删方法前，要同时 grep `androidApp`、`shared/androidMain` 和 `desktopApp`，Android 不用不等于桌面端不用；本地又不能编译（Windows 上 Gradle 分发包下载超时），这类错误只能等 CI 暴露。
