@@ -1,0 +1,350 @@
+<mxfile host="65bd71144e">
+    <diagram id="OV9W3ARuoYDLKwb5JBi4" name="第 1 页">
+        <mxGraphModel dx="934" dy="607" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="light-dark(#FFFFFF,#FFFFFF)" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject label="" plantUmlData="{&#xa;  &quot;data&quot;: &quot;@startuml\ntitle 宠物寄养服务预约系统 · 软件架构图（逻辑视图，v2.3.0）\n\nskinparam defaultFontName \&quot;Microsoft YaHei\&quot;\nskinparam componentStyle uml\nskinparam shadowing false\nskinparam nodesep 60\nskinparam ranksep 60\n\npackage \&quot;表现层 Presentation Layer（多端交互）\&quot; {\n  [Android 客户端\\nKotlin Multiplatform + Compose · 61 屏] as Android\n  [桌面客户端\\nCompose for JVM · 24 页] as Desktop\n  [微信小程序\\nuni-app (Vue 3) · 28 页] as MiniApp\n  [管理后台\\nVue 3 + Element Plus · 18 页] as Admin\n}\n\npackage \&quot;共享核心模块（KMP commonMain · 编译期复用）\&quot; {\n  [数据模型 · Ktor 网络层\\n会话缓存 · 金额与校验工具] as Shared\n}\n\npackage \&quot;业务逻辑层 Business Logic Layer（Go + Gin · 217 路由）\&quot; {\n  [业务服务\\n认证 / 机构 / 宠物 / 订单 / 支付\\n结算 / 内容 / 售后 / 运维] as Service\n}\n\npackage \&quot;数据访问层 Data Access Layer\&quot; {\n  [仓储层 Repository\\npgx 连接池 · MinIO SDK] as Repo\n  database \&quot;Redis\\n热点缓存 / 限流（不承担正确性）\&quot; as Redis\n}\n\npackage \&quot;数据层 Data Layer（持久化）\&quot; {\n  database \&quot;PostgreSQL 18 · 41 表\\npg_trgm / PGroonga / pgvector\\n金额/天数/单价快照落库\&quot; as PG\n  database \&quot;MinIO 对象存储\\n图片 / 附件（Go 中转上传）\&quot; as OSS\n}\n\nAndroid ..&gt; Shared : &lt;&lt;use&gt;&gt;\nDesktop ..&gt; Shared : &lt;&lt;use&gt;&gt;\n\nAndroid ..&gt; Service : HTTPS / JSON / JWT\nDesktop ..&gt; Service : HTTPS / JSON / JWT\nMiniApp ..&gt; Service : HTTPS / JSON\nAdmin ..&gt; Service : HTTPS / JSON\n\nService ..&gt; Repo : &lt;&lt;use&gt;&gt;\nService ..&gt; Redis : &lt;&lt;use&gt;&gt;\nRepo ..&gt; PG : pgx\nRepo ..&gt; OSS : SDK\n@enduml&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="ToMkb1PKzBuQxoffhxH4-2">
+                    <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;" vertex="1">
+                        <mxGeometry as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="表现层" plantUmlId="c_0" plantUmlBaseStyle="shape=folder;tabWidth=212;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="表现层 Presentation Layer（多端交互）" id="ToMkb1PKzBuQxoffhxH4-3">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-2" style="shape=folder;tabWidth=212;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="95" width="1021" x="30" y="66" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Android 客户端&#xa;Kotlin Multiplatform + Compose" plantUmlId="n_1" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Android 客户端&#xa;Kotlin Multiplatform + Compose · 61 屏" id="ToMkb1PKzBuQxoffhxH4-4">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="286" x="248" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_2" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-5">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_3" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-6">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_4" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-7">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="桌面客户端&#xa;Compose for JVM" plantUmlId="n_5" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="桌面客户端&#xa;Compose for JVM · 24 页" id="ToMkb1PKzBuQxoffhxH4-8">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="198" x="15" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_6" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-9">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_7" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-10">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_8" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-11">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="微信小程序&#xa;uni-app" plantUmlId="n_9" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="微信小程序&#xa;uni-app (Vue 3) · 28 页" id="ToMkb1PKzBuQxoffhxH4-12">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="183" x="569" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_10" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-13">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_11" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-14">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_12" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-15">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="管理后台&#xa;Vue 3 + Element Plus" plantUmlId="n_13" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="管理后台&#xa;Vue 3 + Element Plus · 18 页" id="ToMkb1PKzBuQxoffhxH4-16">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="219" x="787" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_14" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-17">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_15" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-18">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_16" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-19">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="共享核心模块" plantUmlId="c_17" plantUmlBaseStyle="shape=folder;tabWidth=247;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="共享核心模块（KMP commonMain · 编译期复用）" id="ToMkb1PKzBuQxoffhxH4-20">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-2" style="shape=folder;tabWidth=247;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="115" width="226.35" x="100" y="220" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="数据模型 · Ktor 网络层&#xa;会话缓存 · 金额与校验工具" plantUmlId="n_18" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="数据模型 · Ktor 网络层&#xa;会话缓存 · 金额与校验工具" id="ToMkb1PKzBuQxoffhxH4-21">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-20" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="59.32" width="198" x="14.17" y="35.68" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_19" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-22">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_20" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-23">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_21" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-24">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="业务逻辑层" plantUmlId="c_22" plantUmlBaseStyle="shape=folder;tabWidth=323;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="业务逻辑层 Business Logic Layer（Go + Gin · 217 路由）" id="ToMkb1PKzBuQxoffhxH4-25">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-2" style="shape=folder;tabWidth=323;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="108" width="356.97" x="740" y="315" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="业务服务&#xa;认证 / 机构 / 宠物 / 订单 / 支付&#xa;结算 / 内容 / 售后 / 运维" plantUmlId="n_23" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="业务服务&#xa;认证 / 机构 / 宠物 / 订单 / 支付&#xa;结算 / 内容 / 售后 / 运维" id="ToMkb1PKzBuQxoffhxH4-26">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-25" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="62" width="269.91" x="46.09" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_24" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-27">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-26" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_25" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-28">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-26" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_26" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-29">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-26" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="数据访问层&lt;div&gt;&lt;br&gt;&lt;/div&gt;" plantUmlId="c_27" plantUmlBaseStyle="shape=folder;tabWidth=177;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="数据访问层 Data Access Layer" id="ToMkb1PKzBuQxoffhxH4-30">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-2" style="shape=folder;tabWidth=177;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="156" width="412" x="370" y="414" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="仓储层 Repository&#xa;pgx 连接池 · MinIO SDK" plantUmlId="n_28" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="仓储层 Repository&#xa;pgx 连接池 · MinIO SDK" id="ToMkb1PKzBuQxoffhxH4-31">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-30" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="80.46315789473684" width="184.86971581516178" x="16.216641738172086" y="55.83157894736842" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_29" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-32">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-31" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_30" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-33">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-31" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_31" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="ToMkb1PKzBuQxoffhxH4-34">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-31" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Redis&#xa;热点缓存 / 限流" plantUmlId="n_32" plantUmlBaseStyle="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Redis&#xa;热点缓存 / 限流（不承担正确性）" id="ToMkb1PKzBuQxoffhxH4-35">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-30" style="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="75.54" width="175.78" x="220" y="55.83" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="数据层 Data Layer（持久化）" plantUmlId="c_33" plantUmlBaseStyle="shape=folder;tabWidth=149;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="数据层 Data Layer（持久化）" id="ToMkb1PKzBuQxoffhxH4-36">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-2" style="shape=folder;tabWidth=149;tabHeight=23;tabPosition=left;html=1;whiteSpace=wrap;fillColor=none;strokeColor=#000000;strokeWidth=1.5;fontSize=14;fontStyle=1;fontColor=#000000;align=left;verticalAlign=top;spacingLeft=2;spacingTop=-4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="150" width="514.54" x="236.55" y="600" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="PostgreSQL 18&#xa;pg_trgm / PGroonga / pgvector&#xa;金额/天数/单价快照落库" plantUmlId="n_34" plantUmlBaseStyle="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="PostgreSQL 18 · 41 表&#xa;pg_trgm / PGroonga / pgvector&#xa;金额/天数/单价快照落库" id="ToMkb1PKzBuQxoffhxH4-37">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-36" style="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="86.11111111111111" width="275.3029439252336" x="221.20411214953268" y="47.22222222222222" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="MinIO 对象存储&#xa;图片 / 附件" plantUmlId="n_35" plantUmlBaseStyle="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="MinIO 对象存储&#xa;图片 / 附件（Go 中转上传）" id="ToMkb1PKzBuQxoffhxH4-38">
+                    <mxCell parent="ToMkb1PKzBuQxoffhxH4-36" style="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="72.78" width="161.09" x="18.03" y="47.22" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="«use»" plantUmlId="e_36" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="«use»" id="ToMkb1PKzBuQxoffhxH4-39">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-4" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-21">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="85" y="-4" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="421" y="202"/>
+                                <mxPoint x="213" y="202"/>
+                            </Array>
+                            <mxPoint x="373.33" y="149" as="sourcePoint"/>
+                            <mxPoint x="305.91" y="243.5" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="«use»" plantUmlId="e_37" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="«use»" id="ToMkb1PKzBuQxoffhxH4-40">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-8" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-21">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="19" y="-1" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="144" y="202"/>
+                                <mxPoint x="213" y="202"/>
+                            </Array>
+                            <mxPoint x="111" y="149" as="sourcePoint"/>
+                            <mxPoint x="258.24" y="243.5" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="HTTPS / JSON / JWT" plantUmlId="e_38" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / JSON / JWT" id="ToMkb1PKzBuQxoffhxH4-41">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-4" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-26">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="58" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="421" y="380"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="HTTPS / JSON / JWT" plantUmlId="e_39" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / JSON / JWT" id="ToMkb1PKzBuQxoffhxH4-42">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-8" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-26">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="-83" y="-7" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="144" y="185"/>
+                                <mxPoint x="921" y="185"/>
+                            </Array>
+                            <mxPoint x="177" y="149" as="sourcePoint"/>
+                            <mxPoint x="576.13" y="243.5" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="HTTPS / JSON" plantUmlId="e_40" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / JSON" id="ToMkb1PKzBuQxoffhxH4-43">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-12" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-26">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="51" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="691" y="380"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="HTTPS / JSON" plantUmlId="e_41" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / JSON" id="ToMkb1PKzBuQxoffhxH4-44">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-16" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-26">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="65" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="927" y="249"/>
+                                <mxPoint x="921" y="249"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="«use»" plantUmlId="e_42" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="«use»" id="ToMkb1PKzBuQxoffhxH4-45">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-26" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-31">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="-105" y="13" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="479" y="380"/>
+                            </Array>
+                            <mxPoint x="600.53" y="305.5" as="sourcePoint"/>
+                            <mxPoint x="225.39" y="400" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="«use»" plantUmlId="e_43" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="«use»" id="ToMkb1PKzBuQxoffhxH4-46">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-26" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-35">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="46" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="921" y="508"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="pgx" plantUmlId="e_44" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="pgx" id="ToMkb1PKzBuQxoffhxH4-47">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-31" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-37">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="10" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="479" y="599"/>
+                                <mxPoint x="595" y="599"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="SDK" plantUmlId="e_45" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="SDK" id="ToMkb1PKzBuQxoffhxH4-48">
+                    <mxCell edge="1" parent="ToMkb1PKzBuQxoffhxH4-2" source="ToMkb1PKzBuQxoffhxH4-31" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;verticalAlign=bottom;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="ToMkb1PKzBuQxoffhxH4-38">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="23" y="-8" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="335" y="510"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

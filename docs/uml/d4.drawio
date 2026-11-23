@@ -1,0 +1,141 @@
+<mxfile host="65bd71144e">
+    <diagram id="OV9W3ARuoYDLKwb5JBi4" name="第 1 页">
+        <mxGraphModel dx="1946" dy="1265" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="light-dark(#FFFFFF,#FFFFFF)" math="1" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject label="宠物寄养服务预约系统" plantUmlId="c_0" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="宠物寄养服务预约系统" id="684HHWljPnrlJJ2y9eC7-30">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="704" width="1110" x="30" y="96" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="主人端" plantUmlId="c_1" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="主人端" id="684HHWljPnrlJJ2y9eC7-31">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="313" width="572.5" x="45" y="130" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构端" plantUmlId="c_9" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="机构端" id="684HHWljPnrlJJ2y9eC7-39">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="204" width="417" x="641.5" y="130" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="账号与认证" plantUmlId="n_2" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="账号与认证" id="684HHWljPnrlJJ2y9eC7-32">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="79" x="75.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="宠物档案管理" plantUmlId="n_3" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="宠物档案管理" id="684HHWljPnrlJJ2y9eC7-33">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="87" x="273.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构浏览 / 搜索 / 收藏 / 对比" plantUmlId="n_4" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="机构浏览 / 搜索 / 收藏 / 对比" id="684HHWljPnrlJJ2y9eC7-34">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="167" x="435.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="预约下单与费用预览" plantUmlId="n_5" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="预约下单与费用预览" id="684HHWljPnrlJJ2y9eC7-35">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="110" x="60" y="273" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="支付 / 钱包 / 优惠券" plantUmlId="n_6" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="支付 / 钱包 / 优惠券" id="684HHWljPnrlJJ2y9eC7-36">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="127" x="253.5" y="273" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="寄养动态 / 消息" plantUmlId="n_7" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="寄养动态 / 消息" id="684HHWljPnrlJJ2y9eC7-37">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="103" x="467.5" y="273" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="评价与追评" plantUmlId="n_8" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="评价与追评" id="684HHWljPnrlJJ2y9eC7-38">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="79" x="75.5" y="382" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="入驻与资质" plantUmlId="n_10" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="入驻与资质" id="684HHWljPnrlJJ2y9eC7-40">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="79" x="656.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="建店 / 定价 / 容量" plantUmlId="n_11" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="建店 / 定价 / 容量" id="684HHWljPnrlJJ2y9eC7-41">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="119" x="790.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="接单与履约" plantUmlId="n_12" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="接单与履约" id="684HHWljPnrlJJ2y9eC7-42">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="79" x="964.5" y="164" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="动态发布" plantUmlId="n_13" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="动态发布" id="684HHWljPnrlJJ2y9eC7-43">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="71" x="660.5" y="273" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="评价回复 / 收益结算" plantUmlId="n_14" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="评价回复 / 收益结算" id="684HHWljPnrlJJ2y9eC7-44">
+                    <mxCell parent="1" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="119" x="790.5" y="273" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <mxCell id="684HHWljPnrlJJ2y9eC7-56" connectable="0" parent="1" style="group" value="" vertex="1">
+                    <mxGeometry height="204" width="335" x="170" y="500" as="geometry"/>
+                </mxCell>
+                <UserObject label="管理后台" plantUmlId="c_15" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="管理后台" id="684HHWljPnrlJJ2y9eC7-45">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-56" style="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="204" width="335" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构 / 订单 / 资金审核" plantUmlId="n_16" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="机构 / 订单 / 资金审核" id="684HHWljPnrlJJ2y9eC7-46">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-56" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="135" x="15" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="用户 / 权限 / 内容管理" plantUmlId="n_17" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="用户 / 权限 / 内容管理" id="684HHWljPnrlJJ2y9eC7-47">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-56" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="135" x="185" y="34" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="工单 / 退款 / 结算" plantUmlId="n_18" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="工单 / 退款 / 结算" id="684HHWljPnrlJJ2y9eC7-48">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-56" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="119" x="23" y="143" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="审计日志 / 系统运维" plantUmlId="n_19" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="审计日志 / 系统运维" id="684HHWljPnrlJJ2y9eC7-49">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-56" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="49" width="119" x="193" y="143" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <mxCell id="684HHWljPnrlJJ2y9eC7-57" connectable="0" parent="1" style="group" value="" vertex="1">
+                    <mxGeometry height="267.5" width="377" x="650" y="470" as="geometry"/>
+                </mxCell>
+                <UserObject label="后端服务" plantUmlId="c_20" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="后端服务" id="684HHWljPnrlJJ2y9eC7-50">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-57" style="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=-4;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="267.5" width="377" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="认证授权 / RBAC" plantUmlId="n_21" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="认证授权 / RBAC" id="684HHWljPnrlJJ2y9eC7-51">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-57" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="64.25245098039215" width="137.19571865443424" x="17.293577981651378" y="44.583333333333336" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构 / 宠物 / 订单" plantUmlId="n_22" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="机构 / 宠物 / 订单" id="684HHWljPnrlJJ2y9eC7-52">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-57" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="64.25245098039215" width="137.19571865443424" x="213.2874617737003" y="44.583333333333336" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="支付 / 钱包 / 结算" plantUmlId="n_23" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="支付 / 钱包 / 结算" id="684HHWljPnrlJJ2y9eC7-53">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-57" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="64.25245098039215" width="137.19571865443424" x="17.293577981651378" y="187.51225490196077" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="内容 / 售后 / 检索推荐" plantUmlId="n_24" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="内容 / 售后 / 检索推荐" id="684HHWljPnrlJJ2y9eC7-54">
+                    <mxCell parent="684HHWljPnrlJJ2y9eC7-57" style="rounded=1;absoluteArcSize=1;arcSize=3;strokeWidth=1;fillColor=#F1F1F1;strokeColor=#181818;whiteSpace=wrap;fontSize=14;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="64.25245098039215" width="155.6422018348624" x="204.06422018348624" y="187.51225490196077" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

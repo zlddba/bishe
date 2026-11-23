@@ -1,0 +1,319 @@
+<mxfile host="65bd71144e">
+    <diagram id="OV9W3ARuoYDLKwb5JBi4" name="第 1 页">
+        <mxGraphModel dx="2335" dy="1518" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="light-dark(#FFFFFF,#FFFFFF)" math="1" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject label="" plantUmlData="{&#xa;  &quot;data&quot;: &quot;@startuml\ntitle 宠物寄养预约与履约 · 端到端时序图（v2.3.0）\n\nskinparam defaultFontName \&quot;Microsoft YaHei\&quot;\nskinparam shadowing false\nskinparam sequenceMessageAlign center\nskinparam maxMessageSize 180\nscale 0.85\n\nparticipant \&quot;主人\&quot; as O\nparticipant \&quot;机构\&quot; as S\nparticipant \&quot;后台\&quot; as A\nparticipant \&quot;Go API\&quot; as API\nparticipant \&quot;数据库\&quot; as DB\n\n== 下单与支付 ==\nO -&gt; API: 创建订单\nAPI -&gt; DB: 事务：锁行→占容量→写快照\nDB --&gt; API: 订单号与金额\nAPI --&gt; O: 待支付\nO -&gt; API: 支付\nAPI -&gt; DB: 写支付 + 流水\nAPI --&gt; O: 已预约\n\n== 接单与履约 ==\nS -&gt; API: 接单\nAPI -&gt; DB: 状态→已接单\nS -&gt; API: 发布动态\nAPI -&gt; DB: 写动态 + 通知\nO -&gt; API: 查看动态\n\n== 完成与结算 ==\nS -&gt; API: 完成订单\nAPI -&gt; DB: 完成 + 归还容量\nO -&gt; API: 评价\nAPI -&gt; DB: 写评价 + 聚合评分\nS -&gt; API: 回复 / 结算申请\nA -&gt; API: 审核结算\n@enduml&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="9Tn1eCuFdMZWc3J5G9KJ-1">
+                    <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10 20 10 10;" vertex="1">
+                        <mxGeometry as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="主人" plantUmlId="p_0" plantUmlBaseStyle="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="主人" id="9Tn1eCuFdMZWc3J5G9KJ-2">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=0;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="738.49" width="42" x="35" y="60.95" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构" plantUmlId="p_1" plantUmlBaseStyle="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="机构" id="9Tn1eCuFdMZWc3J5G9KJ-3">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=0;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="738.49" width="42" x="199.7" y="60.95" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="后台" plantUmlId="p_2" plantUmlBaseStyle="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="后台" id="9Tn1eCuFdMZWc3J5G9KJ-4">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=0;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="738.49" width="42" x="370" y="60.95" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Go API" plantUmlId="p_3" plantUmlBaseStyle="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Go API" id="9Tn1eCuFdMZWc3J5G9KJ-5">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=0;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="738.49" width="58.577200000000005" x="567.7114" y="60.95" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="数据库" plantUmlId="p_4" plantUmlBaseStyle="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="数据库" id="9Tn1eCuFdMZWc3J5G9KJ-6">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=30.49;lifelineMirror=1;dashPattern=5 5;container=0;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#E2E2F0;strokeColor=#181818;strokeWidth=0.5;fontColor=#000000;fontSize=14;whiteSpace=wrap;html=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="738.49" width="56" x="890.0014285714287" y="60.95" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="创建订单" plantUmlId="msg_8" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="创建订单" id="9Tn1eCuFdMZWc3J5G9KJ-7">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-2" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="167.06"/>
+                            </Array>
+                            <mxPoint x="56" y="167.06" as="sourcePoint"/>
+                            <mxPoint x="237" y="167.06" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="事务：锁行→占容量→写快照" plantUmlId="msg_9" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="事务：锁行→占容量→写快照" id="9Tn1eCuFdMZWc3J5G9KJ-8">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="196.37"/>
+                            </Array>
+                            <mxPoint x="237" y="196.37" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="196.37" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="订单号与金额" plantUmlId="msg_10" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="订单号与金额" id="9Tn1eCuFdMZWc3J5G9KJ-9">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-6" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="225.68"/>
+                            </Array>
+                            <mxPoint x="419.6714285714286" y="225.68" as="sourcePoint"/>
+                            <mxPoint x="237" y="225.68" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="待支付" plantUmlId="msg_11" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="待支付" id="9Tn1eCuFdMZWc3J5G9KJ-10">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-2">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="254.99"/>
+                            </Array>
+                            <mxPoint x="237" y="254.99" as="sourcePoint"/>
+                            <mxPoint x="56" y="254.99" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="支付" plantUmlId="msg_12" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="支付" id="9Tn1eCuFdMZWc3J5G9KJ-11">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-2" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="284.3"/>
+                            </Array>
+                            <mxPoint x="56" y="284.3" as="sourcePoint"/>
+                            <mxPoint x="237" y="284.3" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="写支付 + 流水" plantUmlId="msg_13" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="写支付 + 流水" id="9Tn1eCuFdMZWc3J5G9KJ-12">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="313.61"/>
+                            </Array>
+                            <mxPoint x="237" y="313.61" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="313.61" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已预约" plantUmlId="msg_14" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="已预约" id="9Tn1eCuFdMZWc3J5G9KJ-13">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;dashed=1;dashPattern=2 2;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-2">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="342.92"/>
+                            </Array>
+                            <mxPoint x="237" y="342.92" as="sourcePoint"/>
+                            <mxPoint x="56" y="342.92" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="接单" plantUmlId="msg_18" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="接单" id="9Tn1eCuFdMZWc3J5G9KJ-14">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-3" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="173" y="415.53999999999996"/>
+                            </Array>
+                            <mxPoint x="108" y="415.53999999999996" as="sourcePoint"/>
+                            <mxPoint x="237" y="415.53999999999996" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="状态→已接单" plantUmlId="msg_19" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="状态→已接单" id="9Tn1eCuFdMZWc3J5G9KJ-15">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="444.84999999999997"/>
+                            </Array>
+                            <mxPoint x="237" y="444.84999999999997" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="444.84999999999997" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="发布动态" plantUmlId="msg_20" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="发布动态" id="9Tn1eCuFdMZWc3J5G9KJ-16">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-3" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="173" y="474.15999999999997"/>
+                            </Array>
+                            <mxPoint x="108" y="474.15999999999997" as="sourcePoint"/>
+                            <mxPoint x="237" y="474.15999999999997" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="写动态 + 通知" plantUmlId="msg_21" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="写动态 + 通知" id="9Tn1eCuFdMZWc3J5G9KJ-17">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="503.46999999999997"/>
+                            </Array>
+                            <mxPoint x="237" y="503.46999999999997" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="503.46999999999997" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="查看动态" plantUmlId="msg_22" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="查看动态" id="9Tn1eCuFdMZWc3J5G9KJ-18">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-2" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="532.78"/>
+                            </Array>
+                            <mxPoint x="56" y="532.78" as="sourcePoint"/>
+                            <mxPoint x="237" y="532.78" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="完成订单" plantUmlId="msg_26" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="完成订单" id="9Tn1eCuFdMZWc3J5G9KJ-19">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-3" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="173" y="605.4000000000001"/>
+                            </Array>
+                            <mxPoint x="108" y="605.4000000000001" as="sourcePoint"/>
+                            <mxPoint x="237" y="605.4000000000001" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="完成 + 归还容量" plantUmlId="msg_27" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="完成 + 归还容量" id="9Tn1eCuFdMZWc3J5G9KJ-20">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="634.71"/>
+                            </Array>
+                            <mxPoint x="237" y="634.71" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="634.71" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="评价" plantUmlId="msg_28" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="评价" id="9Tn1eCuFdMZWc3J5G9KJ-21">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-2" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="147" y="664.0200000000001"/>
+                            </Array>
+                            <mxPoint x="56" y="664.0200000000001" as="sourcePoint"/>
+                            <mxPoint x="237" y="664.0200000000001" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="写评价 + 聚合评分" plantUmlId="msg_29" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="写评价 + 聚合评分" id="9Tn1eCuFdMZWc3J5G9KJ-22">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-5" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-6">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="328" y="693.33"/>
+                            </Array>
+                            <mxPoint x="237" y="693.33" as="sourcePoint"/>
+                            <mxPoint x="419.6714285714286" y="693.33" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="回复 / 结算申请" plantUmlId="msg_30" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="回复 / 结算申请" id="9Tn1eCuFdMZWc3J5G9KJ-23">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-3" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="173" y="722.6400000000001"/>
+                            </Array>
+                            <mxPoint x="108" y="722.6400000000001" as="sourcePoint"/>
+                            <mxPoint x="237" y="722.6400000000001" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="审核结算" plantUmlId="msg_31" plantUmlBaseStyle="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="审核结算" id="9Tn1eCuFdMZWc3J5G9KJ-24">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-4" style="endArrow=classic;endFill=1;endSize=9;html=1;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;strokeColor=#181818;strokeWidth=1;fontColor=#000000;fontSize=13;verticalAlign=bottom;labelBackgroundColor=none;fontFamily=Microsoft YaHei;align=center;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-5">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="199" y="751.95"/>
+                            </Array>
+                            <mxPoint x="160" y="751.95" as="sourcePoint"/>
+                            <mxPoint x="237" y="751.95" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_5" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-25">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="123.1" as="sourcePoint"/>
+                            <mxPoint x="960" y="123.1" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_6" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-26">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-27" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="126.1" as="sourcePoint"/>
+                            <mxPoint x="960" y="126.1" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_15" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-28">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-30" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="371.58000000000004" as="sourcePoint"/>
+                            <mxPoint x="960" y="371.58" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_16" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-29">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="374.58000000000004" as="sourcePoint"/>
+                            <mxPoint x="960" y="374.58" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_23" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-31">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" source="9Tn1eCuFdMZWc3J5G9KJ-33" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="561.44" as="sourcePoint"/>
+                            <mxPoint x="960" y="561.44" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="divbar_24" plantUmlBaseStyle="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="9Tn1eCuFdMZWc3J5G9KJ-32">
+                    <mxCell edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="30" y="564.44" as="sourcePoint"/>
+                            <mxPoint x="960" y="564.44" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <mxCell id="9Tn1eCuFdMZWc3J5G9KJ-36" edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-27" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="30" y="126.1" as="sourcePoint"/>
+                        <mxPoint x="960" y="126.1" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <UserObject label="下单与支付" plantUmlId="div_7" plantUmlBaseStyle="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="下单与支付" id="9Tn1eCuFdMZWc3J5G9KJ-27">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="23.31" width="83.28" x="449.9957142857143" y="112.44" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <mxCell id="9Tn1eCuFdMZWc3J5G9KJ-37" edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-30" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="30" y="371.58000000000004" as="sourcePoint"/>
+                        <mxPoint x="960" y="371.58" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <UserObject label="接单与履约" plantUmlId="div_17" plantUmlBaseStyle="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="接单与履约" id="9Tn1eCuFdMZWc3J5G9KJ-30">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="23.31" width="83.28" x="449.9957142857143" y="360" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <mxCell id="9Tn1eCuFdMZWc3J5G9KJ-39" edge="1" parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="endArrow=none;html=1;strokeColor=#000000;strokeWidth=1;curved=0;rounded=0;endSize=6;fontSize=11;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="9Tn1eCuFdMZWc3J5G9KJ-33" value="">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="30" y="561.44" as="sourcePoint"/>
+                        <mxPoint x="960" y="561.44" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <UserObject label="完成与结算" plantUmlId="div_25" plantUmlBaseStyle="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="完成与结算" id="9Tn1eCuFdMZWc3J5G9KJ-33">
+                    <mxCell parent="9Tn1eCuFdMZWc3J5G9KJ-1" style="rounded=0;fillColor=#EEEEEE;strokeColor=#000000;strokeWidth=2;fontColor=#000000;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;spacingRight=6;html=1;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="23.31" width="83.28" x="449.9957142857143" y="550.78" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

@@ -1,0 +1,220 @@
+<mxfile host="65bd71144e">
+    <diagram id="OV9W3ARuoYDLKwb5JBi4" name="第 1 页">
+        <mxGraphModel dx="934" dy="607" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="light-dark(#FFFFFF,#FFFFFF)" math="1" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject label="" plantUmlData="{&#xa;  &quot;data&quot;: &quot;@startuml\ntitle 订单状态机（v2.3.0）\n\nskinparam defaultFontName \&quot;Microsoft YaHei\&quot;\nskinparam shadowing false\n\n&#39; 显式定义状态，格式：state \&quot;显示名称\&quot; as 英文别名\nstate \&quot;待支付\&quot; as PendingPayment\nstate \&quot;已预约\&quot; as Reserved\nstate \&quot;已取消\&quot; as Cancelled\nstate \&quot;已接单\&quot; as Accepted\nstate \&quot;已拒绝\&quot; as Rejected\nstate \&quot;寄养中\&quot; as Boarding\nstate \&quot;已完成\&quot; as Completed\nstate \&quot;已评价\&quot; as Reviewed\n\n[*] --&gt; PendingPayment : 提交订单\n\nPendingPayment --&gt; Reserved : 支付成功\nPendingPayment --&gt; Cancelled : 超时未支付 / 主人取消\n\nReserved --&gt; Accepted : 机构接单\nReserved --&gt; Cancelled : 主人取消\nReserved --&gt; Rejected : 机构拒单\n\nAccepted --&gt; Boarding : 开始寄养\nBoarding --&gt; Completed : 完成订单\nCompleted --&gt; Reviewed : 主人评价\n\nReviewed --&gt; [*]\nCancelled --&gt; [*]\nRejected --&gt; [*]\n\nnote right of Cancelled\n  已取消 / 已拒绝均释放占用容量\nend note\nnote left of Completed\n  归还未消费的未来夜间\nend note\n@enduml&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="CwYhvf_L1G7B1fvX8__e-30">
+                    <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10 16 0 10;" vertex="1">
+                        <mxGeometry as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="待支付" plantUmlId="s_0" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="待支付" id="CwYhvf_L1G7B1fvX8__e-31">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="217.34" y="160" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已预约" plantUmlId="s_1" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已预约" id="CwYhvf_L1G7B1fvX8__e-32">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="166.88000000000002" y="327.85" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已取消" plantUmlId="s_2" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已取消" id="CwYhvf_L1G7B1fvX8__e-33">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="488.1" y="140" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已接单" plantUmlId="s_3" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已接单" id="CwYhvf_L1G7B1fvX8__e-34">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="155.55" y="570" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已拒绝" plantUmlId="s_4" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已拒绝" id="CwYhvf_L1G7B1fvX8__e-35">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="683.6" y="340" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="寄养中" plantUmlId="s_5" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="寄养中" id="CwYhvf_L1G7B1fvX8__e-36">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="217.54999999999998" y="666.25" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已完成" plantUmlId="s_6" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已完成" id="CwYhvf_L1G7B1fvX8__e-37">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="400" y="700" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已评价" plantUmlId="s_7" plantUmlBaseStyle="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已评价" id="CwYhvf_L1G7B1fvX8__e-38">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="swimlane;collapsible=0;startSize=26;whiteSpace=wrap;align=center;html=1;fontSize=14;fontStyle=0;rounded=1;absoluteArcSize=1;arcSize=25;fillColor=#F1F1F1;swimlaneFillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="50" width="62" x="621.6" y="590" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="s_8" plantUmlBaseStyle="ellipse;fillColor=#222222;strokeColor=#222222;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-39">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="ellipse;fillColor=#222222;strokeColor=#222222;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="20" width="20" x="238.34" y="64" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="s_9" plantUmlBaseStyle="shape=endState;fillColor=#222222;strokeColor=#222222;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-40">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="shape=endState;fillColor=#222222;strokeColor=#222222;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="24" width="24" x="1110" y="220" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="提交订单" plantUmlId="t_10" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="提交订单" id="CwYhvf_L1G7B1fvX8__e-41">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-39" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" target="CwYhvf_L1G7B1fvX8__e-31">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="248.34" y="114"/>
+                            </Array>
+                            <mxPoint x="248.34" y="84" as="sourcePoint"/>
+                            <mxPoint x="248.34" y="160" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="支付成功" plantUmlId="t_11" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="支付成功" id="CwYhvf_L1G7B1fvX8__e-42">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-31" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-32">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="248" y="353"/>
+                            </Array>
+                            <mxPoint x="238.01000000000002" y="210" as="sourcePoint"/>
+                            <mxPoint x="197.88000000000002" y="327.85" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="超时未支付 / 主人取消" plantUmlId="t_12" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="超时未支付 / 主人取消" id="CwYhvf_L1G7B1fvX8__e-43">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-31" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-33">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="384" y="185"/>
+                                <mxPoint x="384" y="165"/>
+                            </Array>
+                            <mxPoint x="258.67999999999995" y="210" as="sourcePoint"/>
+                            <mxPoint x="351.1" y="499.49" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构接单" plantUmlId="t_13" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="机构接单" id="CwYhvf_L1G7B1fvX8__e-44">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-32" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-34">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="198" y="474"/>
+                                <mxPoint x="187" y="474"/>
+                            </Array>
+                            <mxPoint x="182.38000000000002" y="377.85" as="sourcePoint"/>
+                            <mxPoint x="223.84" y="499.99" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="主人取消" plantUmlId="t_14" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="主人取消" id="CwYhvf_L1G7B1fvX8__e-45">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-32" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-33">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="519" y="353"/>
+                            </Array>
+                            <mxPoint x="213.38000000000002" y="377.85" as="sourcePoint"/>
+                            <mxPoint x="351.1" y="499.49" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="机构拒单" plantUmlId="t_15" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="机构拒单" id="CwYhvf_L1G7B1fvX8__e-46">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-32" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;" target="CwYhvf_L1G7B1fvX8__e-35">
+                        <mxGeometry relative="1" x="-0.0014" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="197.9" y="440"/>
+                                <mxPoint x="620" y="440"/>
+                                <mxPoint x="620" y="365"/>
+                            </Array>
+                            <mxPoint x="197.88000000000002" y="377.85" as="sourcePoint"/>
+                            <mxPoint x="297.45000000000005" y="580.49" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="开始寄养" plantUmlId="t_16" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="开始寄养" id="CwYhvf_L1G7B1fvX8__e-47">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-34" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-36">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="249" y="595"/>
+                            </Array>
+                            <mxPoint x="223.84" y="549.99" as="sourcePoint"/>
+                            <mxPoint x="248.54999999999998" y="666.25" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="完成订单" plantUmlId="t_17" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="完成订单" id="CwYhvf_L1G7B1fvX8__e-48">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-36" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-37">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="382" y="691"/>
+                                <mxPoint x="382" y="725"/>
+                            </Array>
+                            <mxPoint x="248.54999999999998" y="716.25" as="sourcePoint"/>
+                            <mxPoint x="247.50000000000003" y="792.5" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="主人评价" plantUmlId="t_18" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="主人评价" id="CwYhvf_L1G7B1fvX8__e-49">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-37" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;labelPosition=right;align=left;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-38">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="653" y="725"/>
+                            </Array>
+                            <mxPoint x="247.50000000000003" y="843.5" as="sourcePoint"/>
+                            <mxPoint x="251.52" y="922.98" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="t_19" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-50">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-38" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-40">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="1122" y="615"/>
+                            </Array>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="t_20" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-51">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-33" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-40">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="1122" y="165"/>
+                            </Array>
+                            <mxPoint x="351.1" y="550.49" as="sourcePoint"/>
+                            <mxPoint x="307.06000000000006" y="1044.26" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="t_21" plantUmlBaseStyle="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;curved=1;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-52">
+                    <mxCell edge="1" parent="CwYhvf_L1G7B1fvX8__e-30" source="CwYhvf_L1G7B1fvX8__e-35" style="endArrow=block;endFill=1;strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;rounded=0;fontFamily=Microsoft YaHei;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="CwYhvf_L1G7B1fvX8__e-40">
+                        <mxGeometry relative="1" as="geometry">
+                            <Array as="points">
+                                <mxPoint x="1122" y="365"/>
+                            </Array>
+                            <mxPoint x="297.45000000000005" y="630.49" as="sourcePoint"/>
+                            <mxPoint x="301.06000000000006" y="1044.26" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="noteptr_22" plantUmlBaseStyle="triangle;direction=west;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-53">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="triangle;direction=west;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;rotation=-90;" vertex="1">
+                        <mxGeometry height="8" width="36" x="528.1" y="119" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="已取消 / 已拒绝均释放占用容量" plantUmlId="note_23" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;fontSize=13;fontColor=#000000;whiteSpace=wrap;align=left;verticalAlign=middle;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="已取消 / 已拒绝均释放占用容量" id="CwYhvf_L1G7B1fvX8__e-54">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;fontSize=13;fontColor=#000000;whiteSpace=wrap;align=left;verticalAlign=middle;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="25" width="205" x="462" y="80" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="noteptr_24" plantUmlBaseStyle="triangle;direction=east;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="CwYhvf_L1G7B1fvX8__e-55">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="triangle;direction=east;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="8" width="36" x="364" y="742" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="归还未消费的未来夜间" plantUmlId="note_25" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;fontSize=13;fontColor=#000000;whiteSpace=wrap;align=left;verticalAlign=middle;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="归还未消费的未来夜间" id="CwYhvf_L1G7B1fvX8__e-56">
+                    <mxCell parent="CwYhvf_L1G7B1fvX8__e-30" style="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;fontSize=13;fontColor=#000000;whiteSpace=wrap;align=left;verticalAlign=middle;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;container=0;" vertex="1">
+                        <mxGeometry height="25" width="151" x="213" y="733.5" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

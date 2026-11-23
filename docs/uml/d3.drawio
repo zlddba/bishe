@@ -1,0 +1,315 @@
+<mxfile host="65bd71144e">
+    <diagram id="OV9W3ARuoYDLKwb5JBi4" name="第 1 页">
+        <mxGraphModel dx="1394" dy="906" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="light-dark(#FFFFFF,#FFFFFF)" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject label="" plantUmlData="{&#xa;  &quot;data&quot;: &quot;@startuml\ntitle 宠物寄养服务预约系统 · 部署图（v2.3.0）\n\nskinparam defaultFontName \&quot;Microsoft YaHei\&quot;\nskinparam shadowing false\n\nnode \&quot;客户端 / 公网\&quot; as Client {\n  [Android APK\\nbus arm64-v8a]\n  [桌面安装包\\nWindows / Linux / macOS]\n  [微信小程序]\n  [浏览器 - 管理后台]\n}\n\nnode \&quot;后端机（唯一公网入口 · 只暴露 9200）\&quot; as Backend {\n  [Nginx\\n对外 :9200\\nhttp/https 分流 · 管理端静态资源\\nupstream 原子切换]\n  [Go API 蓝槽\\n当前活跃\\nDocker:容器内 9201\\nsystemd:9200]\n  [Go API 绿槽\\n待命 :9201]\n  [Redis\\n回环绑定 · 不对外]\n}\n\nnode \&quot;存储机（安全组 IP 白名单）\&quot; as Storage {\n  database \&quot;PostgreSQL 18\\nssl=on · 非默认端口\&quot;\n  [MinIO\\n对象存储]\n}\n\nClient ..&gt; Backend : 公网 HTTPS :9200\nBackend ..&gt; Storage : 公网直连\\n安全组白名单 + TLS\n\nnote bottom of Client\n  /health 健康门禁 · 蓝绿失败自动回滚\nend note\n\nnote bottom of Storage\n  Redis 回环绑定不对外\n  MinIO 不开匿名桶，客户端经 Go 中转\nend note\n@enduml&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="1DmTx1SpITEkBHLJGnRp-2">
+                    <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;" vertex="1">
+                        <mxGeometry as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="客户端 / 公网" plantUmlId="c_0" plantUmlBaseStyle="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="客户端 / 公网" id="1DmTx1SpITEkBHLJGnRp-3">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-2" style="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="105" width="790.3" x="269.7" y="66" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Android APK&#xa;bus arm64-v8a" plantUmlId="n_1" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Android APK&#xa;bus arm64-v8a" id="1DmTx1SpITEkBHLJGnRp-4">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="163.35167394468704" x="17.25545851528384" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_2" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-5">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_3" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-6">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_4" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-7">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-4" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="桌面安装包&#xa;Windows / Linux / macOS" plantUmlId="n_5" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="桌面安装包&#xa;Windows / Linux / macOS" id="1DmTx1SpITEkBHLJGnRp-8">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="241.5764192139738" x="220.86986899563317" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_6" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-9">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_7" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-10">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_8" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-11">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-8" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="微信小程序" plantUmlId="n_9" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="微信小程序" id="1DmTx1SpITEkBHLJGnRp-12">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="90.87874818049491" x="502.7090247452693" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_10" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-13">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_11" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-14">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_12" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-15">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-12" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="浏览器 - 管理后台" plantUmlId="n_13" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="浏览器 - 管理后台" id="1DmTx1SpITEkBHLJGnRp-16">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-3" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="127.69039301310043" x="633.8505094614264" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_14" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-17">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_15" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-18">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_16" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-19">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-16" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="后端机（唯一公网入口 · 只暴露 9200）" plantUmlId="c_17" plantUmlBaseStyle="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="后端机（唯一公网入口 · 只暴露 9200）" id="1DmTx1SpITEkBHLJGnRp-20">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-2" style="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="134" width="699" x="220" y="233" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Nginx&#xa;对外 :9200&#xa;http/https 分流 · 管理端静态资源&#xa;upstream 原子切换" plantUmlId="n_18" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Nginx&#xa;对外 :9200&#xa;http/https 分流 · 管理端静态资源&#xa;upstream 原子切换" id="1DmTx1SpITEkBHLJGnRp-21">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-20" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="78" width="194" x="15" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_19" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-22">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_20" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-23">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_21" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-24">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-21" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Go API 蓝槽&#xa;当前活跃&#xa;Docker:容器内 9201&#xa;systemd:9200" plantUmlId="n_22" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Go API 蓝槽&#xa;当前活跃&#xa;Docker:容器内 9201&#xa;systemd:9200" id="1DmTx1SpITEkBHLJGnRp-25">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-20" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="78" width="150" x="244" y="40" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_23" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-26">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-25" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_24" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-27">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-25" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_25" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-28">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-25" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Go API 绿槽&#xa;待命 :9201" plantUmlId="n_26" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Go API 绿槽&#xa;待命 :9201" id="1DmTx1SpITEkBHLJGnRp-29">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-20" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="99" x="429" y="54.5" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_27" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-30">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-29" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_28" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-31">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-29" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_29" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-32">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-29" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Redis&#xa;回环绑定 · 不对外" plantUmlId="n_30" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Redis&#xa;回环绑定 · 不对外" id="1DmTx1SpITEkBHLJGnRp-33">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-20" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="49" width="111" x="563" y="54.5" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_31" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-34">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-33" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_32" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-35">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-33" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_33" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-36">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-33" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="存储机（安全组 IP 白名单）" plantUmlId="c_34" plantUmlBaseStyle="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="存储机（安全组 IP 白名单）" id="1DmTx1SpITEkBHLJGnRp-37">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-2" style="shape=cube;size=10;flipH=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=7;spacingRight=10;fontSize=14;fontStyle=1;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="128.5" width="322" x="460" y="470" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="PostgreSQL 18&#xa;ssl=on · 非默认端口" plantUmlId="n_35" plantUmlBaseStyle="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="PostgreSQL 18&#xa;ssl=on · 非默认端口" id="1DmTx1SpITEkBHLJGnRp-38">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-37" style="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="56.2952380952381" width="141.24907063197026" x="17.955390334572492" y="50.788095238095245" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="MinIO&#xa;对象存储" plantUmlId="n_36" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="MinIO&#xa;对象存储" id="1DmTx1SpITEkBHLJGnRp-39">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-37" style="rounded=1;absoluteArcSize=1;arcSize=6;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;spacingRight=10;spacingTop=9;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="59.96666666666667" width="90.97397769516729" x="201.1003717472119" y="48.952380952380956" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_37" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-40">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-39" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="10" relative="1" width="15" x="1" as="geometry">
+                            <mxPoint x="-20" y="5" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_38" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-41">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-39" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="7" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="ci_39" plantUmlBaseStyle="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-42">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-39" style="fillColor=#F1F1F1;strokeColor=#181818;part=1;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="2" relative="1" width="4" x="1" as="geometry">
+                            <mxPoint x="-22" y="11" as="offset"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="公网 HTTPS :9200" plantUmlId="e_40" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="公网 HTTPS :9200" id="1DmTx1SpITEkBHLJGnRp-43">
+                    <mxCell edge="1" parent="1DmTx1SpITEkBHLJGnRp-2" source="1DmTx1SpITEkBHLJGnRp-3" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="1DmTx1SpITEkBHLJGnRp-20">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="60" y="1" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="665" y="194"/>
+                                <mxPoint x="570" y="194"/>
+                            </Array>
+                            <mxPoint x="498.7" y="168.57" as="sourcePoint"/>
+                            <mxPoint x="379.5" y="233" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="公网直连&#xa;安全组白名单 + TLS" plantUmlId="e_41" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;curved=1;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="公网直连&#xa;安全组白名单 + TLS" id="1DmTx1SpITEkBHLJGnRp-44">
+                    <mxCell edge="1" parent="1DmTx1SpITEkBHLJGnRp-2" source="1DmTx1SpITEkBHLJGnRp-20" style="strokeColor=#181818;fontColor=#000000;fontSize=13;html=1;labelBackgroundColor=#FFFFFF;labelPosition=right;align=left;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;fontFamily=Microsoft YaHei;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;edgeStyle=orthogonalEdgeStyle;libavoidRouting=1;" target="1DmTx1SpITEkBHLJGnRp-37">
+                        <mxGeometry relative="1" as="geometry">
+                            <mxPoint x="48" y="2" as="offset"/>
+                            <Array as="points">
+                                <mxPoint x="570" y="411"/>
+                                <mxPoint x="621" y="411"/>
+                            </Array>
+                            <mxPoint x="379.5" y="363.61" as="sourcePoint"/>
+                            <mxPoint x="387.95" y="423.48" as="targetPoint"/>
+                        </mxGeometry>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="/health 健康门禁 · 蓝绿失败自动回滚" plantUmlId="note_42" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="/health 健康门禁 · 蓝绿失败自动回滚" id="1DmTx1SpITEkBHLJGnRp-45">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-2" style="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="36.5" width="172" x="970" y="210" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="noteptr_43" plantUmlBaseStyle="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;direction=north;part=1;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-46">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-45" style="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;direction=north;part=1;" vertex="1">
+                        <mxGeometry height="52.56" width="8" x="82" y="-51.1" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="Redis 回环绑定不对外&#xa;MinIO 不开匿名桶，客户端经 Go 中转" plantUmlId="note_44" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" plantUmlBaseValue="Redis 回环绑定不对外&#xa;MinIO 不开匿名桶，客户端经 Go 中转" id="1DmTx1SpITEkBHLJGnRp-47">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-2" style="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;shadow=0;fontFamily=Microsoft YaHei;" vertex="1">
+                        <mxGeometry height="41" width="241.58" x="500.21" y="640" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+                <UserObject label="" plantUmlId="noteptr_45" plantUmlBaseStyle="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;direction=north;part=1;" plantUmlBaseValue="" id="1DmTx1SpITEkBHLJGnRp-48">
+                    <mxCell parent="1DmTx1SpITEkBHLJGnRp-47" style="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;shadow=0;fontFamily=Microsoft YaHei;direction=north;part=1;" vertex="1">
+                        <mxGeometry height="36.5" width="11.503809523809524" x="115.03809523809524" y="-35.5" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
