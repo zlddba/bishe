@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -30,6 +31,21 @@ type Migration struct {
 	Name     string
 	SQL      string
 	Checksum string
+
+	// ChecksumLF 是 SQL 内容按 LF 归一化后的 sha256。
+	// Windows 检出会把 .sql 变成 CRLF，而历史库里记录的是 LF 版校验和；
+	// 校验时同时接受「原始字节」与「LF 归一化」两种结果，避免仅因换行符
+	// 差异误判为「历史迁移被篡改」。两个值内容一致时才都会匹配。
+	ChecksumLF string
+}
+
+// checksumPair 返回迁移内容在「原始字节」与「LF 归一化」两种口径下的 sha256 十六进制串。
+// 归一化只把 \r\n 变为 \n，不改变任何 SQL 语义，因此两种校验和等价可信。
+func checksumPair(body []byte) (raw, lf string) {
+	rawSum := sha256.Sum256(body)
+	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
+	lfSum := sha256.Sum256(normalized)
+	return hex.EncodeToString(rawSum[:]), hex.EncodeToString(lfSum[:])
 }
 
 type Result struct {
@@ -60,12 +76,13 @@ func Load(dir string) ([]Migration, error) {
 		if version == "" {
 			return nil, fmt.Errorf("迁移文件名缺少版本号前缀: %s", e.Name())
 		}
-		sum := sha256.Sum256(body)
+		raw, lf := checksumPair(body)
 		list = append(list, Migration{
-			Version:  version,
-			Name:     e.Name(),
-			SQL:      string(body),
-			Checksum: hex.EncodeToString(sum[:]),
+			Version:    version,
+			Name:       e.Name(),
+			SQL:        string(body),
+			Checksum:   raw,
+			ChecksumLF: lf,
 		})
 	}
 
@@ -133,7 +150,8 @@ func Run(ctx context.Context, dsn, dir string, dryRun bool) ([]Result, error) {
 	results := make([]Result, 0, len(list))
 	for _, m := range list {
 		if sum, ok := applied[m.Version]; ok {
-			if sum != m.Checksum {
+			// 原始字节或 LF 归一化任一匹配即视为内容一致，兼容跨平台换行符差异。
+			if sum != m.Checksum && sum != m.ChecksumLF {
 				results = append(results, Result{Version: m.Version, Name: m.Name, State: "checksum-mismatch",
 					Err: fmt.Errorf("已应用迁移内容被修改，请新增迁移文件而不是改历史文件")})
 				continue
@@ -179,7 +197,7 @@ func applyOne(ctx context.Context, conn *pgx.Conn, m Migration) error {
 			return err
 		}
 		_, err := conn.Exec(ctx, insertMigration,
-			m.Version, m.Name, m.Checksum, time.Since(start).Milliseconds())
+			m.Version, m.Name, m.ChecksumLF, time.Since(start).Milliseconds())
 		return err
 	}
 
@@ -193,7 +211,7 @@ func applyOne(ctx context.Context, conn *pgx.Conn, m Migration) error {
 		return err
 	}
 	ms := time.Since(start).Milliseconds()
-	if _, err := tx.Exec(ctx, insertMigration, m.Version, m.Name, m.Checksum, ms); err != nil {
+	if _, err := tx.Exec(ctx, insertMigration, m.Version, m.Name, m.ChecksumLF, ms); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

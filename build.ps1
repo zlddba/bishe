@@ -181,6 +181,16 @@ Copy-Item (Join-Path $TplDir "vendor\dnsapi") $vendorDir -Recurse -Force
 Copy-Item (Join-Path $SrcDir "serverdb\init.sql") (Join-Path $PkgDir "db") -Force
 Copy-Item (Join-Path $SrcDir "serverdb\migrations\*.sql") (Join-Path $PkgDir "db\migrations") -Force
 
+# Normalize SQL line endings to LF inside the package. Windows checkouts use
+# CRLF (core.autocrlf=true); migration checksums are byte-based, so a CRLF
+# package would mismatch checksums recorded from earlier LF deployments.
+# Rewrite every packaged .sql as LF so builds are deterministic cross-platform.
+foreach ($sql in (Get-ChildItem -Path (Join-Path $PkgDir "db") -Recurse -Filter *.sql)) {
+    $text = [System.IO.File]::ReadAllText($sql.FullName)
+    $text = $text -replace "`r`n", "`n"
+    [System.IO.File]::WriteAllText($sql.FullName, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 Write-Step "Writing update manifest ..."
 $manifestFiles = [ordered]@{}
 foreach ($rel in @("artifacts\patnest-api", "artifacts\patnest-migrate", "web\dist\index.html", "web\dist\version.json")) {

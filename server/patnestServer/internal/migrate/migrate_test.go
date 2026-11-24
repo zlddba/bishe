@@ -37,6 +37,26 @@ func TestLoadSortsAndHashes(t *testing.T) {
 	}
 }
 
+func TestChecksumPairIgnoresCRLF(t *testing.T) {
+	// 同一 SQL 的 LF 与 CRLF 版本必须产生相同的归一化校验和（ChecksumLF），
+	// 这样历史库里的 LF 记录才能匹配 Windows 检出的 CRLF 文件，避免误判为篡改。
+	lf := "SELECT 1;\nSELECT 2;\n"
+	crlf := "SELECT 1;\r\nSELECT 2;\r\n"
+
+	lfRaw, lfNorm := checksumPair([]byte(lf))
+	crlfRaw, crlfNorm := checksumPair([]byte(crlf))
+
+	if lfRaw == crlfRaw {
+		t.Fatal("raw checksums should differ between LF and CRLF content")
+	}
+	if lfNorm != crlfNorm {
+		t.Fatalf("normalized checksums must match: LF=%s CRLF=%s", lfNorm, crlfNorm)
+	}
+	if lfRaw != lfNorm {
+		t.Fatal("pure-LF content should have identical raw and normalized checksum")
+	}
+}
+
 func TestLoadRejectsDuplicateVersion(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "0001_a.sql", "SELECT 1;")
